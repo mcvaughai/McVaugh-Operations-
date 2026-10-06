@@ -183,6 +183,7 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
     <div class="hud" id="hud">
       <section class="panel live" aria-label="Live status">
         <div class="row"><span class="dot off" id="liveDot" aria-hidden="true"></span><h1 id="liveTitle">THE VAULT</h1></div>
+        <div class="clock" id="etClock" style="color:var(--ink)">—</div>
         <div class="clock" id="clock">—</div>
         <div class="clock" id="clock2" style="color:var(--ink-3)">Python bots · 0DTE options</div>
       </section>
@@ -417,6 +418,17 @@ addEventListener('resize', () => { cam = fitAspect(cam); applyCam(); });
   scene.addEventListener('wheel', (e) => { e.preventDefault(); const f = e.deltaY > 0 ? 1.1 : .9; const mx = cam.x + (e.offsetX / scene.clientWidth) * cam.w, my = cam.y + (e.offsetY / scene.clientHeight) * cam.h; cam = { x: mx - (mx - cam.x) * f, y: my - (my - cam.y) * f, w: cam.w * f, h: cam.h * f }; applyCam(); }, { passive: false });
 })();
 
+/* ---------- Eastern clock (ticks in the browser, independent of the viewer's time zone) ---------- */
+function etNow() {
+  const d = new Date();
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).formatToParts(d).map(p => [p.type, p.value]));
+  const h24 = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(d).map(p => [p.type, p.value]));
+  return { weekday: parts.weekday, date: `${parts.weekday.slice(0, 3)} ${parts.month}/${parts.day}`, long_date: `${parts.weekday} ${parts.month}/${parts.day}`,
+           time: `${parts.hour}:${parts.minute} ${parts.dayPeriod}`, seconds: parts.second, tz: 'ET', minutes_since_open: (Number(h24.hour) % 24) * 60 + Number(h24.minute) - 570 };
+}
+function tickClock() { const n = etNow(); $('#etClock').textContent = `${n.date} · ${n.time}:${n.seconds} ET`; }
+tickClock(); setInterval(tickClock, 1000);
+
 /* ---------- live state ---------- */
 let S = null, seenEvents = null, openId = null, chartSym = null;
 async function poll() {
@@ -445,14 +457,14 @@ function render(st) {
   else setBanner('live', 'Live trading · real money · ' + (st.stale ? 'runner state is stale' : 'runner connected'));
   $('#liveTitle').textContent = (st.mode === 'live' ? 'LIVE' : st.mode === 'paper' ? 'PAPER' : st.mode === 'sim' ? 'SIM' : 'OFFLINE') + ' · THE VAULT';
   $('#liveDot').className = 'dot' + (st.runner && !st.stale && st.market_open ? '' : ' off');
-  const asOf = st.as_of ? new Date(st.as_of) : null;
-  $('#clock').textContent = asOf ? `${asOf.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' })} · ${asOf.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} ${st.mode === 'sim' ? 'sim' : 'ET'} · market ${st.market_open ? 'open' : 'closed'}${st.stale ? ' · STALE' : ''}` : 'no runner state yet';
+  const ck = st.clock || null;
+  $('#clock').textContent = ck ? `market ${st.market_open ? 'open' : 'closed'} · runner at ${ck.time} ${ck.tz}${ck.tz === 'sim' ? ` (${ck.date})` : ''}${st.stale ? ' · STALE' : ''}` : 'no runner state yet';
   const syms = [...new Set(w.map(x => x.symbol))].join(' and ');
   $('#clock2').textContent = (st.equity != null ? `account equity $${Math.round(st.equity).toLocaleString()} · ` : '') + `Python bots · 0DTE options on ${syms || 'SPY and QQQ'}`;
   // vault
   const total = st.total || 0, tTrades = w.reduce((s, x) => s + x.trade_count, 0), tWins = w.reduce((s, x) => s + x.wins, 0);
   $('#vaultTotal').textContent = money(total); $('#vaultTotal').className = 'big num ' + cls(total);
-  const mins = asOf && st.runner ? Math.max(0, Math.round((asOf.getHours() * 60 + asOf.getMinutes()) - 570)) : null;
+  const mins = ck && st.runner ? Math.max(0, ck.minutes_since_open) : null;
   $('#vaultSub').textContent = st.runner ? `${w.length} workers on a shift${mins != null && st.market_open ? ` · ${mins} min after the open` : ''} · ${tWins} of ${tTrades} trades won${st.unrealized ? ` · ${money(st.unrealized)} open` : ''}` : 'waiting for the runner';
   const gross = w.reduce((s, x) => s + Math.abs(x.earned), 0) || 1;
   $('#vaultBar').innerHTML = w.map(x => `<span style="width:${(Math.abs(x.earned) / gross * 100).toFixed(1)}%;background:${x.earned < 0 ? 'var(--loss)' : x.status === 'brake' ? 'var(--gold)' : 'var(--warn)'}" title="${esc(x.name)} ${money(x.earned)}"></span>`).join('');
@@ -574,9 +586,9 @@ function showChart(on) { $('#chart').classList.toggle('open', on); if (on) drawC
 let TOUR = [], step = -1, playing = false, timer = null;
 function buildTour() {
   if (!S) return [];
-  const w = S.workers, asOf = S.as_of ? new Date(S.as_of) : new Date();
-  const when = `${asOf.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} on ${asOf.toLocaleDateString('en-US', { weekday: 'long', month: 'numeric', day: 'numeric' })}`;
-  const mins = Math.max(0, asOf.getHours() * 60 + asOf.getMinutes() - 570);
+  const w = S.workers, ck = S.clock || etNow();
+  const when = `${ck.time} Eastern on ${ck.long_date}`;
+  const mins = Math.max(0, ck.minutes_since_open);
   const syms = [...new Set(w.map(x => x.symbol))];
   const modeWord = S.mode === 'live' ? 'live' : S.mode === 'paper' ? 'paper trading' : S.mode === 'sim' ? 'in simulation' : 'offline';
   const steps = [{ cap: `So here we are, <em>${modeWord}</em>. It is ${when}.`, focus: 'overview' }];

@@ -342,7 +342,10 @@ class Runner:
                 series[sym]["last"], series[sym]["open"] = pts[-1]["c"], pts[0]["c"]
         total = round(sum(w.earned for w in self.workers), 2)
         unreal = round(sum((w.position["mark"] - w.position["entry"]) * 100 * w.position["qty"] for w in self.workers if w.position), 2)
-        state = {"version": 1, "mode": self.mode, "as_of": now.isoformat(), "day": self.day, "market_open": is_open, "equity": equity,
+        clock = {"weekday": now.strftime("%A"), "date": f"{now.strftime('%a')} {now.month}/{now.day}", "long_date": f"{now.strftime('%A')} {now.month}/{now.day}",
+                 "time": f"{now.hour % 12 or 12}:{now.minute:02d} {'AM' if now.hour < 12 else 'PM'}", "tz": "sim" if self.mode == "sim" else "ET",
+                 "minutes_since_open": now.hour * 60 + now.minute - 570}
+        state = {"version": 1, "mode": self.mode, "as_of": now.isoformat(), "clock": clock, "day": self.day, "market_open": is_open, "equity": equity,
                  "profit_lock_pct": self.cfg.get("workers", [{}])[0].get("lock_pct", 5), "trade_window": self.cfg.get("trade_window"), "flatten_at": self.cfg.get("flatten_at"),
                  "total": total, "unrealized": unreal, "workers": [w.snapshot() for w in self.workers], "series": series, "events": self.events, "errors": self.errors}
         self._atomic("state.json", state)
@@ -388,7 +391,7 @@ def main(argv=None):
 
     if a.mode == "sim":
         from sim import SimBroker
-        broker = SimBroker(seed=a.seed)
+        broker = SimBroker(seed=a.seed, start=datetime.now(ET).replace(hour=9, minute=30, second=0, microsecond=0, tzinfo=None))  # today's Eastern date, 9:30 open
     else:
         from alpaca import Broker
         if a.mode == "live" and os.environ.get("VAULT_LIVE") != "yes":

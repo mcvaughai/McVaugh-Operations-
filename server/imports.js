@@ -42,6 +42,73 @@ function upsertDocument(db, { name, content, kind, reason, sensitive, task_id, d
   return id;
 }
 
+
+// ---------- index cards (vault notes that point at a real file on the local server) ----------
+// Format seen in Brittany's vault (2026-10-06): frontmatter type: document / source: localserver,
+// "> [!info] Document · [`file.docx`](../_Inbox/...)", then ## Why it matters / ## Open / ## Part of / ## Topic hubs / ## Entities.
+function parseIndexCard(text) {
+  const { fm, body } = parseFrontmatter(text);
+  if (fm.type !== 'document' && !/\[!info\]\s*Document/i.test(body)) return null;
+  const link = body.match(/\[!info\][^\n]*?\[`([^`]+)`\]\(([^)]+)\)/) || body.match(/##\s*Open\s*\n-\s*\[[^\]]*\]\(([^)]+)\)/);
+  const file = link ? decodeURIComponent(link[2] || link[1]) : null;
+  const sec = name => { const m = body.match(new RegExp(`##\\s*${name}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, 'i')); return m ? m[1].trim() : ''; };
+  const links = t => [...t.matchAll(/\[\[([^\]|]+)/g)].map(m => m[1].trim());
+  return { title: fm.title || (body.match(/^#\s+(.+)$/m) || [])[1], why: sec('Why it matters'), file, hubs: links(sec('Topic hubs')), partOf: links(sec('Part of')), entities: links(sec('Entities')), primary_hub: fm.primary_hub || null };
+}
+// Topic hub → department guess. Editable via meta.hub_departments.
+// 'construction financials & budget vs actual' appears on nearly every card, so it is treated as generic (no department).
+const DEFAULT_HUBS = { 'construction financials & budget vs actual': null, 'database & reconciliation': 'accounting', 'royal oaks water billing & hoa': 'hoa', 'finance': 'accounting', 'accounting': 'accounting', 'sales': 'marketing', 'design': 'design', 'permits': 'permits', 'construction': 'construction', 'purchasing': 'purchasing' };
+function hubMap(db) { const extra = db ? safeJson(db.prepare("SELECT value FROM meta WHERE key = 'hub_departments'").get()?.value) : null; return { ...DEFAULT_HUBS, ...(extra || {}) }; }
+// primary hub wins; otherwise only an unambiguous secondary hub assigns a department.
+function deptFromHubs(primary, hubs, map) {
+  const m = h => (h && map[String(h).toLowerCase()]) || null;
+  if (m(primary)) return m(primary);
+  const found = [...new Set((hubs || []).map(m).filter(Boolean))];
+  return found.length === 1 ? found[0] : null;
+}
+
+// Minimal zip reader (enough for .docx): central directory → entry → inflateRaw. No dependencies.
+function zipEntry(buf, wanted) {
+  const zlib = require('node:zlib');
+  let eocd = buf.length - 22; while (eocd >= 0 && buf.readUInt32LE(eocd) !== 0x06054b50) eocd--;
+  if (eocd < 0) throw new Error('not a zip');
+  const n = buf.readUInt16LE(eocd + 10); let off = buf.readUInt32LE(eocd + 16);
+  for (let i = 0; i < n; i++) {
+    if (buf.readUInt32LE(off) !== 0x02014b50) throw new Error('bad central directory');
+    const method = buf.readUInt16LE(off + 10), csize = buf.readUInt32LE(off + 20), nlen = buf.readUInt16LE(off + 28), elen = buf.readUInt16LE(off + 30), clen = buf.readUInt16LE(off + 32), lho = buf.readUInt32LE(off + 42);
+    const name = buf.toString('utf8', off + 46, off + 46 + nlen);
+    if (name === wanted) {
+      const lnlen = buf.readUInt16LE(lho + 26), lelen = buf.readUInt16LE(lho + 28); const start = lho + 30 + lnlen + lelen; const data = buf.subarray(start, start + csize);
+      return method === 8 ? zlib.inflateRawSync(data) : method === 0 ? data : (() => { throw new Error('unsupported zip method ' + method); })();
+    }
+    off += 46 + nlen + elen + clen;
+  }
+  return null;
+}
+const NAMED = { ndash: '–', mdash: '—', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', hellip: '…', bull: '•', copy: '©', reg: '®', trade: '™' };
+const decodeEntities = t => t.replace(/&([a-z]+);/g, (m, n) => NAMED[n] || m).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#(\d+);/g, (_, c) => String.fromCharCode(c)).replace(/&nbsp;/g, ' ');
+function docxText(buf) {
+  const xml = zipEntry(buf, 'word/document.xml'); if (!xml) throw new Error('no word/document.xml');
+  return decodeEntities(xml.toString('utf8').replace(/<w:tab\/>/g, '\t').replace(/<\/w:p>/g, '\n').replace(/<w:br[^>]*\/>/g, '\n').replace(/<[^>]+>/g, '')).replace(/\n{3,}/g, '\n\n').trim();
+}
+function htmlText(buf) {
+  return decodeEntities(buf.toString('utf8').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, '').replace(/<\/(p|div|li|tr|h\d|section|article|br)>/gi, '\n').replace(/<[^>]+>/g, '')).replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
+}
+const MAX_CONTENT = 200 * 1024;
+// Resolve an index card's link relative to the note and extract text when the format allows.
+function followLink(noteFullPath, rel) {
+  if (!rel) return { status: 'not_followed', text: null, resolved: null };
+  const resolved = path.resolve(path.dirname(noteFullPath), rel);
+  if (!fs.existsSync(resolved)) return { status: 'not_found', text: null, resolved };
+  const ext = path.extname(resolved).toLowerCase();
+  try {
+    if (ext === '.docx') return { status: 'extracted', text: docxText(fs.readFileSync(resolved)).slice(0, MAX_CONTENT), resolved };
+    if (ext === '.html' || ext === '.htm') return { status: 'extracted', text: htmlText(fs.readFileSync(resolved)).slice(0, MAX_CONTENT), resolved };
+    if (ext === '.md' || ext === '.txt' || ext === '.csv') return { status: 'extracted', text: fs.readFileSync(resolved, 'utf8').slice(0, MAX_CONTENT), resolved };
+    return { status: 'needs_conversion', text: null, resolved }; // .doc, .pdf, .xlsx …: save as .docx/.html/.csv or paste
+  } catch (e) { return { status: 'error: ' + e.message, text: null, resolved }; }
+}
+
 // ---------- markdown ----------
 function parseFrontmatter(text) {
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -102,19 +169,43 @@ function parseNote(file, { headings = DEFAULT_HEADINGS, people = [], departments
   if (backupName && !row.backup_id) warnings.push(`Backup "${backupName}" is not a known person`);
   const clsEarly = classifyNote(file.name, file.content);
   if (clsEarly.kind === 'procedure' && !mapped.length && !Object.keys(fm).length) warnings.push('No recognized headings or frontmatter; whole note stored as Steps');
-  const cls = classifyNote(file.name, file.content);
+  const card = parseIndexCard(file.content);
+  const cls = classifyNote(card?.file ? `${file.name} ${path.basename(card.file)}` : file.name, file.content);
+  if (card) warnings.unshift(`Index card → real file: ${card.file || '(no link)'}${file.linked ? ' — ' + file.linked.status.replace('_', ' ') : ''}${card.hubs.length ? ' · hubs: ' + card.hubs.join(', ') : ''}`);
   if (cls.kind !== 'procedure') warnings.unshift(`Classified as ${cls.kind} (${cls.reason}) — will be stored as a document, not a task`);
   if (cls.sensitive) warnings.push('Flagged restricted (financial)');
-  return { row, classification: cls, mapping: { frontmatter: Object.keys(fm), mapped, unmapped }, warnings };
+  if (card) { row.title = card.title || row.title; row.source_link = card.file || null; row.steps = file.linked?.text ? file.linked.text.slice(0, 4000) : null; row.documented = file.linked?.text ? 1 : 0; }
+  return { row, card: card ? { file: card.file, hubs: card.hubs, entities: card.entities, linked: file.linked?.status } : null, classification: cls, mapping: { frontmatter: Object.keys(fm), mapped, unmapped }, warnings };
 }
 
 function importMarkdown(db, files, role, opts = {}) {
   const ts = nowIso(); let imported = 0; const results = []; const overrides = opts.overrides || {};
   const people = db.prepare('SELECT id, name FROM people').all(), departments = db.prepare('SELECT id, name, short FROM departments').all();
   const headings = headingMap(db);
+  const hubs = hubMap(db);
   for (const f of files) {
-    const cls = classifyNote(f.name, f.content); const kind = overrides[f.name] || cls.kind;
+    const card = parseIndexCard(f.content);
+    const cls = classifyNote(card?.file ? `${f.name} ${path.basename(card.file)}` : f.name, f.content); const kind = overrides[f.name] || cls.kind;
     const source = `Obsidian import: ${f.name} (${ts.slice(0, 10)})`;
+    if (card) { // index card → document that points at the real file; task only if procedure AND content was extracted
+      const link = f.linked || { status: 'not_followed', text: null };
+      const department_id = deptFromHubs(card.primary_hub, card.hubs, hubs);
+      const docId = 'doc-' + slug(card.title || cls.base);
+      let task_id = null;
+      if (kind === 'procedure') {
+        task_id = 'obs-' + slug(card.title || cls.base);
+        const existing = db.prepare('SELECT id, owner_id FROM tasks WHERE id = ?').get(task_id);
+        const row = { id: task_id, title: card.title || cls.base, department_id, source, sensitive: cls.sensitive, source_link: card.file || null,
+          steps: link.text ? link.text.slice(0, 4000) : null, documented: link.text ? 1 : 0,
+          missing_info: link.text ? null : `Procedure content lives in "${card.file || 'linked file'}" (${link.status.replace('_', ' ')}). ${link.status === 'needs_conversion' ? 'Save it as .docx/.html and re-run the folder import, or paste the steps.' : ''}`.trim() };
+        if (!existing) Object.assign(row, { proposed: 1, board: 'next' });
+        upsert(db, 'tasks', row);
+        addEvent(db, { entity_type: 'task', entity_id: task_id, kind: 'import', status: 'info', label: `${existing ? 'Re-imported' : 'Imported'} index card: ${f.name} (${link.status})`, source: 'import', actor: role, external_id: 'obs-' + crypto.randomUUID() });
+      }
+      upsert(db, 'documents', { id: docId, title: card.title || cls.base, path: f.name, kind, kind_reason: (overrides[f.name] ? 'set by reviewer' : cls.reason) + ' · index card', sensitive: cls.sensitive, task_id, department_id,
+        summary: card.why || summarize(f.content), size: link.text ? link.text.length : null, source, imported_at: ts, underlying_path: card.file, underlying_status: link.status, content: link.text, hubs: JSON.stringify(card.hubs), entities: JSON.stringify(card.entities) });
+      imported++; results.push({ id: task_id || docId, title: card.title, kind, warnings: link.text ? [] : [`Underlying file ${link.status.replace('_', ' ')}: ${card.file || '?'}`] }); continue;
+    }
     if (kind !== 'procedure') { // stored as a document only — never a task
       const docId = upsertDocument(db, { name: f.name, content: f.content, kind, reason: overrides[f.name] ? 'set by reviewer' : cls.reason, sensitive: cls.sensitive, source });
       addEvent(db, { entity_type: 'document', entity_id: docId, kind: 'import', status: 'info', label: `Imported document (${kind}): ${f.name}`, source: 'import', actor: role, external_id: 'doc-' + crypto.randomUUID() });
@@ -274,10 +365,12 @@ function importFolder(db, { dir, dryRun = false, force = false, csvTarget = 'aut
     const text = buf.toString('utf8');
     try {
       if (entry.kind === 'md') {
-        const p = parseNote({ name: rel, content: text }, { headings, people, departments });
+        const card = parseIndexCard(text); const linked = card ? followLink(full, card.file) : undefined;
+        const p = parseNote({ name: rel, content: text, linked }, { headings, people, departments });
         const kind = overrides[rel] || p.classification.kind;
         entry.preview = { title: p.row.title, id: kind === 'procedure' ? p.row.id : 'doc-' + slug(p.classification.base), kind, kind_reason: overrides[rel] ? 'set by reviewer' : p.classification.reason, sensitive: p.classification.sensitive, versionOf: p.classification.versionOf, mapping: p.mapping, warnings: p.warnings.filter(w => !w.startsWith('Classified')) };
-        if (!dryRun) { importMarkdown(db, [{ name: rel, content: text }], role, { overrides: { [rel]: kind } }); entry.status = prev ? 're-imported' : 'imported'; }
+        if (linked) entry.preview.linked = { file: card.file, status: linked.status, chars: linked.text ? linked.text.length : 0 };
+        if (!dryRun) { importMarkdown(db, [{ name: rel, content: text, linked }], role, { overrides: { [rel]: kind } }); entry.status = prev ? 're-imported' : 'imported'; }
       } else {
         const p = parseCsvFile({ target: csvTarget, filename: rel, content: text }, { aliases, people, departments });
         entry.preview = { target: p.mapping.target, mapping: p.mapping, rows: p.rows, warnings: p.warnings, sample: p.records.slice(0, 3) };
@@ -342,4 +435,4 @@ function pagesMarkdown(state) {
   return L.filter(x => x !== undefined).join('\n');
 }
 
-module.exports = { classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };
+module.exports = { parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };

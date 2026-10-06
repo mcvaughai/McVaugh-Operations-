@@ -120,10 +120,10 @@ function stateFor(role) {
   const ai_configs = db.prepare('SELECT * FROM ai_configs ORDER BY agent_id').all();
   const audit = can.audit(role) ? db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 100').all() : [];
   const demo = db.prepare("SELECT value FROM meta WHERE key = 'demo_mode'").get()?.value === 'on';
-  const documents = db.prepare('SELECT * FROM documents ORDER BY kind, title').all().map(d => (d.sensitive && !sens) ? { id: d.id, title: '(restricted: financial)', kind: d.kind, sensitive: 1, restricted: true, task_id: d.task_id } : d);
+  const documents = db.prepare('SELECT * FROM documents ORDER BY kind, title').all().map(d => (d.sensitive && !sens) ? { id: d.id, title: '(restricted: financial)', kind: d.kind, sensitive: 1, restricted: true, task_id: d.task_id } : { ...d, content: d.content ? d.content.slice(0, 20000) : null });
   const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
   const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
-  const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db) };
+  const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db), hubs: imports.hubMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
     departments, people, agents, tasks, archived_count, homes, documents, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
     server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET } };
@@ -280,6 +280,7 @@ async function api(req, res, url, p, role) {
     const b = await readJson(req);
     if (b.headings) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('heading_aliases', ?)").run(JSON.stringify(b.headings));
     if (b.aliases) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('csv_aliases', ?)").run(JSON.stringify(b.aliases));
+    if (b.hubs) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('hub_departments', ?)").run(JSON.stringify(b.hubs));
     dbm.audit(db, role, 'update_aliases'); return send(res, 200, { headings: imports.headingMap(db), aliases: imports.aliasMap(db) });
   }
   if (p === '/api/review/merge' && m === 'POST') { const b = await readJson(req); const t = imports.mergeTasks(db, b.source_id, b.target_id, role); dbm.audit(db, role, 'merge', 'tasks', b.target_id, b.source_id); return send(res, 200, t); }

@@ -133,6 +133,11 @@ const MIGRATIONS = [
   ['tasks', 'reviewed_by', 'TEXT'],
   ['people', 'reviewed_at', 'TEXT'],
   ['people', 'reviewed_by', 'TEXT'],
+  ['documents', 'underlying_path', 'TEXT'],   // the real file an index-card note points to
+  ['documents', 'underlying_status', 'TEXT'], // extracted | not_found | needs_conversion | not_followed
+  ['documents', 'content', 'TEXT'],           // extracted text (capped)
+  ['documents', 'hubs', 'TEXT'],
+  ['documents', 'entities', 'TEXT'],
 ];
 function migrate(db) {
   for (const [table, column, type] of MIGRATIONS) {
@@ -150,7 +155,7 @@ const TABLES = {
   homes: ['id','address','job_id','active','kind','stage','pilot','notes','source','imported_at','updated_at'],
   decisions: ['id','date','title','reason','decided_by','status','source','created_at'],
   integrations: ['id','name','kind','status','last_checked','last_message','last_import_at','config','notes'],
-  documents: ['id','title','path','kind','kind_reason','sensitive','task_id','department_id','summary','size','source','imported_at','updated_at'],
+  documents: ['id','title','path','kind','kind_reason','sensitive','task_id','department_id','summary','size','source','imported_at','updated_at','underlying_path','underlying_status','content','hubs','entities'],
   ai_configs: ['id','agent_id','purpose','needs_ai','provider','model','why','expected_cost','approval','eval_examples','fallback','updated_at'],
 };
 

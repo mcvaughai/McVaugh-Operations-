@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>McVaugh Operations World</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpolygon points='16,2 30,10 16,18 2,10' fill='%235b7cfa'/%3E%3Cpolygon points='2,10 16,18 16,30 2,22' fill='%233b55c4'/%3E%3Cpolygon points='30,10 16,18 16,30 30,22' fill='%238aa4ff'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="login" class="overlay" hidden>
+  <form id="loginForm" class="card">
+    <h1>McVaugh Operations World</h1>
+    <p>Enter your role passphrase. Passphrases live in <code>data/credentials.json</code> on the server (never in this page).</p>
+    <input id="passphrase" type="password" autocomplete="current-password" placeholder="Passphrase" required>
+    <button type="submit" class="primary">Enter</button>
+    <p id="loginError" class="error" hidden></p>
+  </form>
+</div>
+
+<header class="topbar">
+  <div class="brand"><span class="logo" aria-hidden="true"></span><strong>McVaugh Operations World</strong><span class="stage-pill" id="stagePill">Stage 1</span></div>
+  <nav class="views" role="tablist" aria-label="View">
+    <button data-view="world" class="active" role="tab">World</button>
+    <button data-view="board" role="tab">Board</button>
+    <button data-view="registry" role="tab">Registry</button>
+    <button data-view="integrations" role="tab">Integrations</button>
+    <button data-view="ai" role="tab">AI config</button>
+    <button data-view="history" role="tab">History</button>
+  </nav>
+  <div class="tools">
+    <label class="toggle" title="Simulated activity. Clearly labeled; purged when turned off."><input type="checkbox" id="demoToggle"> <span>Demo mode</span></label>
+    <label class="toggle" title="Stops bobbing/pulsing animations"><input type="checkbox" id="motionToggle"> <span>Reduce motion</span></label>
+    <button id="addBtn" class="primary small">+ Add</button>
+    <span id="rolePill" class="role-pill">—</span>
+    <button id="logoutBtn" class="small ghost">Sign out</button>
+  </div>
+</header>
+
+<div id="demoBanner" class="demo-banner" hidden>DEMO MODE — activity shown with a “DEMO” tag is simulated and is not real company activity. Turning demo off deletes demo events.</div>
+
+<main class="layout">
+  <aside class="start-here" id="startHere" aria-label="Start here">
+    <!-- filled by app.js -->
+  </aside>
+
+  <section class="center">
+    <div id="viewWorld" class="view">
+      <div class="world-toolbar">
+        <button id="overviewBtn" class="small">⌂ Overview</button>
+        <select id="focusSelect" aria-label="Focus a department"><option value="">Focus department…</option></select>
+        <button id="zoomIn" class="small" aria-label="Zoom in">+</button>
+        <button id="zoomOut" class="small" aria-label="Zoom out">−</button>
+        <span class="hint">Drag to pan · scroll to zoom · click anything to open it</span>
+      </div>
+      <div id="worldWrap" class="world-wrap"><svg id="world" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Isometric campus of McVaugh departments, people, agents and homes"></svg></div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div id="viewBoard" class="view" hidden></div>
+    <div id="viewRegistry" class="view" hidden></div>
+    <div id="viewIntegrations" class="view" hidden></div>
+    <div id="viewAi" class="view" hidden></div>
+    <div id="viewHistory" class="view" hidden></div>
+  </section>
+
+  <aside id="detail" class="detail" hidden aria-live="polite"></aside>
+</main>
+
+<div id="modal" class="overlay" hidden><div class="card modal-card" id="modalCard"></div></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="/world.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

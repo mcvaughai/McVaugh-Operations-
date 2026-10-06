@@ -1,0 +1,12 @@
+{
+  "_note": "Model selection is configurable, never hard-coded in agents. Verify availability against the provider's models endpoint before enabling any AI task. Existing seats (ChatGPT Business, Claude Team) do NOT cover API usage; API calls are billed separately and nothing here purchases anything.",
+  "verified_on": "2026-10-06",
+  "verified_how": "IDs listed by the Claude Code build environment on 2026-10-06. Re-verify with GET https://api.anthropic.com/v1/models (Anthropic) or the OpenAI models endpoint before use.",
+  "candidates": {
+    "drafting_default":   { "provider": "anthropic", "model": "claude-sonnet-5-5", "use": "Drafts, summaries, bid-gap narratives. Good cost/quality balance." },
+    "document_extraction": { "provider": "anthropic", "model": "claude-opus-5-5", "use": "Supplier PDF selection extraction where accuracy matters; always human-verified." },
+    "cheap_classification": { "provider": "anthropic", "model": "claude-haiku-4-5-20251001", "use": "Routing/classification only if rules are insufficient." },
+    "openai_alternative":  { "provider": "openai", "model": "(not verified — check the ChatGPT Business / API model list)", "use": "If the company prefers the OpenAI stack for a task." }
+  },
+  "never_use_a_model_for": ["arithmetic", "budget vs actual comparison", "payment matching", "status changes", "reminders and deadlines", "anything the existing mch-* skills already compute deterministically"]
+}

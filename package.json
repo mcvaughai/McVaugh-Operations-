@@ -1,0 +1,13 @@
+{
+  "name": "mcvaugh-operations-world",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persistent, interactive isometric operations workspace for McVaugh Custom Homes (Stage 1).",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node test/acceptance.js"
+  },
+  "engines": { "node": ">=22.13" },
+  "dependencies": {}
+}

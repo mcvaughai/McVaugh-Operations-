@@ -194,16 +194,20 @@ function importMarkdown(db, files, role, opts = {}) {
       let task_id = null;
       if (kind === 'procedure') {
         task_id = 'obs-' + slug(card.title || cls.base);
-        const existing = db.prepare('SELECT id, owner_id FROM tasks WHERE id = ?').get(task_id);
-        const row = { id: task_id, title: card.title || cls.base, department_id, source, sensitive: cls.sensitive, source_link: card.file || null,
-          steps: link.text ? link.text.slice(0, 4000) : null, documented: link.text ? 1 : 0,
-          missing_info: link.text ? null : `Procedure content lives in "${card.file || 'linked file'}" (${link.status.replace('_', ' ')}). ${link.status === 'needs_conversion' ? 'Save it as .docx/.html and re-run the folder import, or paste the steps.' : ''}`.trim() };
-        if (!existing) Object.assign(row, { proposed: 1, board: 'next' });
+        const existing = db.prepare('SELECT id, owner_id, steps, department_id, title FROM tasks WHERE id = ?').get(task_id);
+        const row = { id: task_id, source_link: card.file || null, sensitive: cls.sensitive || undefined };
+        if (!existing) Object.assign(row, { title: card.title || cls.base, department_id, source, proposed: 1, board: 'next' });
+        else { if (!existing.department_id && department_id) row.department_id = department_id; row.source = existing.steps ? undefined : source; }
+        if (link.text) Object.assign(row, { steps: link.text.slice(0, 4000), documented: 1, missing_info: null, source });
+        else if (!existing?.steps) Object.assign(row, { steps: null, documented: 0, missing_info: `Procedure content lives in "${card.file || 'linked file'}" (${link.status.replace('_', ' ')}). ${link.status === 'needs_conversion' ? 'Save it as .docx/.html and re-run the folder import, or paste the steps.' : ''}`.trim() });
+        // a card whose file cannot be read never downgrades a task that already has steps (e.g. text supplied another way)
         upsert(db, 'tasks', row);
         addEvent(db, { entity_type: 'task', entity_id: task_id, kind: 'import', status: 'info', label: `${existing ? 'Re-imported' : 'Imported'} index card: ${f.name} (${link.status})`, source: 'import', actor: role, external_id: 'obs-' + crypto.randomUUID() });
       }
-      upsert(db, 'documents', { id: docId, title: card.title || cls.base, path: f.name, kind, kind_reason: (overrides[f.name] ? 'set by reviewer' : cls.reason) + ' · index card', sensitive: cls.sensitive, task_id, department_id,
-        summary: card.why || summarize(f.content), size: link.text ? link.text.length : null, source, imported_at: ts, underlying_path: card.file, underlying_status: link.status, content: link.text, hubs: JSON.stringify(card.hubs), entities: JSON.stringify(card.entities) });
+      const exDoc = db.prepare('SELECT content, underlying_status FROM documents WHERE id = ?').get(docId);
+      const keep = !link.text && exDoc?.content; // keep previously extracted content when this pass could not read the file
+      upsert(db, 'documents', { id: docId, title: card.title || cls.base, path: f.name, kind, kind_reason: (overrides[f.name] ? 'set by reviewer' : cls.reason) + ' · index card', sensitive: cls.sensitive, task_id, department_id: department_id || undefined,
+        summary: card.why || summarize(f.content), size: link.text ? link.text.length : undefined, source: keep ? undefined : source, imported_at: ts, underlying_path: card.file, underlying_status: keep ? exDoc.underlying_status : link.status, content: keep ? undefined : link.text, hubs: JSON.stringify(card.hubs), entities: JSON.stringify(card.entities) });
       imported++; results.push({ id: task_id || docId, title: card.title, kind, warnings: link.text ? [] : [`Underlying file ${link.status.replace('_', ' ')}: ${card.file || '?'}`] }); continue;
     }
     if (kind !== 'procedure') { // stored as a document only — never a task
@@ -342,7 +346,7 @@ function walk(dir, out = [], depth = 0) {
     if (e.name.startsWith('.') && e.isDirectory()) continue;
     const full = path.join(dir, e.name);
     if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(full, out, depth + 1); }
-    else if (/\.(md|markdown|csv)$/i.test(e.name)) out.push(full);
+    else if (/\.(md|markdown|csv|jsx|js)$/i.test(e.name)) out.push(full);
   }
   return out;
 }
@@ -360,11 +364,16 @@ function importFolder(db, { dir, dryRun = false, force = false, csvTarget = 'aut
     const rel = path.relative(dir, full);
     let buf; try { buf = fs.readFileSync(full); } catch (e) { report.errors.push(`${rel}: ${e.message}`); continue; }
     const hash = hashOf(buf), prev = seen.get(full);
-    const entry = { path: rel, changed: !prev || prev.hash !== hash, kind: /\.csv$/i.test(full) ? 'csv' : 'md' };
+    const entry = { path: rel, changed: !prev || prev.hash !== hash, kind: /\.csv$/i.test(full) ? 'csv' : /\.(jsx|js)$/i.test(full) ? 'hub' : 'md' };
     if (!entry.changed && !force) { report.skipped_unchanged++; entry.status = 'unchanged'; report.files.push(entry); continue; }
     const text = buf.toString('utf8');
     try {
-      if (entry.kind === 'md') {
+      if (entry.kind === 'hub') {
+        const hub = parseOpsHub(text);
+        if (!hub) { entry.status = 'skipped: not an ops-hub file'; report.files.push(entry); continue; }
+        entry.preview = { target: 'ops hub', rows: hub.processes.length, mapping: { target: 'ops hub', columns: { processes: String(hub.processes.length), legacy_roles: String(hub.roles.length), team: String(hub.team.length) }, unmapped: [] }, warnings: [] };
+        if (!dryRun) { importOpsHub(db, { filename: rel, content: text }, role); entry.status = prev ? 're-imported' : 'imported'; }
+      } else if (entry.kind === 'md') {
         const card = parseIndexCard(text); const linked = card ? followLink(full, card.file) : undefined;
         const p = parseNote({ name: rel, content: text, linked }, { headings, people, departments });
         const kind = overrides[rel] || p.classification.kind;
@@ -393,6 +402,64 @@ function importFolder(db, { dir, dryRun = false, force = false, csvTarget = 'aut
   }
   return report;
 }
+
+
+// ---------- old operations hub (mch-ops-hub.jsx / .html): roles, SOPs and the current-team map ----------
+// The old dashboard keeps its data as JS constants (INITIAL_ROLES, INITIAL_PROCESSES, CURRENT_TEAM). They are
+// evaluated in an isolated VM context with no require/globals, then turned into tasks, documents and responsibilities.
+const vm = require('node:vm');
+const HUB_CATEGORY_DEPT = { preconstruction: 'construction', construction: 'construction', 'change management': 'estimating', financial: 'accounting', operations: 'purchasing', sales: 'marketing', design: 'design', 'hr / admin': 'exec' };
+const HUB_PROCESS_DEPT = { budget_review: 'estimating', budget_revision: 'estimating', budget_spec: 'estimating', change_order_budget: 'estimating', permitting: 'permits', president_plan_selection: 'permits', back_charge: 'accounting', work_order_ap: 'accounting', new_work_order: 'purchasing', framed_mirror_purchase: 'purchasing', interior_designer_hoa_rocc: 'hoa' };
+function parseOpsHub(text) {
+  const src = String(text || '');
+  if (!/const\s+INITIAL_PROCESSES\s*=/.test(src)) return null;
+  const end = src.search(/export\s+default|function\s+MCHOpsHub/); const body = (end > 0 ? src.slice(0, end) : src).replace(/^\s*import[^\n]*\n/gm, '');
+  const ctx = vm.createContext(Object.create(null));
+  vm.runInContext(body + '\n;this.__out = { roles: typeof INITIAL_ROLES !== "undefined" ? INITIAL_ROLES : [], processes: INITIAL_PROCESSES, team: typeof CURRENT_TEAM !== "undefined" ? CURRENT_TEAM : [] };', ctx, { timeout: 2000 });
+  const out = ctx.__out;
+  return { roles: out.roles || [], processes: out.processes || [], team: out.team || [] };
+}
+function importOpsHub(db, { filename, content }, role) {
+  let hub = null; try { const j = JSON.parse(content); if (j && Array.isArray(j.processes)) hub = { roles: j.roles || [], processes: j.processes, team: j.team || [] }; } catch { /* not JSON */ }
+  if (!hub) hub = parseOpsHub(content); if (!hub) return { error: 'Not an ops-hub file (no INITIAL_PROCESSES constant found)' };
+  const ts = nowIso(); const src = `Old ops hub import: ${filename || 'mch-ops-hub'} (${ts.slice(0, 10)})`;
+  const people = db.prepare('SELECT id, name FROM people').all();
+  const idFor = t => { const byId = people.find(p => p.id === t.id); if (byId) return byId.id; const first = String(t.name || '').split(' ')[0].toLowerCase(); return people.find(p => p.name.toLowerCase() === first)?.id || slug(t.name || t.id); };
+  const roleOwner = {}; // legacy role id → current person id
+  const roleTitle = Object.fromEntries(hub.roles.map(r => [r.id, r.title]));
+  let peopleUpdated = 0, tasks = 0, docs = 0;
+  for (const t of hub.team) {
+    const pid = idFor(t); const ex = db.prepare('SELECT id FROM people WHERE id = ?').get(pid);
+    for (const r of t.absorbs || []) roleOwner[r] = pid;
+    const row = { id: pid, responsibilities: JSON.stringify(t.responsibilities || []), legacy_roles: JSON.stringify((t.absorbs || []).map(r => roleTitle[r] || r)) };
+    if (!ex) Object.assign(row, { name: String(t.name || t.id).split(' ')[0], full_name: t.name, title: t.title, confirmed: 0, review_status: 'not_reviewed', departments: [normalizeDept(t.department, db.prepare('SELECT id, name, short FROM departments').all())].filter(d => db.prepare('SELECT 1 FROM departments WHERE id = ?').get(d)), source: src, notes: 'Imported from the old ops hub; not in the handoff or org chart.' });
+    upsert(db, 'people', row); peopleUpdated++;
+  }
+  for (const r of hub.roles) { // legacy role definitions are kept as documents so the "who used to do this" history survives
+    upsertDocument(db, { name: `legacy-role-${r.id}.md`, content: `# Legacy role: ${r.title}${r.name ? ' (' + r.name + ')' : ''}\nDepartment: ${r.department}\nNow absorbed by: ${roleOwner[r.id] ? personNameFromDb(db, roleOwner[r.id]) : 'nobody (unassigned)'}\n\n## Responsibilities\n${(r.responsibilities || []).map(x => '- ' + x).join('\n')}\n\n## Processes\n${(r.processes || []).map(x => '- ' + x).join('\n')}`, kind: 'org_chart', reason: 'legacy role from old ops hub', sensitive: 0, source: src });
+    docs++;
+  }
+  for (const p of hub.processes) {
+    const id = 'hub-' + p.id; const ex = db.prepare('SELECT id, proposed, board, owner_id FROM tasks WHERE id = ?').get(id);
+    const owner_id = roleOwner[p.owner] || null;
+    const participants = (p.participants || []).map(r => `${roleTitle[r] || r}${roleOwner[r] ? ' → ' + personNameFromDb(db, roleOwner[r]) : ' → unassigned'}`);
+    const department_id = HUB_PROCESS_DEPT[p.id] || HUB_CATEGORY_DEPT[String(p.category || '').toLowerCase()] || null;
+    const steps = (p.steps || []).map((x, i) => `${i + 1}. ${x}`).join('\n');
+    const old = /\b(200\d|201\d)\b/.test(p.date || '');
+    const row = { id, title: p.name, department_id, owner_id: ex?.owner_id || owner_id, trigger: p.description || null, steps, inputs: participants.length ? 'Participants (legacy role → current person):\n' + participants.join('\n') : null,
+      documented: steps ? 1 : 0, source: `${src} — SOP dated ${p.date || 'unknown'}`, source_link: `${filename || 'mch-ops-hub.jsx'}#${p.id}`,
+      missing_info: [old ? `SOP dated ${p.date}: written for the old org (DOC/DOP/CFO roles). Confirm which steps still apply.` : null, !owner_id ? `Legacy owner "${roleTitle[p.owner] || p.owner}" is not absorbed by anyone on the current team.` : null].filter(Boolean).join(' ') || null,
+      next_action: 'Review with ' + (owner_id ? personNameFromDb(db, owner_id) : 'the team') + ': confirm the steps still match how it is done today.' };
+    if (!ex) Object.assign(row, { proposed: 1, board: 'next' });
+    upsert(db, 'tasks', row);
+    upsertDocument(db, { name: `hub-process-${p.id}.md`, content: `# ${p.name}\n${p.description || ''}\n\n${steps}`, kind: 'procedure', reason: 'SOP from old ops hub', sensitive: 0, task_id: id, department_id, source: src });
+    addEvent(db, { entity_type: 'task', entity_id: id, kind: 'import', status: 'info', label: `${ex ? 'Re-imported' : 'Imported'} SOP from old ops hub: ${p.name}`, source: 'import', actor: role, external_id: 'hub-' + crypto.randomUUID() });
+    tasks++;
+  }
+  addEvent(db, { entity_type: 'integration', entity_id: 'dashboard', kind: 'import', status: 'info', label: `Snapshot import: old ops hub (${tasks} SOPs, ${hub.roles.length} legacy roles, ${hub.team.length} people)`, source: 'import', actor: role, external_id: 'hub-' + crypto.randomUUID() });
+  return { imported: tasks + docs + peopleUpdated, tasks, legacy_roles: hub.roles.length, people: peopleUpdated, unassigned_roles: hub.roles.filter(r => !roleOwner[r.id]).map(r => r.title), imported_at: ts };
+}
+function personNameFromDb(db, id) { return db.prepare('SELECT name FROM people WHERE id = ?').get(id)?.name || id; }
 
 // ---------- review helpers ----------
 const tokens = s => new Set(String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !['the', 'and', 'for', 'procedure', 'process'].includes(w)));
@@ -435,4 +502,4 @@ function pagesMarkdown(state) {
   return L.filter(x => x !== undefined).join('\n');
 }
 
-module.exports = { parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };
+module.exports = { parseOpsHub, importOpsHub, parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };

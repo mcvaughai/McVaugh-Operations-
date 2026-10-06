@@ -32,7 +32,7 @@ Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node
 
 * **World** — isometric campus with ten labeled departments, people (colored, labeled *Person*), proposed agents (gray dashed until reviewed, labeled *Agent (proposed)*), and a neighborhood of job sites. Drag to pan, scroll to zoom, *Focus department…*, *Overview*. Click anything to open its records.
 * **Start here, Brittany** — current step, last completed, one recommended next action, waiting on whom, decisions needed, mini Next/Working/Waiting/Done board, last checkpoint. *Save checkpoint* writes a new dated checkpoint; history is kept.
-* **Review** — the Stage 2 queue: unverified people, then PROPOSED tasks, one at a time, with duplicate suggestions and merge/reject/verify. Decisions are stamped and survive re-imports.
+* **Review** — the Stage 2 queue (people show their org-chart title, absorbed legacy roles and the responsibility list from the old ops hub): unverified people, then PROPOSED tasks, one at a time, with duplicate suggestions and merge/reject/verify. Decisions are stamped and survive re-imports.
 * **Board / Registry** — everything editable without the 3D view.
 * **Integrations** — each shown as disconnected / connected / failing; three import options (Obsidian `.md` from the browser, CSV from the browser, and **Option 3: bulk-import a folder on this computer** with a dry-run preview and skip-unchanged re-import); backup export/restore; handbook export for ChatGPT Pages.
 * **AI config** — per-agent purpose, needs-AI?, provider/model, why, cost, approval, eval examples, fallback.

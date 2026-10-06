@@ -3,6 +3,8 @@
 // Seeding only runs when the database is empty, so edits made in the app are never overwritten.
 'use strict';
 const { upsert, addEvent, nowIso } = require('./db');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const HANDOFF = 'Handoff: McVaugh_Operations_Assessment_and_Pages_Handoff.md (2026-10-02)';
 
@@ -217,11 +219,33 @@ const UPDATES = [
     addEvent(db, { entity_type: 'integration', entity_id: 'manual', kind: 'import', status: 'info', label: 'Manual: org chart 10.24.25 recorded (8 people, titles, reporting lines; Teresa and Ernesto added)', source: 'manual', actor: 'brittany', external_id: 'update-org-chart-10-24-25' });
     upsert(db, 'decisions', { id: 'dec-org-chart', date: '2026-10-06', title: 'Org chart 10.24.25 is the reference for titles and reporting lines', reason: 'Supplied by Brittany. Danielle is not on it; shared mailboxes accounting@ and purchasing@ exist.', decided_by: 'Brittany', status: 'approved', source: src });
   } },
+  { key: 'ops-hub-2026-10-06', apply(db) {
+    // The old MCH Operations Hub (mch-ops-hub.jsx) data: 21 SOPs, 16 legacy roles, current-team responsibilities. Re-importable from Integrations.
+    const { importOpsHub } = require('./imports');
+    const content = fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8');
+    importOpsHub(db, { filename: 'seed/mch-ops-hub.json', content }, 'system');
+    upsert(db, 'integrations', { id: 'dashboard', status: 'connected', last_import_at: nowIso(), last_message: 'Snapshot: old ops hub data seeded from seed/mch-ops-hub.json (supplied 2026-10-06). Re-import the .jsx from Integrations when it changes.' });
+  } },
+  { key: 'db-procedures-doc-2026-10-06', apply(db) {
+    // PROCEDURES FOR THE MCH DATABASE.doc (Maria Abney, 2019) — text extracted from the Word 97 binary; screenshots omitted.
+    const text = fs.readFileSync(path.join(__dirname, '..', 'seed', 'procedures-for-the-mch-database.txt'), 'utf8');
+    const src = 'PROCEDURES FOR THE MCH DATABASE.doc (Maria Abney, 2019-01-28), via Brittany 2026-10-06';
+    const id = 'obs-procedures-for-the-mch-database';
+    const ex = db.prepare('SELECT id FROM tasks WHERE id = ?').get(id);
+    upsert(db, 'tasks', { id, title: 'Procedures for the MCH Database (subcontractor work-order guide)', department_id: 'construction', owner_id: 'maria', backup_id: 'ernesto',
+      trigger: 'A subcontractor is assigned work on a job.', steps: text, documented: 1, source: src, source_link: 'http://db.mcvaugh.com/buildconnect/NewStuff/jobmenu.html',
+      evidence: 'Work order accepted in the database (New WO → name); completion box clicked; superintendent verifies 100% complete and within scope.',
+      approval_rules: 'Only amounts in the database are paid; any scope change needs approval and an additional work order.',
+      missing_info: 'Written 2019 for subcontractors. Confirm the superintendent verification step now sits with Maria, and what the "Accounts Payable letter" is.',
+      next_action: 'Maria confirms this is still how trades are told to use the database.', ...(ex ? {} : { proposed: 1, board: 'next' }) });
+    upsert(db, 'documents', { id: 'doc-procedures-for-the-mch-database', title: 'Procedures for the MCH Database', path: 'PROCEDURES FOR THE MCH DATABASE.doc', kind: 'procedure', kind_reason: 'Word 97 .doc, text extracted by the build (binary scan)', sensitive: 0, task_id: id, department_id: 'construction', summary: 'Subcontractor-facing guide to accepting and completing work orders in db.mcvaugh.com.', content: text, size: text.length, source: src, imported_at: nowIso(), underlying_path: 'PROCEDURES FOR THE MCH DATABASE.doc', underlying_status: 'extracted' });
+    addEvent(db, { entity_type: 'task', entity_id: id, kind: 'import', status: 'info', label: 'Imported: Procedures for the MCH Database (.doc text, 2019)', source: 'import', actor: 'system', external_id: 'update-db-procedures-2026-10-06' });
+  } },
   { key: 'stage2-checkpoint-2026-10-06', apply(db) {
     db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`).run(nowIso(), 'gather',
-      'Stage 2: review queue and bulk import are ready. Work through the Review tab one item at a time.',
+      'Stage 2: the old ops hub (21 SOPs, responsibilities for all 8 people) and the org chart are imported. Work through the Review tab one item at a time.',
       'Stage 1 build (visual world, registry, saved state). Stage 2 build (folder import with skip-unchanged, import preview, review queue with merge). 12 active jobs recorded.',
-      'Open the Review tab and verify the first person (it starts with the people, then proposed tasks). Then point Integrations → Option 3 at your Obsidian vault and click Preview.',
+      'Review tab → Maria first: her card now lists 54 responsibilities absorbed from DOC / Superintendent / PM / CA. Mark what is right, note what is not.',
       'Brittany (old dashboard export and a few real Obsidian notes, so the mapping can be checked); Brittany (which job is the 13th active home)',
       'Confirm the SQLite store decision; confirm the reuse decision for the existing skills.',
       'Added by the Stage 2 build. Save your own checkpoint when you stop.', 'system');

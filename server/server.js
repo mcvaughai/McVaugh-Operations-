@@ -276,6 +276,12 @@ async function api(req, res, url, p, role) {
     dbm.audit(db, role, 'import_folder', 'integration', 'obsidian', b.dir);
     return send(res, 200, r);
   }
+  if (p === '/api/import/opshub' && m === 'POST') {
+    const b = await readJson(req); const r = imports.importOpsHub(db, { filename: b.filename, content: b.content }, role);
+    if (r.error) return send(res, 400, r);
+    setIntegration('dashboard', 'connected', `Snapshot import: ${b.filename || 'ops hub'} — ${r.tasks} SOPs, ${r.legacy_roles} legacy roles, ${r.people} people`, { last_import_at: dbm.nowIso() });
+    dbm.audit(db, role, 'import_opshub', 'integration', 'dashboard', b.filename); return send(res, 200, r);
+  }
   if (p === '/api/import/aliases' && m === 'POST') { // extend heading/column mappings once real files are seen
     const b = await readJson(req);
     if (b.headings) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('heading_aliases', ?)").run(JSON.stringify(b.headings));

@@ -1,0 +1,30 @@
+PROCEDURES FOR THE MCH DATABASE
+Source: PROCEDURES FOR THE MCH DATABASE.doc — author Maria Abney, last saved by Teresa Teran, 2019-01-28 (3 pages, screenshots omitted). Supplied by Brittany 2026-10-06.
+
+PROCEDURES FOR THE DATABASE
+
+All necessary job information is found in the McVaugh Database. Work orders must be in the database prior to work commencing.  Payment may be delayed or denied if work order is not in the database.
+
+To access the database, log in to the internet and enter the following on the browser:
+
+
+http://db.mcvaugh.com/buildconnect/NewStuff/jobmenu.html
+
+Enter your user name and password assigned by the Main Office. 
+
+INBOX
+
+The main screen will take you to your INBOX.  In your INBOX you can see what work orders are waiting for your approval and receipt.  
+
+Click New WO and type your name to Accept the work.  When the work is accepted it will be under the Reports tab, Construction, Work Order Tracking.
+
+Once the work is complete, log back in, go to Work Order Tracking and click the box Complete and the current date will be inserted.  
+
+Any time you wish to return to this main screen, you must click on the INBOX tab at the top of the screen. 
+
+Any change to the scope of work must be approved and an additional work order created.  Only the amounts listed in the database will be paid.
+
+
+Processing Work Orders for Payment
+
+Once the Subcontractor clicks on the Work Order as complete, it will automatically go to the Superintendent who will VERIFY THAT THE WORK IS 100% COMPLETED AND WITHIN THE SCOPE OF WORK.  Please refer to the instructions in the Accounts Payable letter to check on payment status.

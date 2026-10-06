@@ -1,38 +1,114 @@
 {
-  "_note": "Workers for The Vault runner (bots/runner.py). Amounts are dollars; *_pct values are percent of the option premium. Edit and restart the runner.",
+  "_note": "Workers for The Vault runner (bots/runner.py). Amounts are dollars; *_pct values are percent of the option premium. The account block is the real money behind the bots: the runner never buys a contract whose premium exceeds max_premium_per_trade or the budget left, keeps at most max_open_positions open, and stops after day_trades_per_5_days round trips so a small margin account is not flagged as a pattern day trader. Edit and restart the runner.",
+  "account": {
+    "size": 100,
+    "max_premium_per_trade": 60,
+    "max_open_positions": 1,
+    "day_trades_per_5_days": 3
+  },
   "poll_seconds": 15,
   "fill_timeout_seconds": 20,
   "sim_seconds_per_bar": 1.0,
-  "trade_window": ["09:35", "15:30"],
+  "trade_window": [
+    "09:35",
+    "15:30"
+  ],
   "flatten_at": "15:50",
   "workers": [
     {
-      "id": "qqq0", "name": "QQQ 0σ", "symbol": "QQQ", "strategy": "sigma",
-      "params": { "lookback": 20, "sigma_k": 0.0, "confirm": 2 },
-      "qty": 2, "dte": 0, "strike_offset": 0,
-      "stop_loss_pct": 25, "lock_pct": 5, "trail_pct": 8, "take_profit_pct": 40, "max_hold_minutes": 30, "cooldown_minutes": 3,
-      "daily_brake": 1500, "daily_loss_limit": -600, "max_trades": 6, "enabled": true
+      "id": "qqq0",
+      "name": "QQQ 0σ",
+      "symbol": "QQQ",
+      "strategy": "sigma",
+      "params": {
+        "lookback": 20,
+        "sigma_k": 0.0,
+        "confirm": 2
+      },
+      "qty": 1,
+      "dte": 0,
+      "strike_offset": 0,
+      "stop_loss_pct": 25,
+      "lock_pct": 5,
+      "trail_pct": 8,
+      "take_profit_pct": 40,
+      "max_hold_minutes": 30,
+      "cooldown_minutes": 3,
+      "daily_brake": 40,
+      "daily_loss_limit": -40,
+      "max_trades": 2,
+      "enabled": true
     },
     {
-      "id": "qqq5", "name": "QQQ 1.5σ", "symbol": "QQQ", "strategy": "sigma",
-      "params": { "lookback": 20, "sigma_k": 1.5, "confirm": 1 },
-      "qty": 1, "dte": 0, "strike_offset": 0,
-      "stop_loss_pct": 25, "lock_pct": 5, "trail_pct": 8, "take_profit_pct": 40, "max_hold_minutes": 30, "cooldown_minutes": 3,
-      "daily_brake": 300, "daily_loss_limit": -300, "max_trades": 6, "enabled": true
+      "id": "qqq5",
+      "name": "QQQ 1.5σ",
+      "symbol": "QQQ",
+      "strategy": "sigma",
+      "params": {
+        "lookback": 20,
+        "sigma_k": 1.5,
+        "confirm": 1
+      },
+      "qty": 1,
+      "dte": 0,
+      "strike_offset": 0,
+      "stop_loss_pct": 25,
+      "lock_pct": 5,
+      "trail_pct": 8,
+      "take_profit_pct": 40,
+      "max_hold_minutes": 30,
+      "cooldown_minutes": 3,
+      "daily_brake": 40,
+      "daily_loss_limit": -40,
+      "max_trades": 2,
+      "enabled": true
     },
     {
-      "id": "trend", "name": "QQQ Trend", "symbol": "QQQ", "strategy": "trend",
-      "params": { "ema_fast": 9, "ema_slow": 50 },
-      "qty": 1, "dte": 0, "strike_offset": 0,
-      "stop_loss_pct": 30, "lock_pct": 5, "trail_pct": 10, "take_profit_pct": 60, "max_hold_minutes": 45, "cooldown_minutes": 5,
-      "daily_brake": 500, "daily_loss_limit": -300, "max_trades": 4, "enabled": true
+      "id": "trend",
+      "name": "QQQ Trend",
+      "symbol": "QQQ",
+      "strategy": "trend",
+      "params": {
+        "ema_fast": 9,
+        "ema_slow": 50
+      },
+      "qty": 1,
+      "dte": 0,
+      "strike_offset": 0,
+      "stop_loss_pct": 30,
+      "lock_pct": 5,
+      "trail_pct": 10,
+      "take_profit_pct": 60,
+      "max_hold_minutes": 45,
+      "cooldown_minutes": 5,
+      "daily_brake": 40,
+      "daily_loss_limit": -40,
+      "max_trades": 2,
+      "enabled": true
     },
     {
-      "id": "spy", "name": "SPY 0σ", "symbol": "SPY", "strategy": "sigma",
-      "params": { "lookback": 20, "sigma_k": 0.0, "confirm": 2 },
-      "qty": 1, "dte": 0, "strike_offset": 0,
-      "stop_loss_pct": 25, "lock_pct": 5, "trail_pct": 8, "take_profit_pct": 40, "max_hold_minutes": 30, "cooldown_minutes": 3,
-      "daily_brake": 500, "daily_loss_limit": -300, "max_trades": 6, "enabled": true
+      "id": "spy",
+      "name": "SPY 0σ",
+      "symbol": "SPY",
+      "strategy": "sigma",
+      "params": {
+        "lookback": 20,
+        "sigma_k": 0.0,
+        "confirm": 2
+      },
+      "qty": 1,
+      "dte": 0,
+      "strike_offset": 0,
+      "stop_loss_pct": 25,
+      "lock_pct": 5,
+      "trail_pct": 8,
+      "take_profit_pct": 40,
+      "max_hold_minutes": 30,
+      "cooldown_minutes": 3,
+      "daily_brake": 40,
+      "daily_loss_limit": -40,
+      "max_trades": 2,
+      "enabled": true
     }
   ]
 }

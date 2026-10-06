@@ -61,6 +61,41 @@ Every `poll_seconds` (15 by default) the runner:
 
 When a worker's realized profit for the day reaches `daily_brake` it clocks out ("profit brake hit · off duty") and does not trade again until the next day. `daily_loss_limit` does the same on the downside.
 
+## The account budget (what $100 actually buys)
+
+`config/bots.json` has an `account` block that describes the real money behind the bots. The runner enforces it in every mode, so paper trading on Alpaca's $100,000 paper account still behaves like your $100:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `size` | 100 | Starting budget. The runner never spends more than this plus what the bots have earned so far, even if the broker account holds more. |
+| `max_premium_per_trade` | 60 | A contract whose ask × 100 × qty is above this is skipped. The runner walks the strike out of the money, up to six strikes, to find one that fits; if none fits the worker shows "too pricey" and waits. |
+| `max_open_positions` | 1 | Workers share the slot; the others show "queued". |
+| `day_trades_per_5_days` | 3 | Pattern-day-trader protection. A margin account under $25,000 that makes four day trades in five business days gets frozen by the broker, so the runner stops at three and the workers show "day-trade cap". |
+
+With $100 that means: one contract at a time, usually one to three strikes out of the money, about three trades a week. An at-the-money same-day QQQ contract costs $150 to $300, which is why the bots have to go out of the money; those contracts move faster both ways and expire worthless more often. If you open the Alpaca account as a **cash** account there is no day-trade cap, but options cash settles the next day, so one trade a day is the practical limit. Raise `size` and `max_premium_per_trade` when you add money; raise `day_trades_per_5_days` only once the account is over $25,000.
+
+## Testing which strategy to use
+
+Two tools, in this order.
+
+**1. Backtest on real bars.** `bots/backtest.py` replays recorded one-minute SPY and QQQ bars through the exact runner, risk rules and budget, and prints one row per worker and variant:
+
+```
+python bots/backtest.py --source alpaca --days 20 --variants bots/variants.json
+```
+It needs the Alpaca keys in the environment (paper keys work; the data API is the same). `bots/variants.json` lists alternative settings to compare: tighter and wider stops, faster and slower trailing, sigma 1 and 2 instead of 0, and a longer cooldown. Edit it freely; a `patch` applies to every worker, an `account` block overrides the budget. Columns: trades, win rate, total and average P&L, best and worst day, max drawdown, profit factor (gross wins ÷ gross losses), return on premium, and green/red days. Favor the row with the highest profit factor and the shallowest drawdown, not the biggest total; with three trades a week, one lucky day can dominate the total.
+
+Options in the backtest are priced with Black-Scholes on the replayed underlying using the day's realized volatility, because minute-by-minute option tapes are not available. Direction and timing are real; slippage and the bid/ask are modeled. `--source sim` runs the same harness on synthetic days and only proves the plumbing.
+
+**2. Paper trade the winner.** Start the runner in paper mode during market hours (9:35 to 15:50 ET) and leave it running for at least five sessions:
+
+```
+python bots/runner.py
+```
+Then read `data/vault/trades.jsonl`: every line is a closed trade with entry, exit, reason and P&L. Compare the paper fills with what the backtest predicted for the same days. If the paper results are much worse than the backtest, the bid/ask on out-of-the-money contracts is eating the edge, and the fix is a bigger budget (closer to the money), fewer trades, or a longer hold, not a different signal.
+
+The sigma and trend strategies are starting points. Turn a worker off in the dashboard once it has shown a few red sessions, and keep the one that survives.
+
 ## Turning a worker on or off
 
 Open the worker's card on the dashboard and press **Clock out** (turns it off; any open trade is flattened first), **Clock in**, or **Flatten now**. The button queues a command that the runner picks up on its next pass, usually within `poll_seconds`, so the card updates a few seconds later. Only roles that can write (anything but `viewer`) get the buttons, and every command is written to the audit log.

@@ -125,6 +125,51 @@ def test_live_needs_flag():
     assert p.returncode != 0 and "VAULT_LIVE" in (p.stderr + p.stdout)
 
 
+def test_budget_walks_out_of_the_money_or_skips():
+    def edit(cfg):
+        cfg["account"] = {"size": 100, "max_premium_per_trade": 60, "max_open_positions": 1, "day_trades_per_5_days": 50}
+        for w in cfg["workers"]:
+            w["qty"] = 1; w["max_trades"] = 50; w["daily_brake"] = 10 ** 6; w["daily_loss_limit"] = -(10 ** 6)
+    r, _ = fresh(edit)
+    r.run(ticks=390)
+    assert r.history, "no trades under the $100 budget"
+    assert all(t["entry"] * 100 * t["qty"] <= 60 + 1e-6 for t in r.history), "a trade cost more than max_premium_per_trade"
+    # strikes were pushed out of the money to fit: every contract bought sits away from the spot at entry
+    assert any(abs(float(t["contract"][-8:]) / 1000 - 600) >= 1 for t in r.history if t["symbol"] == "QQQ")
+
+
+def test_one_open_position_at_a_time():
+    def edit(cfg):
+        cfg["account"] = {"size": 5000, "max_premium_per_trade": 2000, "max_open_positions": 1, "day_trades_per_5_days": 500}
+        for w in cfg["workers"]:
+            w["max_trades"] = 50; w["daily_brake"] = 10 ** 6; w["daily_loss_limit"] = -(10 ** 6)
+    r, _ = fresh(edit, seed=5)
+    seen_queue = False
+    for _ in range(390):
+        r.run(ticks=1)
+        assert sum(1 for w in r.workers if w.position) <= 1, "two positions open at once"
+        seen_queue = seen_queue or any(w.status == "queue" for w in r.workers)
+    assert seen_queue, "no worker ever waited for the slot"
+
+
+def test_day_trade_cap_from_history():
+    def edit(cfg):
+        cfg["account"] = {"size": 5000, "max_premium_per_trade": 2000, "max_open_positions": 4, "day_trades_per_5_days": 3}
+    r, d = fresh(edit)
+    os.makedirs(os.path.join(d, "vault"), exist_ok=True)
+    day = r.day
+    with open(os.path.join(d, "vault", "trades.jsonl"), "w") as f:
+        for i in range(3):
+            f.write(json.dumps({"id": f"h{i}", "bot": "spy", "symbol": "SPY", "contract": "SPY260101C00600000", "kind": "call", "qty": 1, "entry": 1, "exit": 1.1,
+                                "entry_time": f"{day}T10:0{i}:00", "exit_time": f"{day}T10:1{i}:00", "t": "10:10", "pnl": 10, "reason": "profit locked", "day": day, "mode": "sim"}) + "\n")
+    r2 = Runner(r.b, r.cfg, d, fast=True)
+    assert r2.day_trades_recent(None) == 3
+    r2.run(ticks=200)
+    assert len(r2.history) == 3, "traded past the day-trade cap"
+    assert all(w.status in ("pdt", "done", "closed", "window") for w in r2.workers), [w.status for w in r2.workers]
+    assert any(w.status == "pdt" for w in r2.workers)
+
+
 for name, fn in list(globals().items()):
     if name.startswith("test_"):
         check(name, fn)

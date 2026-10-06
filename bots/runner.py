@@ -80,7 +80,8 @@ class Worker:
 
 
 STATUS_LABEL = {"on": "on shift · watching", "position": "in a trade", "brake": "profit brake hit · off duty", "loss_limit": "loss limit hit · off duty",
-                "done": "trade limit reached · off duty", "off": "turned off", "closed": "market closed", "window": "outside trade window"}
+                "done": "trade limit reached · off duty", "off": "turned off", "closed": "market closed", "window": "outside trade window",
+                "queue": "waiting for a free slot", "pdt": "day-trade limit · off duty", "budget": "nothing affordable · watching"}
 
 
 class Runner:
@@ -96,6 +97,9 @@ class Runner:
         self.errors = []
         self.bars = {}        # symbol -> list of bars
         self.day = None
+        self.history = []     # every closed trade in this mode, from trades.jsonl (for the rolling day-trade count)
+        self.account = {"size": None, "max_premium_per_trade": None, "max_open_positions": None, "day_trades_per_5_days": None, **(config.get("account") or {})}
+        self.cash = None
         self._load_today()
 
     # ---------- files ----------
@@ -119,7 +123,10 @@ class Runner:
                         t = json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    if t.get("day") == today and t.get("mode") == self.mode:
+                    if t.get("mode") != self.mode:
+                        continue
+                    self.history.append(t)
+                    if t.get("day") == today:
                         w = next((w for w in self.workers if w.id == t["bot"]), None)
                         if w:
                             w.trades.append(t)
@@ -215,6 +222,11 @@ class Runner:
         del self.errors[:-8]
         print(f"[{now.strftime('%H:%M:%S')}] {msg}", file=sys.stderr)
 
+    def day_trades_recent(self, now):
+        """Round trips opened and closed on the same day within the last five trading days (the pattern-day-trader window)."""
+        days = sorted({t["day"] for t in self.history if t.get("day")} | {self.day})[-5:]
+        return sum(1 for t in self.history if t.get("day") in days and str(t.get("entry_time", ""))[:10] == str(t.get("exit_time", ""))[:10])
+
     def _run_worker(self, w, now, is_open):
         c = w.cfg
         closes = [b["c"] for b in self.bars.get(w.symbol, [])]
@@ -248,7 +260,16 @@ class Runner:
             w.status = "closed"; return
         if not in_window:
             w.status = "window"; return
-        w.status = "on"
+        limit = self.account.get("day_trades_per_5_days")
+        if limit and self.day_trades_recent(now) >= int(limit):
+            if w.status != "pdt":
+                w.think(now, f"{limit} day trades used in the last 5 days; sitting out so the account is not flagged")
+            w.status = "pdt"; return
+        slots = self.account.get("max_open_positions")
+        if slots and sum(1 for x in self.workers if x.position) >= int(slots):
+            w.status = "queue"; return
+        if w.status != "budget":
+            w.status = "on"
         cooldown = int(c.get("cooldown_minutes", 3))
         if w.last_exit_at and (now - w.last_exit_at) < timedelta(minutes=cooldown):
             return
@@ -263,14 +284,32 @@ class Runner:
     # ---------- orders ----------
     def _open(self, w, now, kind, spot):
         c = w.cfg
-        contract = self.b.pick_contract(w.symbol, spot, kind, int(c.get("dte", 0)), int(c.get("strike_offset", 0)))
-        if not contract:
-            w.think(now, f"no {kind} contract found near {spot:.2f}"); return
-        sym = contract["symbol"]
-        q = self.b.option_quote(sym)
-        if q["mid"] <= 0:
-            w.think(now, f"no quote for {sym}"); return
         qty = int(c.get("qty", 1))
+        cap = self.account.get("max_premium_per_trade")
+        if self.cash is not None:
+            cap = min(cap, self.cash) if cap else self.cash
+        contract = q = None
+        base = int(c.get("strike_offset", 0))
+        for extra in range(0, 7):                      # walk out of the money until the premium fits the budget
+            cand = self.b.pick_contract(w.symbol, spot, kind, int(c.get("dte", 0)), base + extra)
+            if not cand:
+                break
+            cq = self.b.option_quote(cand["symbol"])
+            if cq["mid"] <= 0:
+                continue
+            cost = (cq["ask"] or cq["mid"]) * 100 * qty
+            if cap is None or cost <= cap:
+                contract, q = cand, cq
+                if extra:
+                    w.think(now, f"{extra} strike{'s' if extra > 1 else ''} further out to fit ${cap:.0f}: {cand['symbol']} at {cq['ask']:.2f}")
+                break
+            if cap is not None and cap < 20:
+                break
+        if not contract:
+            if w.status != "budget":
+                w.think(now, f"no {kind} contract under ${cap:.0f}" if cap is not None else f"no {kind} contract found near {spot:.2f}")
+            w.status = "budget"; return
+        sym = contract["symbol"]
         o = self.b.submit(sym, qty, "buy", client_id=f"vault-{w.id}-{uuid.uuid4().hex[:8]}")
         o = self.b.wait_fill(o["id"], float(self.cfg.get("fill_timeout_seconds", 20)))
         px = float(o["filled_avg_price"])
@@ -315,6 +354,7 @@ class Runner:
              "entry": p["entry"], "exit": px, "entry_time": p["entry_time"], "exit_time": now.isoformat(), "t": now.strftime("%H:%M"),
              "pnl": pnl, "reason": reason, "day": self.day, "mode": self.mode}
         w.trades.append(t)
+        self.history.append(t)
         self._append_trade(t)
         w.position, w.last_exit_at = None, now
         w.status = "on" if w.enabled else "off"
@@ -332,6 +372,11 @@ class Runner:
         try:
             acct = self.b.account()
             equity = float(acct.get("equity") or 0)
+            size = self.account.get("size")
+            real_cash = float(acct.get("cash") or acct.get("buying_power") or 0)
+            # never spend more than the budget you said you have, grown or shrunk by what this mode has earned so far
+            budget = float(size) + sum(t["pnl"] for t in self.history) if size else None
+            self.cash = min(real_cash, budget) if budget is not None else real_cash
         except Exception as e:  # noqa: BLE001
             self._err(now, f"account: {e}"); equity = None
         series = {}
@@ -347,6 +392,8 @@ class Runner:
                  "minutes_since_open": now.hour * 60 + now.minute - 570}
         state = {"version": 1, "mode": self.mode, "as_of": now.isoformat(), "clock": clock, "day": self.day, "market_open": is_open, "equity": equity,
                  "profit_lock_pct": self.cfg.get("workers", [{}])[0].get("lock_pct", 5), "trade_window": self.cfg.get("trade_window"), "flatten_at": self.cfg.get("flatten_at"),
+                 "account": {**self.account, "cash": self.cash, "day_trades_recent": self.day_trades_recent(now),
+                             "open_positions": sum(1 for w in self.workers if w.position)},
                  "total": total, "unrealized": unreal, "workers": [w.snapshot() for w in self.workers], "series": series, "events": self.events, "errors": self.errors}
         self._atomic("state.json", state)
 

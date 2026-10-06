@@ -99,6 +99,17 @@ class Broker:
                 break
         return out[-minutes:]
 
+    def bars_range(self, symbol: str, start: str, end: str) -> list[dict]:
+        """One-minute bars between two RFC3339 timestamps (for backtests), oldest first."""
+        out, token = [], None
+        while True:
+            r = self._d("GET", "/v2/stocks/bars", {"symbols": symbol, "timeframe": "1Min", "start": start, "end": end, "limit": 10000, "feed": self.stock_feed, "page_token": token, "adjustment": "raw"})
+            out += (r.get("bars") or {}).get(symbol, [])
+            token = r.get("next_page_token")
+            if not token:
+                break
+        return out
+
     def last_price(self, symbol: str) -> float:
         r = self._d("GET", "/v2/stocks/trades/latest", {"symbols": symbol, "feed": self.stock_feed})
         return float(r["trades"][symbol]["p"])

@@ -1,0 +1,9 @@
+[
+  { "name": "tight-stop",   "patch": { "stop_loss_pct": 15 } },
+  { "name": "wide-stop",    "patch": { "stop_loss_pct": 35, "take_profit_pct": 60 } },
+  { "name": "quick-lock",   "patch": { "lock_pct": 3, "trail_pct": 5 } },
+  { "name": "slow-trail",   "patch": { "lock_pct": 10, "trail_pct": 12, "max_hold_minutes": 60 } },
+  { "name": "sigma-1",      "patch": { "params": { "sigma_k": 1.0 } } },
+  { "name": "sigma-2",      "patch": { "params": { "sigma_k": 2.0 } } },
+  { "name": "late-open",    "account": { "max_open_positions": 1 }, "patch": { "cooldown_minutes": 10 } }
+]

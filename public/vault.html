@@ -83,7 +83,8 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
 .chip.brake { background: rgba(255,201,64,.18); color: var(--gold); }
 .chip.on { background: rgba(62,240,138,.16); color: var(--profit); }
 .chip.position { background: rgba(39,211,255,.18); color: var(--grid); }
-.chip.loss_limit { background: rgba(255,93,122,.18); color: var(--loss); }
+.chip.loss_limit, .chip.pdt { background: rgba(255,93,122,.18); color: var(--loss); }
+.chip.queue, .chip.budget { background: rgba(255,181,74,.16); color: var(--warn); }
 .payroll tfoot td { font-weight: 700; border-top: 1px solid var(--line); }
 .payroll .note { font-size: 11px; color: var(--ink-3); margin-top: 8px; line-height: 1.35; }
 
@@ -305,7 +306,7 @@ const gVault = el('g', {}, gBuild);
 })();
 
 const SLOTS = [[-7, 5], [6, -6], [8, 7], [-7, -8], [0, -12], [12, 0], [0, 12], [-12, 0]];
-const BEAM = { brake: 'url(#gBeamGold)', position: 'url(#gBeamCyan)', on: 'url(#gBeamWarn)', loss_limit: 'url(#gBeamRed)', off: 'url(#gBeamDim)', closed: 'url(#gBeamDim)', window: 'url(#gBeamDim)', done: 'url(#gBeamWarn)', wait: 'url(#gBeamDim)' };
+const BEAM = { brake: 'url(#gBeamGold)', position: 'url(#gBeamCyan)', on: 'url(#gBeamWarn)', budget: 'url(#gBeamWarn)', queue: 'url(#gBeamWarn)', loss_limit: 'url(#gBeamRed)', pdt: 'url(#gBeamRed)', off: 'url(#gBeamDim)', closed: 'url(#gBeamDim)', window: 'url(#gBeamDim)', done: 'url(#gBeamWarn)', wait: 'url(#gBeamDim)' };
 const workerNodes = {};
 let towerSig = '';
 function buildTowers(workers) {
@@ -340,7 +341,7 @@ function tower(w, [x, y]) {
   g.addEventListener('click', () => openWorker(w.id));
   g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWorker(w.id); } });
 }
-const labelColor = (w) => ({ brake: '#ffc940', position: '#27d3ff', on: '#ffb54a', loss_limit: '#ff5d7a' })[w.status] || '#b8b3e6';
+const labelColor = (w) => ({ brake: '#ffc940', position: '#27d3ff', on: '#ffb54a', budget: '#ffb54a', queue: '#ffb54a', loss_limit: '#ff5d7a', pdt: '#ff5d7a' })[w.status] || '#b8b3e6';
 function windows(g, x, y, w, h, color) {
   const rows = Math.floor((h - 12) / 12);
   let seed = Math.round(Math.abs(x * 13 + y * 7)) + 3; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
@@ -460,7 +461,9 @@ function render(st) {
   const ck = st.clock || null;
   $('#clock').textContent = ck ? `market ${st.market_open ? 'open' : 'closed'} · runner at ${ck.time} ${ck.tz}${ck.tz === 'sim' ? ` (${ck.date})` : ''}${st.stale ? ' · STALE' : ''}` : 'no runner state yet';
   const syms = [...new Set(w.map(x => x.symbol))].join(' and ');
-  $('#clock2').textContent = (st.equity != null ? `account equity $${Math.round(st.equity).toLocaleString()} · ` : '') + `Python bots · 0DTE options on ${syms || 'SPY and QQQ'}`;
+  const ac = st.account || {};
+  $('#clock2').textContent = ac.size ? `budget $${Math.round(ac.cash ?? ac.size).toLocaleString()} of $${ac.size} · max $${ac.max_premium_per_trade}/trade · ${ac.open_positions || 0}/${ac.max_open_positions || '∞'} open · ${ac.day_trades_recent || 0}/${ac.day_trades_per_5_days || '∞'} day trades this week`
+    : (st.equity != null ? `account equity $${Math.round(st.equity).toLocaleString()} · ` : '') + `Python bots · 0DTE options on ${syms || 'SPY and QQQ'}`;
   // vault
   const total = st.total || 0, tTrades = w.reduce((s, x) => s + x.trade_count, 0), tWins = w.reduce((s, x) => s + x.wins, 0);
   $('#vaultTotal').textContent = money(total); $('#vaultTotal').className = 'big num ' + cls(total);
@@ -484,7 +487,7 @@ function render(st) {
   if (openId) openWorker(openId, false);
   if ($('#chart').classList.contains('open')) drawChart();
 }
-const chipText = (x) => ({ on: 'on', position: 'in trade', brake: 'brake', loss_limit: 'loss limit', done: 'done', off: 'off', closed: 'closed', window: 'waiting', wait: 'no runner' })[x.status] || x.status;
+const chipText = (x) => ({ on: 'on', position: 'in trade', brake: 'brake', loss_limit: 'loss limit', done: 'done', off: 'off', closed: 'closed', window: 'waiting', wait: 'no runner', queue: 'queued', pdt: 'day-trade cap', budget: 'too pricey' })[x.status] || x.status;
 
 /* ---------- worker card ---------- */
 function openWorker(id, fly = true) {
@@ -604,6 +607,9 @@ function buildTour() {
     else if (x.status === 'off') cap = `${x.name} is <em>turned off</em>. ${e} on the day.`;
     else if (x.status === 'done') cap = `${x.name} used up its trades for the day: <em>${e}</em>.`;
     else if (x.status === 'on') cap = `${x.name} is <em>on shift</em>, watching for its next signal. ${e} so far${x.trade_count ? `, ${x.wins} of ${x.trade_count} won` : ''}.`;
+    else if (x.status === 'queue') cap = `${x.name} is <em>queued</em>: another worker holds the one open slot. ${e} so far.`;
+    else if (x.status === 'pdt') cap = `${x.name} is sitting out: the account has used its <em>day trades</em> for the week.`;
+    else if (x.status === 'budget') cap = `${x.name} has a signal but nothing <em>affordable</em> inside the budget right now.`;
     else cap = `${x.name} is waiting: ${x.status_label}. <em>${e}</em> on the day.`;
     steps.push({ cap, focus: x.id });
   }

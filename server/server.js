@@ -106,7 +106,7 @@ function stateFor(role) {
   const latest = latestRunEvents();
   const integrations = db.prepare('SELECT * FROM integrations ORDER BY name').all().map(i => can.integrationConfig(role) ? i : { ...i, config: i.config ? '(restricted)' : null });
   const integ = Object.fromEntries(integrations.map(i => [i.id, i]));
-  const people = db.prepare('SELECT * FROM people ORDER BY name').all().map(p => ({ ...p, departments: JSON.parse(p.departments || '[]'), runtime: runtimeFor('person', p, latest, integ) }));
+  const people = db.prepare('SELECT * FROM people ORDER BY name').all().map(p => ({ ...p, email: sens ? p.email : undefined, departments: JSON.parse(p.departments || '[]'), runtime: runtimeFor('person', p, latest, integ) }));
   const agents = db.prepare('SELECT * FROM agents ORDER BY name').all().map(a => ({ ...a, runtime: runtimeFor('agent', a, latest, integ) }));
   let tasks = db.prepare('SELECT * FROM tasks WHERE archived = 0 ORDER BY updated_at DESC').all();
   const archived_count = db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE archived = 1').get().n;

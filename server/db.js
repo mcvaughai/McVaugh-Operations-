@@ -133,6 +133,10 @@ const MIGRATIONS = [
   ['tasks', 'reviewed_by', 'TEXT'],
   ['people', 'reviewed_at', 'TEXT'],
   ['people', 'reviewed_by', 'TEXT'],
+  ['people', 'full_name', 'TEXT'],
+  ['people', 'title', 'TEXT'],
+  ['people', 'reports_to', 'TEXT'],
+  ['people', 'email', 'TEXT'],
   ['documents', 'underlying_path', 'TEXT'],   // the real file an index-card note points to
   ['documents', 'underlying_status', 'TEXT'], // extracted | not_found | needs_conversion | not_followed
   ['documents', 'content', 'TEXT'],           // extracted text (capped)
@@ -149,7 +153,7 @@ function migrate(db) {
 // ---------- generic helpers ----------
 const TABLES = {
   departments: ['id','name','short','description','setup_stage','gx','gy','hue','sort'],
-  people: ['id','name','role_summary','confirmed','departments','review_status','notes','source','reviewed_at','reviewed_by','created_at','updated_at'],
+  people: ['id','name','role_summary','confirmed','departments','review_status','notes','source','reviewed_at','reviewed_by','full_name','title','reports_to','email','created_at','updated_at'],
   agents: ['id','name','department_id','purpose','setup_stage','approach','approach_note','enabled','paused','human_authority','initial_output','n8n_workflow_id','next_run','proposed','created_at','updated_at'],
   tasks: ['id','title','department_id','owner_id','backup_id','agent_id','trigger','inputs','steps','deadline','evidence','approval_rules','automation_approach','verification_result','source_link','documented','automated','verified','board','proposed','project_stage','missing_info','blocker','waiting_on','next_action','sensitive','source','archived','merged_into','review_note','reviewed_at','reviewed_by','created_at','updated_at'],
   homes: ['id','address','job_id','active','kind','stage','pilot','notes','source','imported_at','updated_at'],

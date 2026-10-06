@@ -192,6 +192,31 @@ const UPDATES = [
     upsert(db, 'tasks', { id: 'impl-confirm-13th-home', title: 'Confirm the 13th active home (one row was redacted on the loan screen)', department_id: 'exec', owner_id: 'brittany', board: 'next', project_stage: 'gather', proposed: 0, documented: 1, source: src, next_action: 'Open Registry → Homes and mark the missing active job; add its MCH Job ID.' });
     addEvent(db, { entity_type: 'integration', entity_id: 'manual', kind: 'import', status: 'info', label: 'Manual: 12 active jobs recorded from Brittany (10 waiting for permits, 2 in progress)', source: 'manual', actor: 'brittany', external_id: 'update-active-jobs-2026-10-06' });
   } },
+  { key: 'org-chart-10-24-25', apply(db) {
+    // Company Organizational Chart as of 10.24.25, supplied by Brittany on 2026-10-06. Titles are as printed on the chart;
+    // the handoff's role summaries are kept because they describe current implementation roles.
+    const src = 'Company Organizational Chart (10.24.25), via Brittany 2026-10-06'; const ts = nowIso();
+    const rows = [
+      ['jim',      'Jim McVaugh',      'CEO',                              null,      'jim@mcvaugh.com',        ['exec', 'design']],
+      ['pam',      'Pamela McVaugh',   'Sales Broker / Manager',           'jim',     'pam@mcvaugh.com',        ['design', 'marketing']],
+      ['teresa',   'Teresa Teran',     'Executive Assistant / HR',         'jim',     'tteran@mcvaugh.com',     ['exec']],
+      ['kenneth',  'Kenneth Chapman',  'Senior Accounting Manager',        'jim',     'kchapman@mcvaugh.com',   ['accounting']],
+      ['maria',    'Maria Abney',      'Senior Project Manager',           'jim',     'mabney@mcvaugh.com',     ['construction', 'purchasing']],
+      ['james',    'James McVaugh',    'Sales / Marketing Coordinator',    'pam',     'james@mcvaugh.com',      ['design', 'marketing']],
+      ['brittany', 'Brittany McVaugh', 'Accounting Assistant',             'kenneth', 'brittany@mcvaugh.com',   ['exec', 'accounting']],
+      ['ernesto',  'Ernesto Vazquez',  'Purchasing',                       'maria',   'evazquez@mcvaugh.com',   ['purchasing']],
+    ];
+    for (const [id, full_name, title, reports_to, email, departments] of rows) {
+      const ex = db.prepare('SELECT id, departments FROM people WHERE id = ?').get(id);
+      const merged = ex ? [...new Set([...JSON.parse(ex.departments || '[]'), ...departments])] : departments;
+      upsert(db, 'people', { id, name: ex ? undefined : full_name.split(' ')[0], full_name, title, reports_to, email, departments: merged, confirmed: 1,
+        ...(ex ? {} : { role_summary: title + ' (per org chart; responsibilities not yet reviewed)', review_status: 'not_reviewed', source: src, notes: 'On the 10.24.25 org chart but not in the assessment handoff.' }) });
+    }
+    upsert(db, 'people', { id: 'teresa', notes: 'On the 10.24.25 org chart but not in the assessment handoff. Shared mailbox accounting@mcvaugh.com is listed under Kenneth; purchasing@mcvaugh.com under Ernesto.' });
+    upsert(db, 'people', { id: 'danielle', notes: 'Confirmed in the handoff (selections/design when assigned). Not on the 10.24.25 org chart — confirm current status.' });
+    addEvent(db, { entity_type: 'integration', entity_id: 'manual', kind: 'import', status: 'info', label: 'Manual: org chart 10.24.25 recorded (8 people, titles, reporting lines; Teresa and Ernesto added)', source: 'manual', actor: 'brittany', external_id: 'update-org-chart-10-24-25' });
+    upsert(db, 'decisions', { id: 'dec-org-chart', date: '2026-10-06', title: 'Org chart 10.24.25 is the reference for titles and reporting lines', reason: 'Supplied by Brittany. Danielle is not on it; shared mailboxes accounting@ and purchasing@ exist.', decided_by: 'Brittany', status: 'approved', source: src });
+  } },
   { key: 'stage2-checkpoint-2026-10-06', apply(db) {
     db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`).run(nowIso(), 'gather',
       'Stage 2: review queue and bulk import are ready. Work through the Review tab one item at a time.',

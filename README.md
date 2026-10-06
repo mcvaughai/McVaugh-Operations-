@@ -2,7 +2,7 @@
 
 A persistent, interactive isometric workspace for McVaugh Custom Homes: the human team, operating functions, tasks, proposed AI agents and the project neighborhood in one picture — backed by a real saved registry so it shows where Brittany stopped, what is complete, what is blocked, and the next small step.
 
-Stage 1 build. See `docs/ARCHITECTURE.md` for the architecture, store and reuse decisions, and what was (and was not) inspected.
+Stage 1 + Stage 2 build. See `docs/ARCHITECTURE.md` for the architecture, store and reuse decisions, and what was (and was not) inspected.
 
 ## Run it (Windows, Mac or Linux)
 
@@ -23,6 +23,7 @@ Optional environment variables:
 | `MOW_PORT` | Port (default 8787) |
 | `MOW_DATA_DIR` | Where the sqlite file and credentials live (default `./data`) — point it at a backed-up drive |
 | `MOW_N8N_SECRET` | Shared secret n8n must send in `X-MOW-Secret`; webhook refuses everything until set |
+| `MOW_IMPORT_DIR` | Default folder for Option 3 bulk import (e.g. your Obsidian vault) |
 | `MOW_MCHDB_URL` | Page used for the read-only reachability check (default `http://db.mcvaugh.com/buildconnect/NewStuff/wotracking.html`) |
 
 Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node server\server.js`
@@ -31,8 +32,9 @@ Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node
 
 * **World** — isometric campus with ten labeled departments, people (colored, labeled *Person*), proposed agents (gray dashed until reviewed, labeled *Agent (proposed)*), and a neighborhood of job sites. Drag to pan, scroll to zoom, *Focus department…*, *Overview*. Click anything to open its records.
 * **Start here, Brittany** — current step, last completed, one recommended next action, waiting on whom, decisions needed, mini Next/Working/Waiting/Done board, last checkpoint. *Save checkpoint* writes a new dated checkpoint; history is kept.
+* **Review** — the Stage 2 queue: unverified people, then PROPOSED tasks, one at a time, with duplicate suggestions and merge/reject/verify. Decisions are stamped and survive re-imports.
 * **Board / Registry** — everything editable without the 3D view.
-* **Integrations** — each shown as disconnected / connected / failing, with imports (Obsidian `.md`, CSV), backup export/restore, and the handbook export for ChatGPT Pages.
+* **Integrations** — each shown as disconnected / connected / failing; three import options (Obsidian `.md` from the browser, CSV from the browser, and **Option 3: bulk-import a folder on this computer** with a dry-run preview and skip-unchanged re-import); backup export/restore; handbook export for ChatGPT Pages.
 * **AI config** — per-agent purpose, needs-AI?, provider/model, why, cost, approval, eval examples, fallback.
 * **History** — all activity events with their source tag (MANUAL / N8N / IMPORT / DEMO), checkpoint history, audit (admin).
 

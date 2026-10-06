@@ -1,6 +1,6 @@
 # McVaugh Operations World — architecture and reuse decision (Stage 1)
 
-Date: 2026-10-06. Status: Stage 1 delivered; decisions marked PROPOSED need Brittany's confirmation.
+Date: 2026-10-06. Status: Stage 1 and Stage 2 delivered; decisions marked PROPOSED need Brittany's confirmation.
 
 ## 1. What was inspected before building
 
@@ -97,7 +97,19 @@ Roles: `admin`, `accounting`, `construction`, `design_sales`, `viewer`. Passphra
 
 `config/models.json` lists candidate model ids with the date and method of verification; the app never hard-codes one. The AI config table records purpose, provider/model, why, expected cost, approval rule, eval examples and fallback per agent. Existing ChatGPT Business / Claude Team seats do not cover API calls; nothing in this app purchases anything or calls a model.
 
-## 10. Known limits of Stage 1
+## 10. Stage 2 — import, reconcile, verify one at a time
+
+* **Three import options.** (1) Obsidian notes from the browser, (2) CSV from the browser, (3) **folder bulk import**: `POST /api/import/folder {dir}` walks a folder on the server's filesystem (e.g. the vault on `L:`), imports every `.md`/`.csv`, and records each file's SHA-256 in `import_files`; a re-run skips files whose hash is unchanged and re-imports changed ones (`force` overrides). Admin/accounting only, because it reads the server's disk. Skips `.obsidian`, `.trash`, `.git`.
+* **Preview before commit.** `POST /api/import/preview` (files or `dir`) runs the same parser as a dry run and reports, per file, which headings/columns mapped to which fields, which were unmapped, and warnings (unknown owner, unrecognized CSV layout, note with no headings). Nothing is written. Mapping tables (`heading_aliases`, `csv_aliases` in `meta`) can be extended from the UI once real files show their headings.
+* **Provenance and idempotence.** Every imported record carries `source` = file name + date and an `import` event. Re-importing a note refreshes content fields but never undoes a review decision (`proposed`, `board`, owner/backup once set).
+* **Review queue** (Review tab): people who are not yet verified, then tasks marked PROPOSED, one at a time. For a person: role summary, departments, tasks owned/backed up, imported responsibilities → *Verified* / *Under review* with a note, stamped `reviewed_at/by`. For a task: all stored fields, **possible duplicates** (token overlap on titles + same owner, ≥50%), → *Verify* (proposed=0), *Reject/archive* (leaves the board, history kept, `archived_count` shown), or **Merge** into an existing task (`POST /api/review/merge`: fills the target's empty fields, concatenates sources, archives the source, logs an event).
+* **Keyed data updates.** Facts Brittany supplies in conversation are applied once per database via `seed.js` `UPDATES` (tracked in `meta.applied_updates`), so a fresh database on her machine gets them too. First entry: the 12 active jobs (10 waiting for permits on Royal Oaks Run Dr / Royal Oaks Banner Way, 2 Royal Parkside Place in progress) from her loan-tracking screen on 2026-10-06; loan and bank figures were deliberately not stored.
+
+## 11. Known limits after Stage 2
+
+* No `.xlsx` parsing (CSV only). No live MCH DB data pulls (reachability only). No Pages sync.
+* Duplicate detection is title-based; it will miss procedures described with different words and will suggest false matches on generic titles — it only suggests, never merges on its own.
+* The mapping tables were built against the handoff's vocabulary and synthetic notes; they have not yet been checked against a real Obsidian note or the old dashboard export.
 
 * The world is a 2D-SVG isometric scene, not WebGL; it is deliberately light so it runs anywhere.
 * No `.xlsx` parsing (CSV only). No live MCH DB data pulls (reachability only). No Pages sync.

@@ -101,6 +101,10 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 
 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, role TEXT NOT NULL, created_at TEXT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS import_files (
+  path TEXT PRIMARY KEY, hash TEXT NOT NULL, size INTEGER, imported_at TEXT NOT NULL, kind TEXT, status TEXT
+);
 `;
 
 function nowIso() { return new Date().toISOString(); }
@@ -110,15 +114,33 @@ function open() {
   const db = new DatabaseSync(DB_PATH);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+// Additive schema changes for databases created by earlier versions.
+const MIGRATIONS = [
+  ['tasks', 'archived', 'INTEGER NOT NULL DEFAULT 0'],      // rejected/merged imports leave the board but keep history
+  ['tasks', 'merged_into', 'TEXT'],
+  ['tasks', 'review_note', 'TEXT'],
+  ['tasks', 'reviewed_at', 'TEXT'],
+  ['tasks', 'reviewed_by', 'TEXT'],
+  ['people', 'reviewed_at', 'TEXT'],
+  ['people', 'reviewed_by', 'TEXT'],
+];
+function migrate(db) {
+  for (const [table, column, type] of MIGRATIONS) {
+    const has = db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column);
+    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
 }
 
 // ---------- generic helpers ----------
 const TABLES = {
   departments: ['id','name','short','description','setup_stage','gx','gy','hue','sort'],
-  people: ['id','name','role_summary','confirmed','departments','review_status','notes','source','created_at','updated_at'],
+  people: ['id','name','role_summary','confirmed','departments','review_status','notes','source','reviewed_at','reviewed_by','created_at','updated_at'],
   agents: ['id','name','department_id','purpose','setup_stage','approach','approach_note','enabled','paused','human_authority','initial_output','n8n_workflow_id','next_run','proposed','created_at','updated_at'],
-  tasks: ['id','title','department_id','owner_id','backup_id','agent_id','trigger','inputs','steps','deadline','evidence','approval_rules','automation_approach','verification_result','source_link','documented','automated','verified','board','proposed','project_stage','missing_info','blocker','waiting_on','next_action','sensitive','source','created_at','updated_at'],
+  tasks: ['id','title','department_id','owner_id','backup_id','agent_id','trigger','inputs','steps','deadline','evidence','approval_rules','automation_approach','verification_result','source_link','documented','automated','verified','board','proposed','project_stage','missing_info','blocker','waiting_on','next_action','sensitive','source','archived','merged_into','review_note','reviewed_at','reviewed_by','created_at','updated_at'],
   homes: ['id','address','job_id','active','kind','stage','pilot','notes','source','imported_at','updated_at'],
   decisions: ['id','date','title','reason','decided_by','status','source','created_at'],
   integrations: ['id','name','kind','status','last_checked','last_message','last_import_at','config','notes'],
@@ -167,7 +189,7 @@ function audit(db, role, action, entity_type, entity_id, detail) {
 
 function exportAll(db) {
   const out = { exported_at: nowIso(), format: 'mcvaugh-operations-world/1' };
-  for (const t of [...Object.keys(TABLES), 'checkpoints', 'events', 'audit', 'meta']) {
+  for (const t of [...Object.keys(TABLES), 'checkpoints', 'events', 'audit', 'meta', 'import_files']) {
     out[t] = db.prepare(`SELECT * FROM ${t}`).all();
   }
   return out;
@@ -177,7 +199,7 @@ function importBackup(db, dump) {
   if (!dump || dump.format !== 'mcvaugh-operations-world/1') throw new Error('Not a McVaugh Operations World backup');
   db.exec('BEGIN');
   try {
-    for (const t of [...Object.keys(TABLES), 'checkpoints', 'events', 'audit', 'meta']) {
+    for (const t of [...Object.keys(TABLES), 'checkpoints', 'events', 'audit', 'meta', 'import_files']) {
       if (!Array.isArray(dump[t])) continue;
       db.exec(`DELETE FROM ${t}`);
       for (const row of dump[t]) {

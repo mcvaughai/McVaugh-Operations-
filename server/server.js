@@ -9,7 +9,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { URL } = require('node:url');
 const dbm = require('./db');
-const { seedIfEmpty } = require('./seed');
+const { seedIfEmpty, applyUpdates } = require('./seed');
 const imports = require('./imports');
 
 const PORT = Number(process.env.MOW_PORT || 8787);
@@ -18,6 +18,7 @@ const STALE_MINUTES = 30;
 
 const db = dbm.open();
 const seeded = seedIfEmpty(db);
+applyUpdates(db);
 
 // ---------- roles & credentials (never shipped to the browser) ----------
 const ROLES = ['admin', 'accounting', 'construction', 'design_sales', 'viewer'];
@@ -107,7 +108,8 @@ function stateFor(role) {
   const integ = Object.fromEntries(integrations.map(i => [i.id, i]));
   const people = db.prepare('SELECT * FROM people ORDER BY name').all().map(p => ({ ...p, departments: JSON.parse(p.departments || '[]'), runtime: runtimeFor('person', p, latest, integ) }));
   const agents = db.prepare('SELECT * FROM agents ORDER BY name').all().map(a => ({ ...a, runtime: runtimeFor('agent', a, latest, integ) }));
-  let tasks = db.prepare('SELECT * FROM tasks ORDER BY updated_at DESC').all();
+  let tasks = db.prepare('SELECT * FROM tasks WHERE archived = 0 ORDER BY updated_at DESC').all();
+  const archived_count = db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE archived = 1').get().n;
   tasks = tasks.map(t => (t.sensitive && !sens) ? { id: t.id, title: '(restricted: accounting/cash)', department_id: t.department_id, owner_id: t.owner_id, board: t.board, sensitive: 1, restricted: true, documented: t.documented, automated: t.automated, verified: t.verified, proposed: t.proposed, project_stage: t.project_stage } : t);
   const departments = db.prepare('SELECT * FROM departments ORDER BY sort').all().map(d => ({ ...d, runtime: runtimeFor('department', d, latest, integ) }));
   const homes = db.prepare('SELECT * FROM homes ORDER BY address').all().map(h => ({ ...h, runtime: runtimeFor('home', h, latest, integ) }));
@@ -118,8 +120,11 @@ function stateFor(role) {
   const ai_configs = db.prepare('SELECT * FROM ai_configs ORDER BY agent_id').all();
   const audit = can.audit(role) ? db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 100').all() : [];
   const demo = db.prepare("SELECT value FROM meta WHERE key = 'demo_mode'").get()?.value === 'on';
+  const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
+  const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
+  const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
-    departments, people, agents, tasks, homes, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo,
+    departments, people, agents, tasks, archived_count, homes, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
     server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET } };
 }
 
@@ -256,6 +261,28 @@ async function api(req, res, url, p, role) {
     setIntegration(b.target === 'dashboard' ? 'dashboard' : 'excel', 'connected', `Snapshot import: ${b.filename || 'csv'} (${r.imported} rows)`, { last_import_at: dbm.nowIso() });
     return send(res, 200, r);
   }
+  if (p === '/api/import/preview' && m === 'POST') {
+    const b = await readJson(req); const people = db.prepare('SELECT id, name FROM people').all(), departments = db.prepare('SELECT id, name, short FROM departments').all();
+    if (b.dir) return send(res, 200, imports.importFolder(db, { dir: b.dir, dryRun: true, csvTarget: b.target || 'auto' }, role));
+    const out = (b.files || []).map(f => /\.csv$/i.test(f.name) ? { name: f.name, kind: 'csv', ...imports.parseCsvFile({ target: b.target || 'auto', filename: f.name, content: f.content }, { aliases: imports.aliasMap(db), people }) } : { name: f.name, kind: 'md', ...imports.parseNote(f, { headings: imports.headingMap(db), people }) });
+    return send(res, 200, { files: out });
+  }
+  if (p === '/api/import/folder' && m === 'POST') {
+    if (role !== 'admin' && role !== 'accounting') return send(res, 403, { error: 'admin or accounting only (reads the server filesystem)' });
+    const b = await readJson(req); const r = imports.importFolder(db, { dir: b.dir, dryRun: false, force: !!b.force, csvTarget: b.target || 'auto' }, role);
+    if (r.error) return send(res, 400, r);
+    setIntegration('obsidian', 'connected', `Folder snapshot: ${r.imported} imported, ${r.skipped_unchanged} unchanged — ${b.dir}`, { last_import_at: dbm.nowIso() });
+    dbm.audit(db, role, 'import_folder', 'integration', 'obsidian', b.dir);
+    return send(res, 200, r);
+  }
+  if (p === '/api/import/aliases' && m === 'POST') { // extend heading/column mappings once real files are seen
+    const b = await readJson(req);
+    if (b.headings) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('heading_aliases', ?)").run(JSON.stringify(b.headings));
+    if (b.aliases) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('csv_aliases', ?)").run(JSON.stringify(b.aliases));
+    dbm.audit(db, role, 'update_aliases'); return send(res, 200, { headings: imports.headingMap(db), aliases: imports.aliasMap(db) });
+  }
+  if (p === '/api/review/merge' && m === 'POST') { const b = await readJson(req); const t = imports.mergeTasks(db, b.source_id, b.target_id, role); dbm.audit(db, role, 'merge', 'tasks', b.target_id, b.source_id); return send(res, 200, t); }
+  if (p === '/api/review/duplicates' && m === 'POST') { const b = await readJson(req); const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(b.id); if (!task) return send(res, 404, { error: 'not found' }); return send(res, 200, imports.duplicateCandidates(db.prepare('SELECT * FROM tasks').all(), task)); }
   if (p === '/api/export/pages/mark' && m === 'POST') { dbm.addEvent(db, { entity_type: 'integration', entity_id: 'pages', kind: 'import', status: 'info', label: 'Manual: handbook export pasted into ChatGPT Pages', source: 'manual', actor: role, external_id: 'pages-' + crypto.randomUUID() }); setIntegration('pages', 'disconnected', 'Manual export workflow; last export ' + dbm.nowIso(), { last_import_at: dbm.nowIso() }); return send(res, 200, { ok: true }); }
   // generic table upsert / delete: /api/<table>[/<id>]
   const mt = p.match(/^\/api\/(departments|people|agents|tasks|homes|decisions|integrations|ai_configs)(?:\/([^/]+))?$/);
@@ -271,10 +298,12 @@ async function api(req, res, url, p, role) {
     if (table === 'tasks' && body.id) { const ex = db.prepare('SELECT sensitive FROM tasks WHERE id = ?').get(body.id); if (ex?.sensitive && !can.sensitive(role)) return send(res, 403, { error: 'restricted' }); }
     if (table === 'integrations' && !can.integrationConfig(role)) delete body.config;
     const before = body.id ? db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(body.id) : null;
+    if (table === 'people' && body.review_status === 'verified') { body.reviewed_at = dbm.nowIso(); body.reviewed_by = role; }
+    if (table === 'tasks' && (body.proposed === 0 || body.proposed === '0' || body.archived)) { body.reviewed_at = dbm.nowIso(); body.reviewed_by = role; }
     const row = dbm.upsert(db, table, body);
     dbm.audit(db, role, before ? 'update' : 'create', table, row.id, JSON.stringify(body).slice(0, 500));
     // setup milestone changes are recorded as events so history shows who/when
-    const milestoneKeys = ['setup_stage', 'review_status', 'documented', 'automated', 'verified', 'board', 'active', 'pilot'];
+    const milestoneKeys = ['setup_stage', 'review_status', 'documented', 'automated', 'verified', 'board', 'active', 'pilot', 'proposed', 'archived'];
     const changed = milestoneKeys.filter(k => body[k] !== undefined && (!before || String(before[k]) !== String(body[k])));
     if (changed.length) dbm.addEvent(db, { entity_type: table.replace(/s$/, '').replace('people', 'person'), entity_id: row.id, kind: 'setup', status: 'info', source: 'manual', actor: role,
       label: `Manual: ${changed.map(k => `${k} → ${body[k]}`).join(', ')}`, external_id: 'manual-' + crypto.randomUUID() });

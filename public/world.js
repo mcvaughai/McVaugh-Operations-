@@ -150,15 +150,14 @@
     return g;
   }
 
-  function neighborhood(homes, originX, originY) {
+  function neighborhood(homes, originX, originY, { title, subtitle, cols = 6, cell = 1.9, key = 'neighborhood', fill = '#e8f5e4', stroke = '#b7d8ae' } = {}) {
     const g = el('g');
-    const cols = 6, cell = 1.9;
     const rows = Math.ceil(homes.length / cols) || 1;
     const W = cols * cell + 1, H = rows * cell + 1;
-    g.appendChild(poly([iso(originX, originY), iso(originX + W, originY), iso(originX + W, originY + H), iso(originX, originY + H)], { fill: '#e8f5e4', stroke: '#b7d8ae', 'stroke-width': 1.5 }));
+    g.appendChild(poly([iso(originX, originY), iso(originX + W, originY), iso(originX + W, originY + H), iso(originX, originY + H)], { fill, stroke, 'stroke-width': 1.5 }));
     const [tx, ty] = iso(originX + W / 2, originY, 0);
-    g.appendChild(label(tx, ty - 24, 'Project neighborhood', 'lbl dept'));
-    g.appendChild(label(tx, ty - 12, `${homes.length} jobs from snapshot · active status unconfirmed unless marked`, 'lbl small'));
+    g.appendChild(label(tx, ty - 52, title, 'lbl dept'));
+    g.appendChild(label(tx, ty - 40, subtitle, 'lbl small'));
     homes.forEach((h, i) => {
       const x = originX + .5 + (i % cols) * cell, y = originY + .5 + Math.floor(i / cols) * cell;
       const hue = h.pilot ? 45 : h.active === 'active' ? 205 : 210;
@@ -172,11 +171,13 @@
       eg.appendChild(el('circle', { class: 'hitbox', cx, cy: cy + 8, r: 22, fill: 'transparent', stroke: 'transparent' }));
       if (h.pilot) eg.appendChild(badge(cx + 14, cy - 10, '★', '#e0a21b'));
       eg.appendChild(runtimeOverlay(cx, cy, h.runtime || {}, 16));
-      eg.appendChild(label(cx, cy + 32, h.address.length > 22 ? h.address.slice(0, 21) + '…' : h.address, 'lbl small'));
+      eg.appendChild(label(cx, cy + 32, h.address.length > 24 ? h.address.slice(0, 23) + '…' : h.address, h.active === 'active' ? 'lbl' : 'lbl small'));
+      if (h.active === 'active' && h.stage) eg.appendChild(label(cx, cy + 42, h.stage.slice(0, 30), 'lbl small'));
       g.appendChild(eg);
     });
     const [lx, ly0] = iso(originX, originY + H), [rx] = iso(originX + W, originY), [, ty0] = iso(originX, originY, 60), [, by1] = iso(originX + W, originY + H);
-    bounds.neighborhood = { x: lx - 40, y: ty0 - 40, w: rx - lx + 80, h: by1 - ty0 + 80 };
+    bounds[key] = { x: lx - 40, y: ty0 - 40, w: rx - lx + 80, h: by1 - ty0 + 80 };
+    g._H = H;
     return g;
   }
 
@@ -214,8 +215,12 @@
     const unP = s.people.filter(p => !(p.departments || []).some(id => s.departments.find(d => d.id === id)));
     const unA = s.agents.filter(a => !s.departments.find(d => d.id === a.department_id));
     if (unP.length || unA.length) root.appendChild(departmentPlot({ id: '_unassigned', name: 'Unassigned', hue: 0, gx: maxGx + 1, gy: 0, setup_stage: 'not_reviewed', runtime: {} }, unP, unA));
-    const homesVisible = s.homes.filter(h => h.active !== 'inactive');
-    root.appendChild(neighborhood(homesVisible, (maxGx + 1) * (PLOT + GAP) + 1, 0));
+    const active = s.homes.filter(h => h.active === 'active').sort((a, b) => (b.pilot - a.pilot) || a.address.localeCompare(b.address));
+    const snapshot = s.homes.filter(h => h.active === 'unknown').sort((a, b) => a.address.localeCompare(b.address));
+    const nx = (maxGx + 1) * (PLOT + GAP) + 1;
+    const snap = neighborhood(snapshot, nx, 0, { title: 'Job list snapshot', subtitle: `${snapshot.length} jobs from the skill job map · status unconfirmed until marked`, key: 'snapshot', fill: '#eef2f6', stroke: '#c5cdd9' });
+    root.appendChild(snap);
+    root.appendChild(neighborhood(active, nx, snap._H + 2, { title: 'Active jobs', subtitle: `${active.length} active · ${active.filter(h => h.pilot).length} pilot`, cols: 4, cell: 3.2, key: 'neighborhood' }));
     const all = Object.values(bounds);
     bounds._all = { x: Math.min(...all.map(b => b.x)), y: Math.min(...all.map(b => b.y)), w: 0, h: 0 };
     bounds._all.w = Math.max(...all.map(b => b.x + b.w)) - bounds._all.x; bounds._all.h = Math.max(...all.map(b => b.y + b.h)) - bounds._all.y;

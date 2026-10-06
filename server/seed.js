@@ -175,4 +175,41 @@ function seedIfEmpty(db) {
   return true;
 }
 
-module.exports = { seedIfEmpty };
+
+// Keyed data updates applied once per database (also to databases seeded before the update existed).
+// Each entry records facts Brittany supplied, with source and date.
+const UPDATES = [
+  { key: 'active-jobs-2026-10-06', apply(db) {
+    const src = 'Brittany, loan-tracking screen (2026-10-06)'; const ts = nowIso();
+    const permits = [...[12030, 12032, 12034, 12036].map(n => `${n} Royal Oaks Run Dr`), ...[12051, 12053, 12055, 12057, 12059, 12061].map(n => `${n} Royal Oaks Banner Way`)];
+    for (const address of permits) {
+      const ex = db.prepare('SELECT id FROM homes WHERE lower(address) = lower(?)').get(address);
+      upsert(db, 'homes', { id: ex?.id || 'home-' + address.toLowerCase().replace(/[^a-z0-9]+/g, '-'), address, kind: 'home', active: 'active', stage: 'Waiting for permits to start', source: src, imported_at: ts, notes: 'Active job per Brittany. Not in the skill job map; MCH Job ID to confirm.' });
+    }
+    for (const [id, address] of [['job-766', '11602 Royal Parkside Place'], ['job-767', '11603 Royal Parkside Place']]) {
+      upsert(db, 'homes', { id, address, kind: 'home', active: 'active', stage: 'In progress (construction loan drawn)', source: src, imported_at: ts, notes: 'Active job per Brittany. Stage inferred from loan draws on the bank screen; confirm construction stage.' });
+    }
+    upsert(db, 'tasks', { id: 'impl-confirm-13th-home', title: 'Confirm the 13th active home (one row was redacted on the loan screen)', department_id: 'exec', owner_id: 'brittany', board: 'next', project_stage: 'gather', proposed: 0, documented: 1, source: src, next_action: 'Open Registry → Homes and mark the missing active job; add its MCH Job ID.' });
+    addEvent(db, { entity_type: 'integration', entity_id: 'manual', kind: 'import', status: 'info', label: 'Manual: 12 active jobs recorded from Brittany (10 waiting for permits, 2 in progress)', source: 'manual', actor: 'brittany', external_id: 'update-active-jobs-2026-10-06' });
+  } },
+  { key: 'stage2-checkpoint-2026-10-06', apply(db) {
+    db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`).run(nowIso(), 'gather',
+      'Stage 2: review queue and bulk import are ready. Work through the Review tab one item at a time.',
+      'Stage 1 build (visual world, registry, saved state). Stage 2 build (folder import with skip-unchanged, import preview, review queue with merge). 12 active jobs recorded.',
+      'Open the Review tab and verify the first person (it starts with the people, then proposed tasks). Then point Integrations → Option 3 at your Obsidian vault and click Preview.',
+      'Brittany (old dashboard export and a few real Obsidian notes, so the mapping can be checked); Brittany (which job is the 13th active home)',
+      'Confirm the SQLite store decision; confirm the reuse decision for the existing skills.',
+      'Added by the Stage 2 build. Save your own checkpoint when you stop.', 'system');
+  } },
+];
+function applyUpdates(db) {
+  const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));
+  let n = 0;
+  for (const u of UPDATES) {
+    if (applied.has(u.key)) continue;
+    db.exec('BEGIN'); try { u.apply(db); applied.add(u.key); db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('applied_updates', ?)").run(JSON.stringify([...applied])); db.exec('COMMIT'); n++; } catch (e) { db.exec('ROLLBACK'); throw e; }
+  }
+  return n;
+}
+
+module.exports = { seedIfEmpty, applyUpdates };

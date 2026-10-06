@@ -4,6 +4,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = ts => ts ? new Date(ts).toLocaleString() : '—';
   const STAGES = ['gather', 'map', 'simplify', 'choose', 'pilot', 'expand'];
+  const DEFAULT_H = { trigger: 1, when: 1, inputs: 1, input: 1, steps: 1, procedure: 1, process: 1, 'how to': 1, owner: 1, responsible: 1, backup: 1, deadline: 1, due: 1, evidence: 1, 'completion evidence': 1, 'done when': 1, approval: 1, 'approval rules': 1, approvals: 1, automation: 1, verification: 1, source: 1, links: 1, 'missing information': 1, missing: 1, 'open questions': 1, blocker: 1, blockers: 1, 'next action': 1, next: 1, 'next steps': 1 };
   const BOARD = { next: 'Next', working: 'Working', waiting: 'Waiting', done: 'Done' };
   const SETUP_STAGES = Object.keys(World.SETUP);
   let S = null, selected = null, pollTimer = null;
@@ -50,9 +51,9 @@
     $('#demoToggle').checked = S.demo; $('#demoBanner').hidden = !S.demo;
     $('#addBtn').hidden = !S.permissions.write;
     $('#stagePill').textContent = 'Stage: ' + (S.checkpoint?.stage || 'gather');
-    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
+    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
     const fs = $('#focusSelect'); const cur = fs.value;
-    fs.innerHTML = '<option value="">Focus department…</option>' + S.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('') + '<option value="neighborhood">Project neighborhood</option>';
+    fs.innerHTML = '<option value="">Focus department…</option>' + S.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('') + '<option value="neighborhood">Active jobs</option><option value="snapshot">Job list snapshot</option>';
     fs.value = cur;
   }
 
@@ -92,6 +93,61 @@
     $('#viewBoard').innerHTML = `<div class="board">${Object.entries(BOARD).map(([k, v]) => `<div class="col"><h3>${v} <span>${S.tasks.filter(t => t.board === k).length}</span></h3>${S.tasks.filter(t => t.board === k).map(taskCard).join('') || '<p class="empty">Nothing here</p>'}</div>`).join('')}</div>`;
   }
 
+
+  // ---------- Review queue: one person or task at a time ----------
+  let reviewIdx = 0, reviewDupes = {};
+  function reviewQueue() {
+    const people = S.people.filter(p => p.review_status !== 'verified').map(p => ({ type: 'person', obj: p }));
+    const tasks = S.tasks.filter(t => t.proposed && !t.restricted).map(t => ({ type: 'task', obj: t }));
+    return [...people, ...tasks];
+  }
+  function renderReview() {
+    const q = reviewQueue();
+    $('#reviewCount').textContent = q.length || '';
+    $('#reviewCount').hidden = !q.length;
+    const v = $('#viewReview');
+    if (!q.length) { v.innerHTML = `<div class="section"><h2>Review</h2><p class="empty">Nothing waiting for review. Every person is verified and no task is marked PROPOSED.</p></div>`; return; }
+    if (reviewIdx >= q.length) reviewIdx = 0;
+    const item = q[reviewIdx], o = item.obj, w = S.permissions.write;
+    const nav = `<div class="actions" style="align-items:center"><button class="small" id="rvPrev">‹ Previous</button><span class="src">${reviewIdx + 1} of ${q.length} (${q.filter(i => i.type === 'person').length} people, ${q.filter(i => i.type === 'task').length} tasks)</span><button class="small" id="rvNext">Next ›</button><span class="hint">Verify one at a time; nothing changes until you click.</span></div>`;
+    let body = '';
+    if (item.type === 'person') {
+      const owned = S.tasks.filter(t => t.owner_id === o.id), backup = S.tasks.filter(t => t.backup_id === o.id), imported = owned.filter(t => /import/i.test(t.source || ''));
+      body = `<div class="card"><div class="kind">Person · responsibility review</div><h2>${esc(o.name)}</h2><p>${esc(o.role_summary || '')}</p>
+        ${o.confirmed ? chip('Confirmed in handoff', 'ok') : chip('Not confirmed — came from an import', 'amber')} ${chip('Review: ' + o.review_status.replace('_', ' '), o.review_status === 'under_review' ? 'amber' : 'gray')}
+        <div class="src">Source: ${esc(o.source || '')}</div>
+        <h4>Departments</h4>${o.departments.map(deptName).map(esc).join(', ') || '<span class="empty">none</span>'}
+        <h4>Tasks owned (${owned.length})${imported.length ? ` · ${imported.length} from imports` : ''}</h4>${owned.map(t => `<div class="card-t ${t.proposed ? 'proposed' : t.verified ? 'verified' : ''}" data-open="task:${t.id}">${esc(t.title)}<small>${esc(t.source || '')}</small></div>`).join('') || '<p class="empty">No tasks yet. If this person has responsibilities, add them or import the old dashboard.</p>'}
+        ${backup.length ? `<h4>Backup for (${backup.length})</h4>${backup.map(t => `<div class="card-t" data-open="task:${t.id}">${esc(t.title)}</div>`).join('')}` : ''}
+        <h4>Question for Brittany</h4><p>Is the summary above correct and complete for ${esc(o.name)}? If yes, mark <b>Verified</b>. If some of it needs checking with ${esc(o.name)} first, mark <b>Under review</b> and say what in the note.</p>
+        ${w ? `<label class="field"><span>Review note (optional, saved with the decision)</span><textarea id="rvNote">${esc(o.notes || '')}</textarea></label>
+        <div class="actions"><button class="primary" data-rv="person:verified">✓ Verified — responsibilities are right</button><button data-rv="person:under_review">Under review — need to check</button><button class="small" id="rvEdit">Edit details</button></div>` : ''}</div>`;
+    } else {
+      const dupes = reviewDupes[o.id];
+      if (!dupes) { api('POST', '/api/review/duplicates', { id: o.id }).then(d => { reviewDupes[o.id] = d; renderReview(); }).catch(() => { reviewDupes[o.id] = []; }); }
+      const field = (l, v) => v ? `<h4>${l}</h4><div>${esc(v)}</div>` : '';
+      body = `<div class="card"><div class="kind">Task / procedure · ${esc(o.source || '')}</div><h2>${esc(o.title)}</h2>
+        ${chip('PROPOSED', 'amber')} ${chip(deptName(o.department_id), 'gray')} ${o.documented ? chip('documented', 'blue') : ''}
+        <h4>Owner / backup</h4>${esc(personName(o.owner_id))} / ${esc(o.backup_id ? personName(o.backup_id) : '—')}
+        ${field('Trigger', o.trigger)}${field('Inputs', o.inputs)}${field('Steps', o.steps)}${field('Deadline', o.deadline)}${field('Completion evidence', o.evidence)}${field('Approval rules', o.approval_rules)}${field('Missing information', o.missing_info)}
+        <h4>Possible duplicates</h4>${dupes === undefined ? '<p class="src">checking…</p>' : dupes.length ? dupes.map(d => `<div class="card-t ${d.proposed ? 'proposed' : ''}" style="display:flex;justify-content:space-between;align-items:center"><span data-open="task:${d.id}">${esc(d.title)} <small>${esc(personName(d.owner_id))} · match ${Math.round(d.score * 100)}%</small></span>${w ? `<button class="small" data-merge="${d.id}">Merge into this one</button>` : ''}</div>`).join('') : '<p class="empty">No similar task found.</p>'}
+        <h4>Question for Brittany</h4><p>Is this a real procedure McVaugh follows (or should follow), with the right owner? <b>Verify</b> keeps it as a reviewed task. <b>Reject</b> archives it (history is kept). <b>Merge</b> folds it into an existing task.</p>
+        ${w ? `<label class="field"><span>Review note (optional)</span><textarea id="rvNote">${esc(o.review_note || '')}</textarea></label>
+        <div class="actions"><button class="primary" data-rv="task:verify">✓ Verify — real procedure, owner correct</button><button data-rv="task:reject">Reject / archive</button><button class="small" id="rvEdit">Edit details first</button></div>` : ''}</div>`;
+    }
+    v.innerHTML = `<div class="section"><h2>Review queue</h2>${nav}${body}</div>`;
+    $('#rvPrev').onclick = () => { reviewIdx = (reviewIdx - 1 + q.length) % q.length; renderReview(); };
+    $('#rvNext').onclick = () => { reviewIdx = (reviewIdx + 1) % q.length; renderReview(); };
+    $('#rvEdit')?.addEventListener('click', () => editEntity(item.type, o));
+    v.querySelectorAll('[data-rv]').forEach(b => b.onclick = async () => {
+      const [, action] = b.dataset.rv.split(':'); const note = $('#rvNote')?.value || '';
+      if (item.type === 'person') await save('people', { id: o.id, review_status: action, notes: note });
+      else if (action === 'verify') await save('tasks', { id: o.id, proposed: 0, review_note: note });
+      else if (action === 'reject') { if (!confirm('Archive this task? It leaves the board; history is kept.')) return; await save('tasks', { id: o.id, archived: 1, review_note: note }); }
+    });
+    v.querySelectorAll('[data-merge]').forEach(b => b.onclick = async () => { if (!confirm('Merge this proposed task into the selected existing task? Empty fields on the existing task are filled from this one; this one is archived.')) return; await api('POST', '/api/review/merge', { source_id: o.id, target_id: b.dataset.merge }); toast('Merged'); refresh(); });
+  }
+
   function renderRegistry() {
     const rows = (items, cols, type) => `<table><thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join('')}</tr></thead><tbody>${items.map(i => `<tr class="clickable" data-open="${type}:${i.id}">${cols.map(c => `<td>${c[1](i)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     $('#viewRegistry').innerHTML = `<div class="table-wrap">
@@ -106,23 +162,43 @@
 
   function renderIntegrations() {
     const w = S.permissions.write;
-    if ($('#obsFiles')?.files.length || $('#csvFile')?.files.length || $('#restoreFile')?.files.length) return; // don't wipe a chosen file during polling
+    if ($('#obsFiles')?.files.length || $('#csvFile')?.files.length || $('#restoreFile')?.files.length || $('#folderReport')?.innerHTML || (document.activeElement && $('#viewIntegrations').contains(document.activeElement))) return; // don't wipe a chosen file, a report, or a field being typed in during polling
     $('#viewIntegrations').innerHTML = `<div class="section">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><h2 style="margin:0">Integrations</h2>${w ? '<button class="small" id="checkInt">Check connections</button>' : ''}<span class="hint">Snapshot imports are never shown as live connections.</span></div>
       <div class="grid-2">${S.integrations.map(i => `<div class="card int-card" data-open="integration:${i.id}"><div class="dot ${i.status}"></div><div><b>${esc(i.name)}</b> ${chip(i.kind, 'gray')} ${chip(i.status, i.status === 'connected' ? 'ok' : i.status === 'failing' ? 'red' : 'gray')}<br><span class="src">${esc(i.notes || '')}</span><br><span class="src">Checked: ${fmt(i.last_checked)}${i.last_import_at ? ' · last import ' + fmt(i.last_import_at) : ''}${i.last_message ? ' · ' + esc(i.last_message) : ''}</span></div></div>`).join('')}</div>
       <h2 style="margin-top:20px">Import (snapshot)</h2>
-      <div class="grid-2">
-        <div class="card"><h3>Obsidian notes (.md)</h3><p class="src">Headings like <code>## Trigger</code>, <code>## Inputs</code>, <code>## Steps</code>, <code>## Owner</code>, <code>## Approval rules</code> map to task fields. Frontmatter <code>owner:</code>, <code>department:</code>, <code>status: approved</code> are honored.</p><input type="file" id="obsFiles" multiple accept=".md,.markdown,.txt" ${w ? '' : 'disabled'}><button class="small" id="obsImport" ${w ? '' : 'disabled'}>Import notes</button></div>
-        <div class="card"><h3>CSV (old dashboard / Excel saved as CSV)</h3><p class="src">Dashboard columns: person, responsibility, department. Schedule: address, stage. Selections/tasks: title, owner, deadline.</p><select id="csvTarget"><option value="dashboard">Old people/responsibilities dashboard</option><option value="schedule">Excel schedule (homes & stages)</option><option value="selections">Excel selection guide</option><option value="tasks">Generic task list</option></select><input type="file" id="csvFile" accept=".csv,.txt" ${w ? '' : 'disabled'}><button class="small" id="csvImport" ${w ? '' : 'disabled'}>Import CSV</button></div>
+      <div class="card" style="margin-bottom:12px"><h3>Option 3 — bulk-import a folder on this computer</h3>
+        <p class="src">Point the app at a folder on the machine running the server (e.g. your Obsidian vault on L:). Every <code>.md</code> and <code>.csv</code> inside is imported; re-running skips files whose contents haven't changed. <b>Preview</b> shows how headings and columns map before anything is written.</p>
+        <div style="display:flex;gap:8px;align-items:center"><input id="folderPath" placeholder="L:\\AI Tools Shared\\Obsidian\\McVaugh" value="${esc(S.import_dir || '')}" ${S.permissions.sensitive ? '' : 'disabled'}><select id="folderCsvTarget" style="width:auto"><option value="auto">CSV: detect from headers</option><option value="dashboard">CSV: old dashboard</option><option value="schedule">CSV: schedule</option><option value="selections">CSV: selections</option><option value="tasks">CSV: tasks</option></select><button class="small" id="folderPreview" ${S.permissions.sensitive ? '' : 'disabled'}>Preview (dry run)</button><button class="small primary" id="folderImport" ${S.permissions.sensitive ? '' : 'disabled'}>Import changed files</button><label class="toggle"><input type="checkbox" id="folderForce"> force re-import</label></div>
+        ${S.permissions.sensitive ? '' : '<p class="src">Admin or accounting role required (reads the server filesystem).</p>'}
+        <div id="folderReport"></div>
+        ${S.import_files.length ? `<h4>Imported files (${S.import_files.length})</h4><div style="max-height:180px;overflow:auto"><table><thead><tr><th>File</th><th>Kind</th><th>Status</th><th>Imported</th></tr></thead><tbody>${S.import_files.map(f => `<tr><td class="src">${esc(f.path)}</td><td>${esc(f.kind)}</td><td>${esc(f.status)}</td><td>${fmt(f.imported_at)}</td></tr>`).join('')}</tbody></table></div>` : ''}
       </div>
+      <div class="grid-2">
+        <div class="card"><h3>Option 1 — Obsidian notes (.md) from this browser</h3><p class="src">Headings like <code>## Trigger</code>, <code>## Inputs</code>, <code>## Steps</code>, <code>## Owner</code>, <code>## Approval rules</code> map to task fields. Frontmatter <code>owner:</code>, <code>department:</code>, <code>status: approved</code> are honored. Re-importing a note refreshes its content but never undoes a review decision.</p><input type="file" id="obsFiles" multiple accept=".md,.markdown,.txt" ${w ? '' : 'disabled'}><div class="actions"><button class="small" id="obsPreview" ${w ? '' : 'disabled'}>Preview mapping</button><button class="small primary" id="obsImport" ${w ? '' : 'disabled'}>Import notes</button></div><div id="obsReport"></div></div>
+        <div class="card"><h3>Option 2 — CSV (old dashboard / Excel saved as CSV)</h3><p class="src">Dashboard columns: person, responsibility, department. Schedule: address, stage. Selections/tasks: title, owner, deadline. Headers are matched by alias; unmatched columns are listed in the preview.</p><select id="csvTarget"><option value="auto">Detect from headers</option><option value="dashboard">Old people/responsibilities dashboard</option><option value="schedule">Excel schedule (homes & stages)</option><option value="selections">Excel selection guide</option><option value="tasks">Generic task list</option></select><input type="file" id="csvFile" accept=".csv,.txt" ${w ? '' : 'disabled'}><div class="actions"><button class="small" id="csvPreview" ${w ? '' : 'disabled'}>Preview mapping</button><button class="small primary" id="csvImport" ${w ? '' : 'disabled'}>Import CSV</button></div><div id="csvReport"></div></div>
+      </div>
+      <details style="margin-top:12px"><summary class="src">Mapping aliases (extend when a real file uses different headings or column names)</summary>
+        <div class="grid-2" style="margin-top:8px"><label class="field"><span>Extra heading → field (JSON, e.g. {"what triggers it": "trigger"})</span><textarea id="aliasHeadings">${esc(JSON.stringify(Object.fromEntries(Object.entries(S.mapping.headings).filter(([k]) => !(k in DEFAULT_H))) , null, 1))}</textarea></label>
+        <label class="field"><span>Extra column aliases (JSON, e.g. {"person": ["staff member"]})</span><textarea id="aliasCols">{}</textarea></label></div>
+        <p class="src">Fields: ${Object.keys(S.mapping.aliases).join(', ')}. Built-in headings: ${Object.keys(S.mapping.headings).slice(0, 40).join(', ')}…</p>
+        ${w ? '<button class="small" id="aliasSave">Save aliases</button>' : ''}</details>
       <h2 style="margin-top:20px">Export / recovery</h2>
       <div class="actions">${S.permissions.sensitive ? '<a class="small" href="/api/export" download><button class="small">Download full backup (JSON)</button></a>' : ''}<a href="/api/export/pages" target="_blank"><button class="small">Handbook export for ChatGPT Pages (Markdown)</button></a>${w ? '<button class="small" id="pagesMark">Mark "pasted into Pages"</button>' : ''}${S.role === 'admin' ? '<input type="file" id="restoreFile" accept=".json" style="width:auto"><button class="small danger" id="restoreBtn">Restore backup (replaces everything)</button>' : ''}</div>
       <p class="src">Canonical store: <code>${esc(S.server.db_path || 'data/mcvaugh-world.sqlite (path visible to admin)')}</code>. Back up by copying that file or downloading the JSON. n8n webhook: <code>POST /api/webhooks/n8n</code> with header <code>X-MOW-Secret</code> — secret ${S.server.n8n_secret_set ? 'is set' : 'NOT set (MOW_N8N_SECRET)'}.</p>
       <p class="src">Not accessible from this build environment (nothing was inspected): <code>C:\\Users\\bmcvaugh\\Documents</code>, <code>L:\\AI Tools Shared</code>, <code>C:\\Users\\bmcvaugh\\Documents\\MCH-DB</code>, the old dashboard, Obsidian vault, BuildConnect 2.0.</p>
     </div>`;
     $('#checkInt')?.addEventListener('click', async () => { await api('POST', '/api/integrations/check'); toast('Checked'); refresh(); });
+    const reportFiles = files => files.map(f => `<div class="card-t"><b>${esc(f.name)}</b> ${f.kind === 'md' ? `→ task <code>${esc(f.row.id)}</code> "${esc(f.row.title)}"<small>mapped: ${esc(f.mapping.mapped.join('; ') || 'none')}</small>${f.mapping.unmapped.length ? `<small>unmapped headings: ${esc(f.mapping.unmapped.join(', '))}</small>` : ''}` : `→ ${esc(f.mapping.target || 'UNKNOWN layout')} (${f.rows} rows)<small>columns: ${esc(Object.entries(f.mapping.columns).map(([k, v]) => `${k}=${v || '—'}`).join(', '))}</small>${f.mapping.unmapped.length ? `<small>unmapped columns: ${esc(f.mapping.unmapped.join(', '))}</small>` : ''}`}${(f.warnings || []).map(x => `<small class="error">${esc(x)}</small>`).join('')}</div>`).join('');
+    const readFiles = input => Promise.all([...input.files].map(async f => ({ name: f.name, content: await f.text() })));
+    $('#obsPreview')?.addEventListener('click', async () => { const files = await readFiles($('#obsFiles')); if (!files.length) return toast('Choose .md files first'); const r = await api('POST', '/api/import/preview', { files }); $('#obsReport').innerHTML = reportFiles(r.files); });
+    $('#csvPreview')?.addEventListener('click', async () => { const files = await readFiles($('#csvFile')); if (!files.length) return toast('Choose a CSV first'); const r = await api('POST', '/api/import/preview', { files, target: $('#csvTarget').value }); $('#csvReport').innerHTML = reportFiles(r.files) + (r.files[0]?.records?.length ? `<small>Sample: ${esc(JSON.stringify(r.files[0].records.slice(0, 2)))}</small>` : ''); });
+    const folderReport = r => `<p>${r.dry_run ? 'Dry run — nothing written.' : 'Imported.'} Scanned ${r.scanned}, ${r.dry_run ? 'would import' : 'imported'} ${r.dry_run ? r.files.filter(f => f.changed).length : r.imported}, unchanged ${r.skipped_unchanged}${r.errors.length ? `, errors ${r.errors.length}` : ''}.</p>${r.errors.map(e => `<div class="error">${esc(e)}</div>`).join('')}<div style="max-height:260px;overflow:auto">${r.files.filter(f => f.status !== 'unchanged').map(f => `<div class="card-t"><b>${esc(f.path)}</b> <small>${esc(f.status)}</small>${f.preview ? (f.kind === 'md' ? `<small>→ "${esc(f.preview.title)}" · mapped: ${esc(f.preview.mapping.mapped.join('; ') || 'none')}${f.preview.mapping.unmapped.length ? ' · unmapped: ' + esc(f.preview.mapping.unmapped.join(', ')) : ''}</small>` : `<small>→ ${esc(f.preview.target || 'UNKNOWN layout')} (${f.preview.rows} rows) · columns: ${esc(Object.entries(f.preview.mapping.columns).map(([k, v]) => `${k}=${v || '—'}`).join(', '))}${f.preview.mapping.unmapped.length ? ' · unmapped: ' + esc(f.preview.mapping.unmapped.join(', ')) : ''}</small>`) + (f.preview.warnings || []).map(x => `<small class="error">${esc(x)}</small>`).join('') : ''}</div>`).join('')}</div>`;
+    $('#folderPreview')?.addEventListener('click', async () => { const r = await api('POST', '/api/import/preview', { dir: $('#folderPath').value, target: $('#folderCsvTarget').value }); $('#folderReport').innerHTML = r.error ? `<p class="error">${esc(r.error)}</p>` : folderReport(r); });
+    $('#folderImport')?.addEventListener('click', async () => { const dir = $('#folderPath').value; if (!dir) return toast('Enter a folder path'); if (!confirm(`Import every changed .md/.csv under ${dir}?`)) return; const r = await api('POST', '/api/import/folder', { dir, target: $('#folderCsvTarget').value, force: $('#folderForce').checked }); toast(`Imported ${r.imported}, unchanged ${r.skipped_unchanged}`); $('#folderReport').innerHTML = folderReport(r); setTimeout(refresh, 300); });
+    $('#aliasSave')?.addEventListener('click', async () => { try { await api('POST', '/api/import/aliases', { headings: JSON.parse($('#aliasHeadings').value || '{}'), aliases: JSON.parse($('#aliasCols').value || '{}') }); toast('Aliases saved'); refresh(); } catch (e) { toast('Invalid JSON: ' + e.message); } });
     $('#obsImport')?.addEventListener('click', async () => { const files = [...$('#obsFiles').files]; if (!files.length) return toast('Choose .md files first'); const payload = await Promise.all(files.map(async f => ({ name: f.name, content: await f.text() }))); const r = await api('POST', '/api/import/obsidian', { files: payload }); toast(`Imported ${r.imported} notes`); refresh(); });
-    $('#csvImport')?.addEventListener('click', async () => { const f = $('#csvFile').files[0]; if (!f) return toast('Choose a CSV first'); const r = await api('POST', '/api/import/csv', { target: $('#csvTarget').value, filename: f.name, content: await f.text() }); toast(`Imported ${r.imported} of ${r.rows} rows`); refresh(); });
+    $('#csvImport')?.addEventListener('click', async () => { const f = $('#csvFile').files[0]; if (!f) return toast('Choose a CSV first'); const r = await api('POST', '/api/import/csv', { target: $('#csvTarget').value, filename: f.name, content: await f.text() }); toast(`Imported ${r.imported} of ${r.rows} rows as ${r.target}`); $('#csvReport').innerHTML = (r.warnings || []).map(x => `<small class="error">${esc(x)}</small>`).join(''); setTimeout(refresh, 300); });
     $('#pagesMark')?.addEventListener('click', async () => { await api('POST', '/api/export/pages/mark'); toast('Logged'); refresh(); });
     $('#restoreBtn')?.addEventListener('click', async () => { const f = $('#restoreFile').files[0]; if (!f) return toast('Choose a backup file'); if (!confirm('Replace ALL current data with this backup?')) return; await api('POST', '/api/import/backup', JSON.parse(await f.text())); toast('Restored'); refresh(); });
   }
@@ -171,7 +247,7 @@
   const deptOpts = () => [['', '— none —'], ...S.departments.map(d => [d.id, d.name])];
   const FIELDS = {
     person: () => [{ key: 'name', label: 'Name' }, { key: 'role_summary', label: 'Responsibilities (summary)', type: 'textarea' }, { key: 'departments', label: 'Departments', type: 'multiselect', options: S.departments.map(d => [d.id, d.name]) }, { key: 'confirmed', label: 'Confirmed by Brittany/Jim', type: 'checkbox' }, { key: 'review_status', label: 'Responsibility review', type: 'select', options: [['not_reviewed', 'Not reviewed'], ['under_review', 'Under review'], ['verified', 'Verified']] }, { key: 'notes', label: 'Notes', type: 'textarea' }, { key: 'source', label: 'Source' }],
-    task: () => [{ key: 'title', label: 'Title' }, { key: 'department_id', label: 'Department', type: 'select', options: deptOpts() }, { key: 'owner_id', label: 'Owner', type: 'select', options: peopleOpts() }, { key: 'backup_id', label: 'Backup', type: 'select', options: peopleOpts() }, { key: 'agent_id', label: 'Linked agent', type: 'select', options: [['', '— none —'], ...S.agents.map(a => [a.id, a.name])] }, { key: 'board', label: 'Board column', type: 'select', options: Object.entries(BOARD) }, { key: 'project_stage', label: 'Project stage (implementation tasks)', type: 'select', options: [['', '—'], ...STAGES.map(s => [s, s])] }, { key: 'trigger', label: 'Trigger' }, { key: 'inputs', label: 'Inputs', type: 'textarea' }, { key: 'steps', label: 'Steps', type: 'textarea' }, { key: 'deadline', label: 'Deadline' }, { key: 'evidence', label: 'Completion evidence' }, { key: 'approval_rules', label: 'Approval rules', type: 'textarea' }, { key: 'automation_approach', label: 'Automation approach', type: 'textarea' }, { key: 'verification_result', label: 'Verification result' }, { key: 'source_link', label: 'Source-system link' }, { key: 'missing_info', label: 'Missing information', type: 'textarea' }, { key: 'blocker', label: 'Blocker / approval needed' }, { key: 'waiting_on', label: 'Waiting on (who)' }, { key: 'next_action', label: 'Next small action' }, { key: 'proposed', label: 'Proposed (not yet verified with the team)', type: 'checkbox' }, ...(S.permissions.sensitive ? [{ key: 'sensitive', label: 'Sensitive (cash/accounting — restricted roles only)', type: 'checkbox' }] : []), { key: 'source', label: 'Source' }],
+    task: () => [{ key: 'title', label: 'Title' }, { key: 'department_id', label: 'Department', type: 'select', options: deptOpts() }, { key: 'owner_id', label: 'Owner', type: 'select', options: peopleOpts() }, { key: 'backup_id', label: 'Backup', type: 'select', options: peopleOpts() }, { key: 'agent_id', label: 'Linked agent', type: 'select', options: [['', '— none —'], ...S.agents.map(a => [a.id, a.name])] }, { key: 'board', label: 'Board column', type: 'select', options: Object.entries(BOARD) }, { key: 'project_stage', label: 'Project stage (implementation tasks)', type: 'select', options: [['', '—'], ...STAGES.map(s => [s, s])] }, { key: 'trigger', label: 'Trigger' }, { key: 'inputs', label: 'Inputs', type: 'textarea' }, { key: 'steps', label: 'Steps', type: 'textarea' }, { key: 'deadline', label: 'Deadline' }, { key: 'evidence', label: 'Completion evidence' }, { key: 'approval_rules', label: 'Approval rules', type: 'textarea' }, { key: 'automation_approach', label: 'Automation approach', type: 'textarea' }, { key: 'verification_result', label: 'Verification result' }, { key: 'source_link', label: 'Source-system link' }, { key: 'missing_info', label: 'Missing information', type: 'textarea' }, { key: 'blocker', label: 'Blocker / approval needed' }, { key: 'waiting_on', label: 'Waiting on (who)' }, { key: 'next_action', label: 'Next small action' }, { key: 'proposed', label: 'Proposed (not yet verified with the team)', type: 'checkbox' }, { key: 'review_note', label: 'Review note', type: 'textarea' }, { key: 'archived', label: 'Archived (hidden from board; history kept)', type: 'checkbox' }, ...(S.permissions.sensitive ? [{ key: 'sensitive', label: 'Sensitive (cash/accounting — restricted roles only)', type: 'checkbox' }] : []), { key: 'source', label: 'Source' }],
     agent: () => [{ key: 'name', label: 'Agent name' }, { key: 'department_id', label: 'Department', type: 'select', options: deptOpts() }, { key: 'purpose', label: 'Purpose', type: 'textarea' }, { key: 'initial_output', label: 'Initial output (read/flag/draft)' }, { key: 'human_authority', label: 'Human authority retained' }, { key: 'approach', label: 'Approach', type: 'select', options: [['rules', 'Ordinary rules are sufficient'], ['ai', 'AI model needed'], ['hybrid', 'Hybrid: rules + model drafting'], ['undecided', 'Undecided']] }, { key: 'approach_note', label: 'Why', type: 'textarea' }, { key: 'setup_stage', label: 'Setup maturity', type: 'select', options: SETUP_STAGES.map(s => [s, World.SETUP[s].label]) }, { key: 'enabled', label: 'Enabled (does not mean running)', type: 'checkbox' }, { key: 'paused', label: 'Paused', type: 'checkbox' }, { key: 'n8n_workflow_id', label: 'n8n workflow id (maps callbacks to this agent)' }, { key: 'next_run', label: 'Next scheduled run' }, { key: 'proposed', label: 'Proposed placeholder', type: 'checkbox' }],
     home: () => [{ key: 'address', label: 'Address' }, { key: 'job_id', label: 'MCH Job ID' }, { key: 'kind', label: 'Kind', type: 'select', options: [['home', 'Home'], ['lot', 'Lot'], ['hoa', 'HOA entity'], ['office', 'Office'], ['other', 'Other'], ['unknown', 'Unknown']] }, { key: 'active', label: 'Active', type: 'select', options: [['unknown', 'Unknown (not confirmed)'], ['active', 'Active'], ['inactive', 'Inactive / finished']] }, { key: 'stage', label: 'Construction stage' }, { key: 'pilot', label: 'Pilot home', type: 'checkbox' }, { key: 'notes', label: 'Notes', type: 'textarea' }, { key: 'source', label: 'Source' }],
     decision: () => [{ key: 'date', label: 'Date (YYYY-MM-DD)', default: new Date().toISOString().slice(0, 10) }, { key: 'title', label: 'Decision' }, { key: 'reason', label: 'Reason', type: 'textarea' }, { key: 'decided_by', label: 'Decided by' }, { key: 'status', label: 'Status', type: 'select', options: [['approved', 'Approved'], ['proposed', 'Proposed'], ['superseded', 'Superseded']] }, { key: 'source', label: 'Source' }],
@@ -208,7 +284,7 @@
         ${w ? `<h4>Responsibility review</h4><div class="milestones">${[['not_reviewed', 'Not reviewed'], ['under_review', 'Under review'], ['verified', 'Verified']].map(([k, l]) => `<button class="${obj.review_status === k ? 'on' : ''}" data-set="review_status:${k}">${l}</button>`).join('')}</div>` : ''}
         ${section('Current activity', runtimeChip(obj.runtime))}
         ${section('Tasks (owner or backup)', taskList(tasksFor))}
-        ${section('Notes', esc(obj.notes))}${section('Source', esc(obj.source))}`;
+        ${section('Notes', esc(obj.notes))}${section('Source', esc(obj.source))}${obj.reviewed_at ? section('Verified', fmt(obj.reviewed_at) + ' by ' + esc(obj.reviewed_by)) : ''}`;
     } else if (type === 'agent') {
       const ai = S.ai_configs.find(c => c.agent_id === id);
       body = `<p>${esc(obj.purpose)}</p>${chip(obj.proposed ? 'Proposed function' : 'Active', obj.proposed ? 'amber' : 'ok')} ${setupChip(obj.setup_stage)} ${chip('Approach: ' + obj.approach, obj.approach === 'rules' ? 'ok' : obj.approach === 'ai' ? 'purple' : 'gray')} ${obj.enabled ? chip('enabled', 'blue') : chip('not enabled', 'gray')}
@@ -239,7 +315,7 @@
         ${section('Missing information', esc(obj.missing_info))}${section('Blocker / approval needed', esc(obj.blocker))}${section('Waiting on', esc(obj.waiting_on))}
         ${obj.next_action ? `<div class="next-action"><b>Next small action</b><br>${esc(obj.next_action)}</div>` : ''}
         ${section('Linked agent', obj.agent_id ? `<a href="#" data-open="agent:${obj.agent_id}">${esc(agent(obj.agent_id)?.name || obj.agent_id)}</a>` : '')}
-        ${section('Source', esc(obj.source))}`;
+        ${section('Source', esc(obj.source))}${obj.reviewed_at ? section('Reviewed', fmt(obj.reviewed_at) + ' by ' + esc(obj.reviewed_by) + (obj.review_note ? ' — ' + esc(obj.review_note) : '')) : ''}`;
     } else if (type === 'home') {
       body = `${chip('Active: ' + obj.active, obj.active === 'active' ? 'ok' : obj.active === 'inactive' ? 'gray' : 'amber')} ${chip(obj.kind, 'gray')} ${obj.pilot ? chip('★ Pilot home', 'amber') : ''}
         ${section('MCH Job ID', obj.job_id ? `<code>${esc(obj.job_id)}</code> · <a href="http://db.mcvaugh.com/buildconnect/NewStuff/budgetform.html?ID=${esc(obj.job_id)}" target="_blank" rel="noopener">budget form</a> · <a href="http://db.mcvaugh.com/buildconnect/NewStuff/wotracking.html?archive=0&perfID=${esc(obj.job_id)}&subconid=0&filterchange=1" target="_blank" rel="noopener">work orders</a> (live McVaugh database; needs your login)` : '—')}
@@ -273,7 +349,7 @@
   // ---------- views & global events ----------
   function showView(v) {
     document.querySelectorAll('.views button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
-    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
+    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
     if (v === 'world') World.overview();
     localStorage.setItem('mow_view', v);
   }

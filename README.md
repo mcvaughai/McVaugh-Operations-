@@ -42,7 +42,18 @@ Setup maturity: gray outline → under review (amber) → 1/3 documented → 2/3
 
 ## The Vault trading floor (`/vault.html`)
 
-A standalone page, no server state: an isometric night-city "trading floor" where each Python options bot is a worker tower paying its closed trades down a road into the central vault. It carries the Monday 10/5 session (QQQ 0σ +$1,878 and QQQ +$309 on profit brake, QQQ Trend +$96 and SPY -$227 switched off, vault +$2,056), the payroll table, each worker's earned-today card with its signal-scanner readout, the QQQ intraday chart with trades marked, and a nine-step narrated tour (*Play tour*). Edit the `DAY` and `TOUR` objects at the top of the page's script to show a different day. Open `public/vault.html` directly in a browser or visit http://localhost:8787/vault.html while the server runs.
+An isometric night-city "trading floor" fed by real bots. Each worker tower is one Python options bot from `config/bots.json`; every closed trade rolls a coin down its road into the central vault. The page polls `/api/vault/state` every few seconds and shows the vault total, the payroll table, each worker's earned-today card (open position, last trades, signal-scanner readout, thoughts), the intraday chart with trades marked, and a narrated tour whose captions are written from the live numbers when you press *Play tour*.
+
+The bots live in `bots/` and are documented in `bots/README.md`. Short version:
+
+```
+node server/server.js                 # dashboard at http://localhost:8787/vault.html
+python bots/runner.py --mode sim      # simulated day, no keys, any time
+python bots/runner.py                 # paper trading on Alpaca (ALPACA_KEY_ID / ALPACA_SECRET_KEY)
+VAULT_LIVE=yes python bots/runner.py --mode live   # real money, only after paper has earned trust
+```
+
+Sim, paper and live trades are tagged and never mixed; the banner at the top of the page always says which one you are looking at. The runner's files live in `data/vault/` (git-ignored). `python bots/test_bots.py` checks the risk rules on the simulator.
 
 ## Backup and restore
 

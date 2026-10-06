@@ -7,39 +7,37 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Rubik:wght@400;500;700;800&display=swap">
 <style>
 /* Layout: one night-city scene fills the stage; HUD panels float over it on desktop and stack under it on a phone.
-   The tour caption rides the bottom edge like a reel subtitle. Single deliberate dark theme (neon arcade). */
+   The tour caption rides the bottom edge like a reel subtitle. Single deliberate dark theme (neon arcade).
+   Every number on the page comes from /api/vault/state, written by bots/runner.py. */
 :root {
-  --night: #0a0930;        /* page ground */
-  --night-2: #140f4d;      /* panel ground */
-  --violet: #4a2fd9;       /* city glow */
-  --grid: #27d3ff;         /* floor grid / cyan accent */
-  --ink: #f4f2ff;          /* primary text */
-  --ink-2: #b8b3e6;        /* secondary text */
-  --ink-3: #7d78b4;        /* muted text */
-  --gold: #ffc940;         /* beam / emphasis */
-  --profit: #3ef08a;       /* good */
-  --loss: #ff5d7a;         /* bad */
-  --warn: #ffb54a;         /* turned off */
-  --line: rgba(120,110,255,.28);
-  --panel: rgba(16, 12, 64, .86);
+  --night: #0a0930; --night-2: #140f4d; --violet: #4a2fd9; --grid: #27d3ff;
+  --ink: #f4f2ff; --ink-2: #b8b3e6; --ink-3: #7d78b4;
+  --gold: #ffc940; --profit: #3ef08a; --loss: #ff5d7a; --warn: #ffb54a; --live: #ff3b5c;
+  --line: rgba(120,110,255,.28); --panel: rgba(16, 12, 64, .86);
   --display: "Chakra Petch", "Rubik", "Segoe UI", system-ui, sans-serif;
   --body: "Rubik", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body { background: var(--night); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.4; overflow: hidden; }
-button { font: inherit; color: inherit; cursor: pointer; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
 h1, h2, h3 { margin: 0; line-height: 1.15; }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .good { color: var(--profit); } .bad { color: var(--loss); } .warn { color: var(--warn); }
 .eyebrow { font-family: var(--display); font-weight: 600; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
 
-/* ---------- stage ---------- */
-.stage { position: relative; height: 100%; width: 100%; display: grid; grid-template-rows: 1fr auto; }
-.scene-wrap { position: relative; min-height: 0; overflow: hidden; background:
-  radial-gradient(ellipse 70% 50% at 50% 60%, #2b1f8f 0%, #140f4d 55%, #0a0930 100%); }
+.stage { position: relative; height: 100%; width: 100%; display: grid; grid-template-rows: auto 1fr auto; }
+.mode-banner { font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; padding: 5px 16px; text-align: center; }
+.mode-banner.sim { background: #3a2a00; color: var(--warn); border-bottom: 2px dashed var(--warn); }
+.mode-banner.paper { background: #0d2a4a; color: #7cc4ff; border-bottom: 1px solid #2a6db5; }
+.mode-banner.live { background: #4a0d1c; color: #ff8ea0; border-bottom: 1px solid var(--live); }
+.mode-banner.none { background: #1a1540; color: var(--ink-2); border-bottom: 1px solid var(--line); text-transform: none; letter-spacing: .02em; font-family: var(--body); font-weight: 500; }
+.mode-banner code { font-family: var(--mono); background: rgba(0,0,0,.3); padding: 1px 6px; border-radius: 4px; }
+.scene-wrap { position: relative; min-height: 0; overflow: hidden; background: radial-gradient(ellipse 70% 50% at 50% 60%, #2b1f8f 0%, #140f4d 55%, #0a0930 100%); }
 svg#scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 svg#scene.dragging { cursor: grabbing; }
 svg#scene text { font-family: var(--display); font-weight: 700; }
@@ -50,19 +48,19 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
 .worker:focus-visible .ring, .worker.focused .ring { opacity: 1; }
 .ring { opacity: 0; transition: opacity .25s; }
 .beam { mix-blend-mode: screen; }
+.beam.active { animation: beam 1.4s ease-in-out infinite alternate; }
+@keyframes beam { from { opacity: .45; } to { opacity: 1; } }
 .coin { pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .coin, .beam-anim, .pulse { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .coin, .beam, .pulse, .dot { animation: none !important; } }
 
-/* ---------- HUD ---------- */
-.hud { position: absolute; inset: 0; pointer-events: none; padding: 14px; display: grid;
-  grid-template-columns: minmax(220px, 300px) 1fr minmax(240px, 330px); grid-template-rows: auto 1fr auto; gap: 12px; }
+.hud { position: absolute; inset: 0; pointer-events: none; padding: 14px; display: grid; grid-template-columns: minmax(220px, 300px) 1fr minmax(240px, 340px); grid-template-rows: auto 1fr auto; gap: 12px; }
 .hud > * { pointer-events: auto; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(8px);
-  box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); padding: 12px 14px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(8px); box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); padding: 12px 14px; min-width: 0; }
 .live { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 4px; }
 .live .row { display: flex; align-items: center; gap: 8px; }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--loss); box-shadow: 0 0 0 0 rgba(255,93,122,.7); animation: pulse 1.6s infinite; }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,93,122,.7);} 70% { box-shadow: 0 0 0 9px rgba(255,93,122,0);} 100% { box-shadow: 0 0 0 0 rgba(255,93,122,0);} }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 0 rgba(255,59,92,.7); animation: pulse 1.6s infinite; }
+.dot.off { background: var(--ink-3); animation: none; box-shadow: none; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,59,92,.7);} 70% { box-shadow: 0 0 0 9px rgba(255,59,92,0);} 100% { box-shadow: 0 0 0 0 rgba(255,59,92,0);} }
 .live h1 { font-family: var(--display); font-size: 15px; font-weight: 700; letter-spacing: .02em; }
 .live .clock { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
 .vault-total { grid-column: 1; grid-row: 2; align-self: start; }
@@ -79,50 +77,55 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
 .payroll tr:last-child td { border-bottom: none; }
 .payroll tr.worker-row { cursor: pointer; }
 .payroll tr.worker-row:hover td, .payroll tr.worker-row.focused td { background: rgba(120,110,255,.10); }
-.payroll td.name { display: flex; align-items: center; gap: 7px; font-weight: 600; }
-.chip { font-family: var(--display); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
-.chip.off { background: rgba(255,181,74,.16); color: var(--warn); }
+.payroll td.name { font-weight: 600; }
+.chip { font-family: var(--display); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap; margin-left: 6px; }
+.chip.off, .chip.closed, .chip.window, .chip.done, .chip.wait { background: rgba(125,120,180,.2); color: var(--ink-2); }
 .chip.brake { background: rgba(255,201,64,.18); color: var(--gold); }
 .chip.on { background: rgba(62,240,138,.16); color: var(--profit); }
+.chip.position { background: rgba(39,211,255,.18); color: var(--grid); }
+.chip.loss_limit { background: rgba(255,93,122,.18); color: var(--loss); }
 .payroll tfoot td { font-weight: 700; border-top: 1px solid var(--line); }
 .payroll .note { font-size: 11px; color: var(--ink-3); margin-top: 8px; line-height: 1.35; }
 
-.detail { grid-column: 3; grid-row: 1 / span 2; align-self: start; display: none; }
+.detail { grid-column: 3; grid-row: 1 / span 2; align-self: start; display: none; max-height: calc(100% - 10px); overflow: auto; }
 .detail.open { display: block; }
 .detail .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .detail .close { background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; color: var(--ink-2); font-size: 12px; }
 .detail .big { font-family: var(--display); font-size: 40px; font-weight: 700; line-height: 1; margin: 6px 0 2px; }
 .detail .stat { font-size: 12px; color: var(--ink-2); }
-.detail .trades { margin-top: 10px; display: grid; gap: 4px; font-size: 12px; }
+.detail .trades { margin-top: 6px; display: grid; gap: 4px; font-size: 12px; }
 .detail .trade { display: grid; grid-template-columns: 42px 16px 1fr auto; gap: 6px; align-items: center; font-family: var(--mono); }
 .detail .trade .what { font-family: var(--body); color: var(--ink-2); }
-.detail .scanner { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: rgba(0,0,0,.25); }
-.detail .scanner .title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.detail .scanner .title .eyebrow.sc { color: var(--profit); }
-.detail .scanner .hit { margin-top: 6px; border: 1px solid rgba(255,201,64,.5); background: rgba(255,201,64,.08); border-radius: 6px; padding: 6px 8px; font-family: var(--display); font-weight: 700; font-size: 12px; }
-.detail .scanner .hit small { display: block; font-family: var(--mono); font-weight: 500; color: var(--ink-2); font-size: 11px; margin-top: 2px; }
-.detail .scanner .thoughts { margin-top: 6px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
-.detail .why { margin-top: 10px; font-size: 12px; color: var(--ink-2); border-left: 3px solid var(--warn); padding-left: 8px; }
+.detail .box { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: rgba(0,0,0,.25); }
+.detail .box .title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.detail .box .title .eyebrow.sc { color: var(--profit); }
+.detail .hit { margin-top: 6px; border: 1px solid rgba(255,201,64,.5); background: rgba(255,201,64,.08); border-radius: 6px; padding: 6px 8px; font-family: var(--display); font-weight: 700; font-size: 12px; }
+.detail .hit.red { border-color: rgba(255,93,122,.5); background: rgba(255,93,122,.08); }
+.detail .hit.cyan { border-color: rgba(39,211,255,.5); background: rgba(39,211,255,.08); }
+.detail .hit small { display: block; font-family: var(--mono); font-weight: 500; color: var(--ink-2); font-size: 11px; margin-top: 2px; }
+.detail .thoughts { margin-top: 6px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); display: grid; gap: 2px; }
+.detail .kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 11px; color: var(--ink-2); margin-top: 6px; }
+.detail .kv b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
 
 .chart { grid-column: 2; grid-row: 3; align-self: end; justify-self: center; width: min(100%, 520px); display: none; }
 .chart.open { display: block; }
 .chart .title { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
-.chart .title .sym { font-family: var(--display); font-weight: 700; font-size: 14px; color: var(--profit); letter-spacing: .06em; }
+.chart .title .sym { font-family: var(--display); font-weight: 700; font-size: 14px; color: var(--profit); letter-spacing: .06em; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 0 6px; }
+.chart .title .sym.off { color: var(--ink-3); border-color: var(--line); }
 .chart svg { width: 100%; height: auto; display: block; margin-top: 6px; }
 .chart .tip { font-family: var(--mono); font-size: 11px; color: var(--ink-2); min-height: 16px; margin-top: 4px; }
 
 .controls { grid-column: 1; grid-row: 3; align-self: end; display: flex; gap: 6px; flex-wrap: wrap; }
 .controls button, .tour-btns button { background: rgba(16,12,64,.85); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: var(--display); font-weight: 600; letter-spacing: .04em; backdrop-filter: blur(6px); }
 .controls button:hover, .tour-btns button:hover { border-color: var(--grid); }
-.controls button:focus-visible, .tour-btns button:focus-visible, .close:focus-visible { outline: 2px solid var(--grid); outline-offset: 2px; }
+.controls button:focus-visible, .tour-btns button:focus-visible, .close:focus-visible, .sym:focus-visible { outline: 2px solid var(--grid); outline-offset: 2px; }
 
-/* ---------- tour caption bar ---------- */
 .tour { background: linear-gradient(180deg, rgba(10,9,48,0) 0%, var(--night) 40%); padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; border-top: 1px solid rgba(120,110,255,.18); }
 .tour-btns { display: flex; gap: 6px; }
 .tour-btns button.primary { background: var(--gold); color: #1a1200; border-color: var(--gold); }
 .tour-btns button.primary:hover { background: #ffd978; }
 .caption { min-width: 0; text-align: center; }
-.caption .line { font-family: var(--rubik, var(--body)); font-weight: 800; font-size: clamp(16px, 2.4vw, 22px); line-height: 1.25; text-shadow: 0 2px 0 rgba(0,0,0,.6), 0 0 14px rgba(0,0,0,.6); text-wrap: balance; }
+.caption .line { font-weight: 800; font-size: clamp(16px, 2.4vw, 22px); line-height: 1.25; text-shadow: 0 2px 0 rgba(0,0,0,.6), 0 0 14px rgba(0,0,0,.6); text-wrap: balance; }
 .caption .line em { font-style: normal; color: var(--gold); }
 .caption .step { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 4px; }
 .progress { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; max-width: 140px; }
@@ -130,10 +133,16 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
 .progress button.done { background: var(--ink-3); }
 .progress button.now { background: var(--gold); }
 
-/* ---------- phone ---------- */
+.overlay { position: fixed; inset: 0; background: rgba(5,4,24,.78); display: grid; place-items: center; z-index: 10; padding: 16px; }
+.overlay .card { background: var(--night-2); border: 1px solid var(--line); border-radius: 12px; padding: 20px; width: min(100%, 380px); display: grid; gap: 10px; }
+.overlay input { width: 100%; background: #0a0930; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.overlay button { background: var(--gold); color: #1a1200; border: none; border-radius: 8px; padding: 8px 12px; font-family: var(--display); font-weight: 700; }
+.overlay p { margin: 0; font-size: 12px; color: var(--ink-2); }
+.err { color: var(--loss); font-size: 12px; }
+
 @media (max-width: 760px) {
   body { overflow: auto; }
-  .stage { height: auto; min-height: 100%; grid-template-rows: auto auto; }
+  .stage { height: auto; min-height: 100%; grid-template-rows: auto auto auto; }
   .scene-wrap { height: auto; overflow: visible; }
   svg#scene { position: relative; height: 60vh; min-height: 360px; }
   .hud { position: static; padding: 12px 16px; grid-template-columns: 1fr; grid-template-rows: none; background: var(--night); }
@@ -141,6 +150,7 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
   .vault-total .big { font-size: 36px; }
   .controls { order: -1; }
   .chart { width: 100%; justify-self: stretch; }
+  .detail { max-height: none; }
   .tour { position: sticky; bottom: 0; grid-template-columns: 1fr; text-align: center; }
   .tour-btns { justify-content: center; }
   .progress { justify-content: center; max-width: none; }
@@ -148,21 +158,32 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
 </style>
 </head>
 <body>
+<div id="login" class="overlay" hidden>
+  <form class="card" id="loginForm">
+    <h2 style="font-family:var(--display)">The Vault</h2>
+    <p>Sign in with a role passphrase from <code>data/credentials.json</code> on the server.</p>
+    <input id="passphrase" type="password" autocomplete="current-password" placeholder="Passphrase" required>
+    <button type="submit">Enter</button>
+    <p id="loginError" class="err" hidden></p>
+  </form>
+</div>
+
 <div class="stage">
+  <div id="modeBanner" class="mode-banner none">Connecting to the runner…</div>
   <div class="scene-wrap">
-    <svg id="scene" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Isometric trading floor: four Python bot workers on a neon city block, each sending today's earnings down a road to the vault in the center"></svg>
+    <svg id="scene" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Isometric trading floor: each Python bot is a worker tower paying its closed trades down a road to the vault in the center"></svg>
 
     <div class="hud" id="hud">
       <section class="panel live" aria-label="Live status">
-        <div class="row"><span class="dot" aria-hidden="true"></span><h1 id="liveTitle">LIVE · THE VAULT</h1></div>
-        <div class="clock" id="clock">Mon 10/5 · 10:30 AM ET</div>
-        <div class="clock" style="color:var(--ink-3)">Python bots · 0DTE options on SPY and QQQ</div>
+        <div class="row"><span class="dot off" id="liveDot" aria-hidden="true"></span><h1 id="liveTitle">THE VAULT</h1></div>
+        <div class="clock" id="clock">—</div>
+        <div class="clock" id="clock2" style="color:var(--ink-3)">Python bots · 0DTE options</div>
       </section>
 
       <section class="panel vault-total" aria-label="Vault total today">
         <div class="eyebrow">The vault · today</div>
-        <div class="big num" id="vaultTotal">+$0</div>
-        <div class="sub" id="vaultSub"></div>
+        <div class="big num" id="vaultTotal">$0</div>
+        <div class="sub" id="vaultSub">waiting for the runner</div>
         <div class="bar" id="vaultBar" aria-hidden="true"></div>
       </section>
 
@@ -173,16 +194,15 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
           <tbody id="payrollBody"></tbody>
           <tfoot><tr><td>Total</td><td class="r num" id="pTrades"></td><td class="r num" id="pWins"></td><td class="r num" id="pTotal"></td></tr></tfoot>
         </table>
-        <p class="note">Every closed trade sends its money down the road to the vault. Gold coins for a win, red for a loss. Tap a worker for its card.</p>
+        <p class="note" id="payrollNote">Every closed trade sends its money down the road to the vault. Gold coins for a win, red for a loss. Tap a worker for its card.</p>
       </section>
 
       <section class="panel detail" id="detail" aria-live="polite"></section>
-
-      <section class="panel chart" id="chart" aria-label="QQQ trades today"></section>
+      <section class="panel chart" id="chart" aria-label="Underlying price today with trades"></section>
 
       <div class="controls">
         <button id="overviewBtn" type="button">⌂ Overview</button>
-        <button id="chartBtn" type="button">QQQ chart</button>
+        <button id="chartBtn" type="button">Chart</button>
         <button id="replayBtn" type="button">Replay payouts</button>
       </div>
     </div>
@@ -195,264 +215,168 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
       <button id="nextBtn" type="button" aria-label="Next step">›</button>
     </div>
     <div class="caption">
-      <div class="line" id="captionLine">Four Python bots, one vault. Press play to walk the floor.</div>
-      <div class="step" id="captionStep">Mon 10/5 · 10:30 AM · 42 minutes after the open</div>
+      <div class="line" id="captionLine">Python bots, one vault. Press play to walk the floor.</div>
+      <div class="step" id="captionStep">The tour reads the live numbers when it starts.</div>
     </div>
     <div class="progress" id="progress" aria-label="Tour steps"></div>
   </div>
 </div>
 
 <script>
-/* =========================================================
-   DATA — edit this block to show a different day.
-   Amounts are dollars. Times are ET. Rows are the day's bots.
-   ========================================================= */
-const DAY = {
-  date: 'Mon 10/5', time: '10:30 AM ET', minutesSinceOpen: 42,
-  profitLockPct: 5, brake: 1500,
-  workers: [
-    { id: 'qqq0', name: 'QQQ 0σ', symbol: 'QQQ', status: 'brake',
-      statusLabel: 'profit brake hit · off duty', earned: 1878,
-      trades: [
-        { t: '9:52', side: 'up',   qty: 30, note: 'rode the trail',  pnl: 600 },
-        { t: '9:59', side: 'down', qty: 31, note: 'rode the trail',  pnl: 795 },
-        { t: '10:05', side: 'up',  qty: 31, note: 'profit locked',   pnl: 483 }
-      ],
-      thoughts: '10:27 clocked in · trading QQQ · original 5σ' },
-    { id: 'qqq', name: 'QQQ', symbol: 'QQQ', status: 'brake',
-      statusLabel: 'profit brake hit · off duty', earned: 309, brakeOverride: 300,
-      trades: [
-        { t: '9:41', side: 'up',   qty: 12, note: 'rode the trail',  pnl: 142 },
-        { t: '10:12', side: 'up',  qty: 14, note: 'profit locked',   pnl: 167 }
-      ] },
-    { id: 'trend', name: 'QQQ Trend', symbol: 'QQQ', status: 'off',
-      statusLabel: 'turned off', earned: 96,
-      why: 'The trend is not good today. It only made $96. Not risking it.',
-      trades: [
-        { t: '9:48', side: 'up',   qty: 9, note: 'profit locked', pnl: 96 }
-      ] },
-    { id: 'spy', name: 'SPY', symbol: 'SPY', status: 'off',
-      statusLabel: 'turned off', earned: -227,
-      why: 'Turned it off. It was not doing well: two stop-outs in a row.',
-      trades: [
-        { t: '9:31', side: 'up',   qty: 8, note: 'rode the trail', pnl: 120 },
-        { t: '9:59', side: 'down', qty: 6, note: 'stopped out',    pnl: -176 },
-        { t: '10:01', side: 'down', qty: 7, note: 'stopped out',   pnl: -231 },
-        { t: '10:03', side: 'up',  qty: 6, note: 'profit locked',  pnl: 60 }
-      ] }
-  ],
-  // QQQ intraday, 9:30 to 10:28, one point per two minutes (price). Last print 753.61, +0.60% on the day.
-  qqq: { last: 753.61, changePct: 0.60, asOf: '10:28', tradesCount: 8,
-    prices: [749.1,749.4,749.0,748.6,748.9,749.6,750.2,749.8,750.5,751.1,750.7,751.4,751.9,751.3,752.0,752.6,752.1,752.8,753.3,752.9,753.0,753.5,753.2,752.7,753.1,753.6,753.4,753.0,753.5,753.61] }
-};
-
-/* =========================================================
-   TOUR — the narration, one caption per stop. {em} marks the highlighted word.
-   ========================================================= */
-const TOUR = [
-  { cap: 'So here we are, <em>live</em>. It is 10:30 in the morning on Monday, 10/5.', focus: 'overview' },
-  { cap: 'That is how much my Python bots have made today: <em>over $2,000</em>, in about forty minutes.', focus: 'vault' },
-  { cap: 'They trade SPY and QQQ. I have found out that QQQ is <em>more consistent</em> than SPY.', focus: 'chart' },
-  { cap: 'Here are the <em>QQQ trades</em> we have made today.', focus: 'chart' },
-  { cap: 'All these bots are turned off. This one hit its <em>profit brake</em> at $1,878, so it is off duty for the day.', focus: 'qqq0' },
-  { cap: 'This one hit its <em>$300</em> profit brake. Done for the day.', focus: 'qqq' },
-  { cap: 'SPY I turned off because it was <em>not doing good</em>: negative $227.', focus: 'spy' },
-  { cap: 'And the Trend bot. The trend is not good, it only made $96 today. <em>Not risking it.</em>', focus: 'trend' },
-  { cap: 'So I am at <em>two grand</em> in less than an hour after the open, from Python bots trading one-day options for me. Pretty cool.', focus: 'overview' }
-];
-
 /* ---------- helpers ---------- */
 const $ = (s) => document.querySelector(s);
-const money = (n, sign = true) => (n < 0 ? '-' : (sign ? '+' : '')) + '$' + Math.abs(n).toLocaleString('en-US');
-const cls = (n) => n < 0 ? 'bad' : 'good';
+const money = (n, sign = true) => (n < 0 ? '-' : (sign && n > 0 ? '+' : '')) + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
+const cls = (n) => n < 0 ? 'bad' : n > 0 ? 'good' : '';
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const NS = 'http://www.w3.org/2000/svg';
-function el(tag, attrs = {}, parent) {
-  const e = document.createElementNS(NS, tag);
-  for (const k in attrs) e.setAttribute(k, attrs[k]);
-  if (parent) parent.appendChild(e);
-  return e;
-}
-const wins = (w) => w.trades.filter(t => t.pnl > 0).length;
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const toMin = (s) => { const [h, m] = String(s).split(':').map(Number); return h * 60 + m; };
+const winRate = (w) => w.trade_count ? Math.round(w.wins / w.trade_count * 100) : 0;
 
 /* ---------- isometric scene ---------- */
-// World units: a 2:1 isometric projection. iso(x,y,z) → screen.
-const TW = 44, TH = 22;              // tile width/height on screen
+const TW = 44, TH = 22;
 function iso(x, y, z = 0) { return [(x - y) * TW / 2, (x + y) * TH / 2 - z]; }
 const P = (pts) => pts.map(p => p.join(',')).join(' ');
-
 const scene = $('#scene');
-const VIEW = { x: -440, y: -330, w: 880, h: 600 };   // default (overview) target rect in world units
+const VIEW = { x: -440, y: -330, w: 880, h: 600 };
 const defs = el('defs', {}, scene);
 defs.innerHTML = `
   <linearGradient id="gBeamGold" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fff3c4" stop-opacity="0"/><stop offset=".55" stop-color="#ffc940" stop-opacity=".55"/><stop offset="1" stop-color="#ffd978" stop-opacity=".95"/></linearGradient>
-  <linearGradient id="gBeamRed" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff5d7a" stop-opacity="0"/><stop offset="1" stop-color="#ff5d7a" stop-opacity=".45"/></linearGradient>
+  <linearGradient id="gBeamRed" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff5d7a" stop-opacity="0"/><stop offset="1" stop-color="#ff5d7a" stop-opacity=".5"/></linearGradient>
   <linearGradient id="gBeamWarn" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ffb54a" stop-opacity="0"/><stop offset="1" stop-color="#ffb54a" stop-opacity=".4"/></linearGradient>
+  <linearGradient id="gBeamCyan" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#27d3ff" stop-opacity="0"/><stop offset="1" stop-color="#27d3ff" stop-opacity=".8"/></linearGradient>
+  <linearGradient id="gBeamDim" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7d78b4" stop-opacity="0"/><stop offset="1" stop-color="#7d78b4" stop-opacity=".25"/></linearGradient>
   <radialGradient id="gPlaza" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#3b2bc4"/><stop offset=".7" stop-color="#1f1680"/><stop offset="1" stop-color="#160f62"/></radialGradient>
   <radialGradient id="gVaultGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd978" stop-opacity=".9"/><stop offset=".5" stop-color="#ffc940" stop-opacity=".25"/><stop offset="1" stop-color="#ffc940" stop-opacity="0"/></radialGradient>
   <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
-`;
-const gBack = el('g', { id: 'back' }, scene);
-const gFloor = el('g', { id: 'floor' }, scene);
-const gRoads = el('g', { id: 'roads' }, scene);
-const gBuild = el('g', { id: 'buildings' }, scene);
-const gCoins = el('g', { id: 'coins' }, scene);
-const gLabels = el('g', { id: 'labels' }, scene);
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>`;
+const gBack = el('g', {}, scene), gFloor = el('g', {}, scene), gRoads = el('g', {}, scene), gBuild = el('g', {}, scene), gCoins = el('g', {}, scene), gLabels = el('g', {}, scene);
 
-// Backdrop: distant skyline silhouettes + stars.
 (function backdrop() {
-  const sky = el('g', { opacity: '.9' }, gBack);
   let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
-  for (let i = 0; i < 70; i++) el('circle', { cx: -700 + rnd() * 1400, cy: -420 + rnd() * 300, r: rnd() * 1.4 + .3, fill: '#cfd3ff', opacity: (rnd() * .6 + .2).toFixed(2) }, sky);
+  for (let i = 0; i < 70; i++) el('circle', { cx: -700 + rnd() * 1400, cy: -420 + rnd() * 300, r: rnd() * 1.4 + .3, fill: '#cfd3ff', opacity: (rnd() * .6 + .2).toFixed(2) }, gBack);
   for (let i = 0; i < 44; i++) {
     const x = -720 + i * 33, h = 60 + rnd() * 150, w = 22 + rnd() * 14;
-    el('rect', { x, y: -170 - h, width: w, height: h + 60, fill: '#1a1366', opacity: '.9' }, sky);
-    for (let r = 0; r < Math.floor(h / 14); r++) for (let c = 0; c < 2; c++) if (rnd() > .55)
-      el('rect', { x: x + 5 + c * 9, y: -162 - h + r * 14, width: 4, height: 6, fill: rnd() > .8 ? '#ffc940' : '#6f8cff', opacity: '.75' }, sky);
+    el('rect', { x, y: -170 - h, width: w, height: h + 60, fill: '#1a1366', opacity: '.9' }, gBack);
+    for (let r = 0; r < Math.floor(h / 14); r++) for (let c = 0; c < 2; c++) if (rnd() > .55) el('rect', { x: x + 5 + c * 9, y: -162 - h + r * 14, width: 4, height: 6, fill: rnd() > .8 ? '#ffc940' : '#6f8cff', opacity: '.75' }, gBack);
   }
-  el('rect', { x: -800, y: -120, width: 1600, height: 40, fill: '#120d58' }, sky);
-})();
-
-// Floor: big diamond with a cyan grid.
-(function floor() {
-  const N = 16;
-  const a = iso(-N, -N), b = iso(N, -N), c = iso(N, N), d = iso(-N, N);
+  el('rect', { x: -800, y: -120, width: 1600, height: 40, fill: '#120d58' }, gBack);
+  const N = 16, a = iso(-N, -N), b = iso(N, -N), c = iso(N, N), d = iso(-N, N);
   el('polygon', { points: P([a, b, c, d]), fill: '#15107a' }, gFloor);
   el('polygon', { points: P([a, b, c, d]), fill: 'url(#gPlaza)', opacity: '.8' }, gFloor);
   for (let i = -N; i <= N; i += 2) {
-    el('line', { x1: iso(i, -N)[0], y1: iso(i, -N)[1], x2: iso(i, N)[0], y2: iso(i, N)[1], stroke: '#27d3ff', 'stroke-opacity': '.14', 'stroke-width': '1' }, gFloor);
-    el('line', { x1: iso(-N, i)[0], y1: iso(-N, i)[1], x2: iso(N, i)[0], y2: iso(N, i)[1], stroke: '#27d3ff', 'stroke-opacity': '.14', 'stroke-width': '1' }, gFloor);
+    el('line', { x1: iso(i, -N)[0], y1: iso(i, -N)[1], x2: iso(i, N)[0], y2: iso(i, N)[1], stroke: '#27d3ff', 'stroke-opacity': '.14' }, gFloor);
+    el('line', { x1: iso(-N, i)[0], y1: iso(-N, i)[1], x2: iso(N, i)[0], y2: iso(N, i)[1], stroke: '#27d3ff', 'stroke-opacity': '.14' }, gFloor);
   }
   el('polygon', { points: P([a, b, c, d]), fill: 'none', stroke: '#27d3ff', 'stroke-opacity': '.5', 'stroke-width': '1.5' }, gFloor);
 })();
 
-// Vault plaza at the center: a ring road, a pedestal, and a glowing vault.
-const VAULT = { x: 0, y: 0 };
-(function vault() {
-  const [cx, cy] = iso(0, 0);
-  el('ellipse', { cx, cy: cy + 2, rx: 150, ry: 75, fill: 'none', stroke: '#27d3ff', 'stroke-opacity': '.6', 'stroke-width': '2' }, gRoads);
-  el('ellipse', { cx, cy: cy + 2, rx: 128, ry: 64, fill: '#1c1489', stroke: '#27d3ff', 'stroke-opacity': '.25' }, gRoads);
-  el('ellipse', { cx, cy: cy + 2, rx: 150, ry: 75, fill: 'url(#gVaultGlow)', opacity: '.35', filter: 'url(#soft)', class: 'pulse' }, gRoads);
-  // pedestal (short wide box)
-  box(0, 0, 3.2, 3.2, 10, { top: '#2d22b0', left: '#17107a', right: '#1e1690' }, gBuild);
-  // vault safe: dark block with a gold dial ring
-  box(0, 0, 2.2, 2.2, 28, { top: '#4b3fd6', left: '#241b96', right: '#3127b4' }, gBuild, 10);
-  const [vx, vy] = iso(0, 0, 38);
-  el('ellipse', { cx: vx, cy: vy, rx: 22, ry: 11, fill: 'none', stroke: '#ffc940', 'stroke-width': '3', filter: 'url(#glow)' }, gBuild);
-  el('ellipse', { cx: vx, cy: vy, rx: 9, ry: 4.5, fill: '#ffc940', filter: 'url(#glow)' }, gBuild);
-  for (let i = 0; i < 6; i++) { const [dx, dy] = iso(0, 0, 38); el('circle', { cx: dx + Math.cos(i * 1.05) * 44, cy: dy + 8 + Math.sin(i * 1.05) * 22, r: 3.5, fill: '#27d3ff', opacity: '.8' }, gBuild); }
-  const [lx, ly] = iso(0, 0, 84);
-  bubble(lx, ly - 14, [['THE VAULT · TODAY', '#ffc940', 10], ['', '#3ef08a', 18, 'num']], 'vaultLabel');
-})();
-
-// Draw an isometric box centered on tile (x,y) with footprint w×d and height h (screen px). Optional z base.
 function box(x, y, w, d, h, col, parent, z0 = 0) {
   const x0 = x - w / 2, x1 = x + w / 2, y0 = y - d / 2, y1 = y + d / 2;
   const tA = iso(x0, y0, z0 + h), tB = iso(x1, y0, z0 + h), tC = iso(x1, y1, z0 + h), tD = iso(x0, y1, z0 + h);
   const bC = iso(x1, y1, z0), bD = iso(x0, y1, z0), bB = iso(x1, y0, z0);
   const g = el('g', {}, parent);
-  el('polygon', { points: P([tD, tC, bC, bD]), fill: col.left }, g);   // left face (front-left)
-  el('polygon', { points: P([tC, tB, bB, bC]), fill: col.right }, g);  // right face (front-right)
+  el('polygon', { points: P([tD, tC, bC, bD]), fill: col.left }, g);
+  el('polygon', { points: P([tC, tB, bB, bC]), fill: col.right }, g);
   el('polygon', { points: P([tA, tB, tC, tD]), fill: col.top }, g);
   return g;
 }
+const gVault = el('g', {}, gBuild);
+(function vault() {
+  const [cx, cy] = iso(0, 0);
+  el('ellipse', { cx, cy: cy + 2, rx: 150, ry: 75, fill: 'none', stroke: '#27d3ff', 'stroke-opacity': '.6', 'stroke-width': '2' }, gRoads);
+  el('ellipse', { cx, cy: cy + 2, rx: 128, ry: 64, fill: '#1c1489', stroke: '#27d3ff', 'stroke-opacity': '.25' }, gRoads);
+  el('ellipse', { cx, cy: cy + 2, rx: 150, ry: 75, fill: 'url(#gVaultGlow)', opacity: '.35', filter: 'url(#soft)' }, gRoads);
+  box(0, 0, 3.2, 3.2, 10, { top: '#2d22b0', left: '#17107a', right: '#1e1690' }, gVault);
+  box(0, 0, 2.2, 2.2, 28, { top: '#4b3fd6', left: '#241b96', right: '#3127b4' }, gVault, 10);
+  const [vx, vy] = iso(0, 0, 38);
+  el('ellipse', { cx: vx, cy: vy, rx: 22, ry: 11, fill: 'none', stroke: '#ffc940', 'stroke-width': '3', filter: 'url(#glow)' }, gVault);
+  el('ellipse', { cx: vx, cy: vy, rx: 9, ry: 4.5, fill: '#ffc940', filter: 'url(#glow)' }, gVault);
+  for (let i = 0; i < 6; i++) el('circle', { cx: vx + Math.cos(i * 1.05) * 44, cy: vy + 8 + Math.sin(i * 1.05) * 22, r: 3.5, fill: '#27d3ff', opacity: '.8' }, gVault);
+})();
 
-// A tower for a worker: a stacked box with lit windows, a beam, and a floating label.
-const WORKER_POS = { qqq0: [-7, 5], qqq: [6, -6], trend: [8, 7], spy: [-7, -8] };
+const SLOTS = [[-7, 5], [6, -6], [8, 7], [-7, -8], [0, -12], [12, 0], [0, 12], [-12, 0]];
+const BEAM = { brake: 'url(#gBeamGold)', position: 'url(#gBeamCyan)', on: 'url(#gBeamWarn)', loss_limit: 'url(#gBeamRed)', off: 'url(#gBeamDim)', closed: 'url(#gBeamDim)', window: 'url(#gBeamDim)', done: 'url(#gBeamWarn)', wait: 'url(#gBeamDim)' };
 const workerNodes = {};
-function tower(w) {
-  const [x, y] = WORKER_POS[w.id];
+let towerSig = '';
+function buildTowers(workers) {
+  const sig = workers.map(w => `${w.id}:${w.status}:${Math.round(Math.abs(w.earned) / 100)}`).join('|');
+  if (sig === towerSig) return;
+  towerSig = sig;
+  for (const id in workerNodes) { workerNodes[id].g.remove(); workerNodes[id].label.remove(); workerNodes[id].roads.forEach(r => r.remove()); delete workerNodes[id]; }
+  workers.forEach((w, i) => tower(w, SLOTS[i % SLOTS.length]));
+  [...gBuild.querySelectorAll('.worker')].sort((a, b) => +a.dataset.depth - +b.dataset.depth).forEach(n => gBuild.appendChild(n));
+  if (openId && workerNodes[openId]) { workerNodes[openId].g.classList.add('focused'); }
+}
+function tower(w, [x, y]) {
   const h = Math.max(60, Math.min(150, 60 + Math.abs(w.earned) / 16));
-  const tone = w.status === 'brake' ? { top: '#5a4ae6', left: '#2a1fa0', right: '#3b2fc4' }
-             : w.earned < 0 ? { top: '#5b2f73', left: '#2c1646', right: '#3f2060' }
-             : { top: '#413699', left: '#201870', right: '#2d2290' };
-  const g = el('g', { class: 'worker', tabindex: '0', role: 'button', 'aria-label': `${w.name}: ${w.statusLabel}, earned ${money(w.earned)} today` }, gBuild);
-  // road from tower to the vault ring
-  const [rx0, ry0] = iso(x, y), [rx1, ry1] = iso(VAULT.x, VAULT.y);
+  const tone = w.status === 'brake' ? { top: '#5a4ae6', left: '#2a1fa0', right: '#3b2fc4' } : w.earned < 0 ? { top: '#5b2f73', left: '#2c1646', right: '#3f2060' } : { top: '#413699', left: '#201870', right: '#2d2290' };
+  const g = el('g', { class: 'worker', tabindex: '0', role: 'button', 'aria-label': `${w.name}: ${w.status_label}, earned ${money(w.earned)} today`, 'data-depth': iso(x, y)[1] }, gBuild);
+  const [rx0, ry0] = iso(x, y), [rx1, ry1] = iso(0, 0);
   const dx = rx1 - rx0, dy = ry1 - ry0, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
   const roadEnd = [rx1 - ux * 150 * Math.abs(ux) - ux * 20, ry1 - uy * 75 * Math.abs(uy) - uy * 10];
-  const road = el('line', { x1: rx0, y1: ry0, x2: roadEnd[0], y2: roadEnd[1], stroke: '#27d3ff', 'stroke-opacity': '.45', 'stroke-width': '10', 'stroke-linecap': 'round' }, gRoads);
-  el('line', { x1: rx0, y1: ry0, x2: roadEnd[0], y2: roadEnd[1], stroke: '#0a0930', 'stroke-opacity': '.9', 'stroke-width': '2', 'stroke-dasharray': '6 8' }, gRoads);
-  // ground pad + focus ring
+  const roads = [el('line', { x1: rx0, y1: ry0, x2: roadEnd[0], y2: roadEnd[1], stroke: '#27d3ff', 'stroke-opacity': '.45', 'stroke-width': '10', 'stroke-linecap': 'round' }, gRoads),
+                 el('line', { x1: rx0, y1: ry0, x2: roadEnd[0], y2: roadEnd[1], stroke: '#0a0930', 'stroke-opacity': '.9', 'stroke-width': '2', 'stroke-dasharray': '6 8' }, gRoads)];
   const [px, py] = iso(x, y);
   el('ellipse', { cx: px, cy: py + 6, rx: 78, ry: 39, fill: '#1a1380', stroke: '#27d3ff', 'stroke-opacity': '.3' }, g);
   el('ellipse', { class: 'ring', cx: px, cy: py + 6, rx: 84, ry: 42, fill: 'none', stroke: '#ffc940', 'stroke-width': '2.5', filter: 'url(#glow)' }, g);
-  // beam
-  const beamFill = w.status === 'brake' ? 'url(#gBeamGold)' : w.earned < 0 ? 'url(#gBeamRed)' : 'url(#gBeamWarn)';
-  el('rect', { class: 'beam', x: px - 9, y: py - h - 260, width: 18, height: 260 + h, fill: beamFill, opacity: w.status === 'brake' ? '1' : '.7' }, g);
-  // tower body with a base and crown
+  el('rect', { class: 'beam' + (w.status === 'position' ? ' active' : ''), x: px - 9, y: py - h - 260, width: 18, height: 260 + h, fill: BEAM[w.status] || BEAM.wait, opacity: w.status === 'brake' ? '1' : '.75' }, g);
   box(x, y, 2.6, 2.6, h, tone, g);
-  box(x, y, 1.8, 1.8, 10, { top: w.status === 'brake' ? '#ffc940' : w.earned < 0 ? '#ff5d7a' : '#ffb54a', left: tone.left, right: tone.right }, g, h);
-  // windows on the two visible faces
+  const crown = w.status === 'brake' ? '#ffc940' : w.status === 'position' ? '#27d3ff' : w.earned < 0 ? '#ff5d7a' : w.status === 'on' ? '#ffb54a' : '#5e58a8';
+  box(x, y, 1.8, 1.8, 10, { top: crown, left: tone.left, right: tone.right }, g, h);
   windows(g, x, y, 2.6, h, w.earned < 0 ? '#ff8aa0' : '#9fd8ff');
-  // label
   const [lx, ly] = iso(x, y, h + 48);
-  const lines = [[w.name.replace(/[a-z]/g, c => c.toUpperCase()), '#ffffff', 11], [w.statusLabel, w.status === 'brake' ? '#ffc940' : '#ffb54a', 9], ['earned ' + money(w.earned), w.earned < 0 ? '#ff5d7a' : '#3ef08a', 12, 'num']];
-  const lab = bubble(lx, ly, lines, 'label-' + w.id);
-  workerNodes[w.id] = { g, road: { from: [rx0, ry0], to: roadEnd }, center: [px, py - h / 2], h, label: lab };
+  const label = bubble(lx, ly, [[w.name.replace(/[a-z]/g, c => c.toUpperCase()), '#ffffff', 11], [w.status_label, labelColor(w), 9], ['earned ' + money(w.earned), w.earned < 0 ? '#ff5d7a' : w.earned > 0 ? '#3ef08a' : '#b8b3e6', 12, 'num']]);
+  workerNodes[w.id] = { g, roads, road: { from: [rx0, ry0], to: roadEnd }, center: [px, py - h / 2], label };
   g.addEventListener('click', () => openWorker(w.id));
   g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWorker(w.id); } });
 }
+const labelColor = (w) => ({ brake: '#ffc940', position: '#27d3ff', on: '#ffb54a', loss_limit: '#ff5d7a' })[w.status] || '#b8b3e6';
 function windows(g, x, y, w, h, color) {
   const rows = Math.floor((h - 12) / 12);
   let seed = Math.round(Math.abs(x * 13 + y * 7)) + 3; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
   for (let r = 0; r < rows; r++) for (let c = 0; c < 3; c++) {
     const zz = 8 + r * 12;
-    // left face: along y from (x-w/2, y+w/2) toward (x+w/2, y+w/2)
-    const lx = x - w / 2 + (c + .5) * (w / 3), ly = y + w / 2;
-    const [a, b] = iso(lx, ly, zz);
+    const [a, b] = iso(x - w / 2 + (c + .5) * (w / 3), y + w / 2, zz);
     if (rnd() > .35) el('polygon', { points: P([[a - 5, b - 2.5], [a + 5, b + 2.5], [a + 5, b + 8.5], [a - 5, b + 3.5]]), fill: color, opacity: (rnd() * .5 + .4).toFixed(2) }, g);
-    // right face
-    const rx = x + w / 2, ry = y + w / 2 - (c + .5) * (w / 3);
-    const [a2, b2] = iso(rx, ry, zz);
+    const [a2, b2] = iso(x + w / 2, y + w / 2 - (c + .5) * (w / 3), zz);
     if (rnd() > .35) el('polygon', { points: P([[a2 - 5, b2 + 2.5], [a2 + 5, b2 - 2.5], [a2 + 5, b2 + 3.5], [a2 - 5, b2 + 8.5]]), fill: color, opacity: (rnd() * .5 + .4).toFixed(2) }, g);
   }
 }
-// Floating sticker label: lines = [text, color, size, extraClass]
-function bubble(cx, cy, lines, id) {
-  const g = el('g', { id, class: 'bubble' }, gLabels);
+function bubble(cx, cy, lines) {
+  const g = el('g', { class: 'bubble' }, gLabels);
   const lh = 14, pad = 8;
   const H = lines.reduce((s, l) => s + Math.max(lh, l[2] + 4), 0) + pad * 2 - 2;
   const W = Math.max(...lines.map(l => (l[0] || '').length * (l[2] * .62) + pad * 2), 70) + 8;
   el('rect', { x: cx - W / 2, y: cy - H, width: W, height: H, rx: 5, fill: '#0a0930', 'fill-opacity': '.92', stroke: '#6f66ff', 'stroke-opacity': '.6' }, g);
   el('polygon', { points: P([[cx - 5, cy], [cx + 5, cy], [cx, cy + 6]]), fill: '#0a0930', 'fill-opacity': '.92' }, g);
   let yy = cy - H + pad;
-  g.texts = lines.map((l) => {
-    yy += Math.max(lh, l[2] + 4) - 3;
-    const t = el('text', { x: cx, y: yy - 1, 'text-anchor': 'middle', 'font-size': l[2], fill: l[1], class: l[3] === 'num' ? 'bubble-mono' : 'bubble-text' }, g);
-    t.textContent = l[0];
-    return t;
-  });
-  g.box = { x: cx - W / 2, y: cy - H, w: W, h: H + 6 };
+  g.texts = lines.map((l) => { yy += Math.max(lh, l[2] + 4) - 3; const t = el('text', { x: cx, y: yy - 1, 'text-anchor': 'middle', 'font-size': l[2], fill: l[1], class: l[3] === 'num' ? 'bubble-mono' : 'bubble-text' }, g); t.textContent = l[0]; return t; });
   return g;
 }
-DAY.workers.forEach(tower);
-$('#vaultLabel').texts[1].textContent = money(DAY.workers.reduce((s, w) => s + w.earned, 0));
-// Draw order: sort worker groups by screen depth so near towers overlap far ones.
-[...gBuild.querySelectorAll('.worker')].sort((a, b) => +a.querySelector('ellipse').getAttribute('cy') - +b.querySelector('ellipse').getAttribute('cy')).forEach(n => gBuild.appendChild(n));
+const vaultLabel = (() => { const [lx, ly] = iso(0, 0, 84); return bubble(lx, ly - 14, [['THE VAULT · TODAY', '#ffc940', 10], ['$0', '#b8b3e6', 18, 'num']]); })();
 
-/* ---------- coins rolling down the roads ---------- */
+/* ---------- coins ---------- */
 function sendCoin(id, pnl, delay = 0) {
-  if (reduceMotion) return;
+  if (reduceMotion || !workerNodes[id]) return;
   const r = workerNodes[id].road;
   const c = el('circle', { class: 'coin', r: 5, fill: pnl >= 0 ? '#ffc940' : '#ff5d7a', filter: 'url(#glow)' }, gCoins);
   const t0 = performance.now() + delay, dur = 1400;
   (function step(now) {
-    const k = Math.min(1, Math.max(0, (now - t0) / dur));
-    const e = k < .5 ? 2 * k * k : -1 + (4 - 2 * k) * k;
+    const k = Math.min(1, Math.max(0, (now - t0) / dur)), e = k < .5 ? 2 * k * k : -1 + (4 - 2 * k) * k;
     c.setAttribute('cx', r.from[0] + (r.to[0] - r.from[0]) * e);
     c.setAttribute('cy', r.from[1] + (r.to[1] - r.from[1]) * e - Math.sin(k * Math.PI * 6) * 4);
     if (k < 1) requestAnimationFrame(step); else c.remove();
   })(t0);
 }
 function replayPayouts() {
-  const all = DAY.workers.flatMap(w => w.trades.map(t => ({ id: w.id, pnl: t.pnl, t: t.t })));
+  if (!S) return;
+  const all = S.workers.flatMap(w => w.trades.map(t => ({ id: w.id, pnl: t.pnl, t: t.t })));
   all.sort((a, b) => toMin(a.t) - toMin(b.t)).forEach((t, i) => sendCoin(t.id, t.pnl, i * 350));
 }
-const toMin = (s) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
 
-/* ---------- camera (viewBox) ---------- */
+/* ---------- camera ---------- */
 let cam = { ...VIEW }, camAnim = null;
 function applyCam() { scene.setAttribute('viewBox', `${cam.x} ${cam.y} ${cam.w} ${cam.h}`); }
 function flyTo(target, ms = 900) {
@@ -462,30 +386,21 @@ function flyTo(target, ms = 900) {
   (function step(now) {
     const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3);
     cam = { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, w: from.w + (target.w - from.w) * e, h: from.h + (target.h - from.h) * e };
-    applyCam();
-    if (k < 1) camAnim = requestAnimationFrame(step);
+    applyCam(); if (k < 1) camAnim = requestAnimationFrame(step);
   })(t0);
 }
-function fitAspect(v) { // fit the target rect into the part of the stage the HUD panels leave free, keeping the element's aspect
-  const W = scene.clientWidth || 1120, H = scene.clientHeight || 640;
-  const wide = W > 760;
-  const inL = wide ? 330 : 8, inR = wide ? 360 : 8, inT = 10, inB = wide ? 60 : 10;
+function fitAspect(v) {
+  const W = scene.clientWidth || 1120, H = scene.clientHeight || 640, wide = W > 760;
+  const inL = wide ? 330 : 8, inR = wide ? 370 : 8, inT = 10, inB = wide ? 60 : 10;
   const innerW = Math.max(200, W - inL - inR), innerH = Math.max(200, H - inT - inB);
-  const s = Math.min(innerW / v.w, innerH / v.h);            // px per world unit
-  const cx = v.x + v.w / 2, cy = v.y + v.h / 2;
-  const w = W / s, h = H / s;
-  return { x: cx - (inL + innerW / 2) / s, y: cy - (inT + innerH / 2) / s, w, h };
+  const s = Math.min(innerW / v.w, innerH / v.h), cx = v.x + v.w / 2, cy = v.y + v.h / 2;
+  return { x: cx - (inL + innerW / 2) / s, y: cy - (inT + innerH / 2) / s, w: W / s, h: H / s };
 }
 function overview() { flyTo(fitAspect(VIEW)); }
-function focusWorker(id) {
-  const n = workerNodes[id], [cx, cy] = n.center;
-  flyTo(fitAspect({ x: cx - 260, y: cy - 200, w: 520, h: 330 }));
-}
+function focusWorker(id) { const n = workerNodes[id]; if (!n) return; const [cx, cy] = n.center; flyTo(fitAspect({ x: cx - 260, y: cy - 200, w: 520, h: 330 })); }
 function focusVault() { const [cx, cy] = iso(0, 0, 30); flyTo(fitAspect({ x: cx - 300, y: cy - 190, w: 600, h: 340 })); }
 applyCam();
 addEventListener('resize', () => { cam = fitAspect(cam); applyCam(); });
-
-// Drag to pan, wheel/pinch to zoom.
 (function pan() {
   let drag = null;
   scene.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, cam: { ...cam } }; scene.setPointerCapture(e.pointerId); scene.classList.add('dragging'); });
@@ -495,106 +410,178 @@ addEventListener('resize', () => { cam = fitAspect(cam); applyCam(); });
   scene.addEventListener('wheel', (e) => { e.preventDefault(); const f = e.deltaY > 0 ? 1.1 : .9; const mx = cam.x + (e.offsetX / scene.clientWidth) * cam.w, my = cam.y + (e.offsetY / scene.clientHeight) * cam.h; cam = { x: mx - (mx - cam.x) * f, y: my - (my - cam.y) * f, w: cam.w * f, h: cam.h * f }; applyCam(); }, { passive: false });
 })();
 
-/* ---------- HUD: vault total + payroll ---------- */
-const total = DAY.workers.reduce((s, w) => s + w.earned, 0);
-const tTrades = DAY.workers.reduce((s, w) => s + w.trades.length, 0);
-const tWins = DAY.workers.reduce((s, w) => s + wins(w), 0);
-$('#vaultTotal').textContent = money(total); $('#vaultTotal').classList.add(cls(total));
-$('#vaultSub').textContent = `${DAY.workers.length} workers on a shift · ${DAY.minutesSinceOpen} min after the open · ${tWins} of ${tTrades} trades won`;
-$('#clock').textContent = `${DAY.date} · ${DAY.time}`;
-const gross = DAY.workers.reduce((s, w) => s + Math.abs(w.earned), 0);
-$('#vaultBar').innerHTML = DAY.workers.map(w => `<span style="width:${(Math.abs(w.earned) / gross * 100).toFixed(1)}%;background:${w.earned < 0 ? 'var(--loss)' : w.status === 'brake' ? 'var(--gold)' : 'var(--warn)'}" title="${w.name} ${money(w.earned)}"></span>`).join('');
-$('#payrollBody').innerHTML = DAY.workers.map(w => `
-  <tr class="worker-row" data-id="${w.id}" tabindex="0">
-    <td class="name">${w.name} <span class="chip ${w.status === 'brake' ? 'brake' : 'off'}">${w.status === 'brake' ? 'brake' : 'off'}</span></td>
-    <td class="r num">${w.trades.length}</td><td class="r num">${wins(w)}</td>
-    <td class="r num ${cls(w.earned)}"><strong>${money(w.earned)}</strong></td></tr>`).join('');
-$('#pTrades').textContent = tTrades; $('#pWins').textContent = tWins; $('#pTotal').textContent = money(total); $('#pTotal').classList.add(cls(total));
-document.querySelectorAll('.worker-row').forEach(r => { r.addEventListener('click', () => openWorker(r.dataset.id)); r.addEventListener('keydown', (e) => { if (e.key === 'Enter') openWorker(r.dataset.id); }); });
+/* ---------- live state ---------- */
+let S = null, seenEvents = null, openId = null, chartSym = null;
+async function poll() {
+  let r;
+  try { r = await fetch('/api/vault/state', { cache: 'no-store' }); } catch { setBanner('none', 'Cannot reach the server. Start it with <code>node server/server.js</code> and open this page from it.'); return; }
+  if (r.status === 401) { $('#login').hidden = false; return; }
+  $('#login').hidden = true;
+  const st = await r.json();
+  render(normalize(st));
+}
+function normalize(st) {
+  if (!st.runner) {
+    return { runner: false, mode: null, workers: (st.config_workers || []).map(w => ({ ...w, status: 'wait', status_label: 'waiting for the runner', earned: 0, wins: 0, trade_count: 0, trades: [], thoughts: [], indicators: {}, position: null, risk: w.risk || {} })),
+             total: 0, unrealized: 0, series: {}, events: [], errors: st.error ? [st.error] : [], server_now: st.server_now, config_workers: st.config_workers };
+  }
+  return st;
+}
+function setBanner(kind, html) { const b = $('#modeBanner'); b.className = 'mode-banner ' + kind; b.innerHTML = html; }
+function render(st) {
+  S = st;
+  const w = st.workers;
+  // banner + live header
+  if (!st.runner) setBanner('none', 'Runner not connected. Start it with <code>python bots/runner.py</code> (paper) or <code>python bots/runner.py --mode sim</code> to watch a simulated day.');
+  else if (st.mode === 'sim') setBanner('sim', 'Simulation · random-walk prices, no broker, no money. Sim trades never mix with paper or live records.');
+  else if (st.mode === 'paper') setBanner('paper', 'Paper trading · real market data, Alpaca paper account, no money at risk');
+  else setBanner('live', 'Live trading · real money · ' + (st.stale ? 'runner state is stale' : 'runner connected'));
+  $('#liveTitle').textContent = (st.mode === 'live' ? 'LIVE' : st.mode === 'paper' ? 'PAPER' : st.mode === 'sim' ? 'SIM' : 'OFFLINE') + ' · THE VAULT';
+  $('#liveDot').className = 'dot' + (st.runner && !st.stale && st.market_open ? '' : ' off');
+  const asOf = st.as_of ? new Date(st.as_of) : null;
+  $('#clock').textContent = asOf ? `${asOf.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' })} · ${asOf.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} ${st.mode === 'sim' ? 'sim' : 'ET'} · market ${st.market_open ? 'open' : 'closed'}${st.stale ? ' · STALE' : ''}` : 'no runner state yet';
+  const syms = [...new Set(w.map(x => x.symbol))].join(' and ');
+  $('#clock2').textContent = (st.equity != null ? `account equity $${Math.round(st.equity).toLocaleString()} · ` : '') + `Python bots · 0DTE options on ${syms || 'SPY and QQQ'}`;
+  // vault
+  const total = st.total || 0, tTrades = w.reduce((s, x) => s + x.trade_count, 0), tWins = w.reduce((s, x) => s + x.wins, 0);
+  $('#vaultTotal').textContent = money(total); $('#vaultTotal').className = 'big num ' + cls(total);
+  const mins = asOf && st.runner ? Math.max(0, Math.round((asOf.getHours() * 60 + asOf.getMinutes()) - 570)) : null;
+  $('#vaultSub').textContent = st.runner ? `${w.length} workers on a shift${mins != null && st.market_open ? ` · ${mins} min after the open` : ''} · ${tWins} of ${tTrades} trades won${st.unrealized ? ` · ${money(st.unrealized)} open` : ''}` : 'waiting for the runner';
+  const gross = w.reduce((s, x) => s + Math.abs(x.earned), 0) || 1;
+  $('#vaultBar').innerHTML = w.map(x => `<span style="width:${(Math.abs(x.earned) / gross * 100).toFixed(1)}%;background:${x.earned < 0 ? 'var(--loss)' : x.status === 'brake' ? 'var(--gold)' : 'var(--warn)'}" title="${esc(x.name)} ${money(x.earned)}"></span>`).join('');
+  vaultLabel.texts[1].textContent = money(total); vaultLabel.texts[1].setAttribute('fill', total < 0 ? '#ff5d7a' : total > 0 ? '#3ef08a' : '#b8b3e6');
+  // payroll
+  $('#payrollBody').innerHTML = w.map(x => `<tr class="worker-row${x.id === openId ? ' focused' : ''}" data-id="${esc(x.id)}" tabindex="0"><td class="name">${esc(x.name)}<span class="chip ${esc(x.status)}">${chipText(x)}</span></td><td class="r num">${x.trade_count}</td><td class="r num">${x.wins}</td><td class="r num ${cls(x.earned)}"><strong>${money(x.earned)}</strong></td></tr>`).join('');
+  $('#pTrades').textContent = tTrades; $('#pWins').textContent = tWins; $('#pTotal').textContent = money(total); $('#pTotal').className = 'r num ' + cls(total);
+  document.querySelectorAll('.worker-row').forEach(r => { r.addEventListener('click', () => openWorker(r.dataset.id)); r.addEventListener('keydown', (e) => { if (e.key === 'Enter') openWorker(r.dataset.id); }); });
+  if (st.errors && st.errors.length) $('#payrollNote').innerHTML = '<span class="bad">Runner reported:</span> ' + esc(st.errors[st.errors.length - 1]);
+  // scene
+  buildTowers(w);
+  for (const x of w) { const n = workerNodes[x.id]; if (n) { n.label.texts[1].textContent = x.status_label; n.label.texts[1].setAttribute('fill', labelColor(x)); n.label.texts[2].textContent = (x.position ? 'open ' + money((x.position.mark - x.position.entry) * 100 * x.position.qty) + ' · ' : '') + 'earned ' + money(x.earned); } }
+  // coins for new closes
+  const ev = st.events || [];
+  if (seenEvents === null) seenEvents = new Set(ev.map(e => e.id));
+  else ev.forEach(e => { if (!seenEvents.has(e.id)) { seenEvents.add(e.id); if (e.kind === 'close') sendCoin(e.bot, e.pnl); } });
+  if (openId) openWorker(openId, false);
+  if ($('#chart').classList.contains('open')) drawChart();
+}
+const chipText = (x) => ({ on: 'on', position: 'in trade', brake: 'brake', loss_limit: 'loss limit', done: 'done', off: 'off', closed: 'closed', window: 'waiting', wait: 'no runner' })[x.status] || x.status;
 
 /* ---------- worker card ---------- */
-let openId = null;
 function openWorker(id, fly = true) {
-  const w = DAY.workers.find(x => x.id === id); if (!w) return;
-  openId = id;
+  const w = S && S.workers.find(x => x.id === id); if (!w) return;
+  const wasOpen = openId === id; openId = id;
   document.querySelectorAll('.worker.focused, .worker-row.focused').forEach(n => n.classList.remove('focused'));
-  workerNodes[id].g.classList.add('focused');
-  document.querySelector(`.worker-row[data-id="${id}"]`).classList.add('focused');
-  const rate = w.trades.length ? Math.round(wins(w) / w.trades.length * 100) : 0;
-  const brake = w.brakeOverride || DAY.brake;
+  if (workerNodes[id]) workerNodes[id].g.classList.add('focused');
+  const row = document.querySelector(`.worker-row[data-id="${CSS.escape(id)}"]`); if (row) row.classList.add('focused');
+  const r = w.risk || {}, p = w.position, brake = r.daily_brake;
+  const openPnl = p ? (p.mark - p.entry) * 100 * p.qty : 0;
+  const trades = [...(w.trades || [])].reverse();
   const d = $('#detail');
   d.innerHTML = `
-    <div class="head"><div><div class="eyebrow">Earned · today</div><h2 style="font-family:var(--display);font-size:16px">${w.name} <span class="chip ${w.status === 'brake' ? 'brake' : 'off'}">${w.statusLabel}</span></h2></div>
+    <div class="head"><div><div class="eyebrow">Earned · today</div><h2 style="font-family:var(--display);font-size:16px">${esc(w.name)}<span class="chip ${esc(w.status)}">${esc(w.status_label)}</span></h2></div>
       <button class="close" type="button" id="closeDetail" aria-label="Close card">✕</button></div>
     <div class="big num ${cls(w.earned)}">${money(w.earned)}</div>
-    <div class="stat">${w.trades.length} trades · ${wins(w)} wins · ${rate}% win rate</div>
+    <div class="stat">${w.trade_count} trades · ${w.wins} wins · ${winRate(w)}% win rate · ${esc(w.strategy)}${w.indicators && w.indicators.z != null ? ` · z ${w.indicators.z >= 0 ? '+' : ''}${w.indicators.z}` : ''}${w.indicators && w.indicators.ema_fast != null ? ` · EMA ${w.indicators.ema_fast} / ${w.indicators.ema_slow}` : ''}</div>
+    ${p ? `<div class="box"><div class="title"><span class="eyebrow" style="color:var(--grid)">In a trade</span><span class="num ${cls(openPnl)}" style="font-weight:700">${money(openPnl)}</span></div>
+      <div class="kv"><span>Contract</span><b>${esc(p.contract)}</b><span>Side</span><b>${esc(p.kind)} ${p.strike}</b><span>Qty</span><b>${p.qty}</b><span>Entry</span><b>${Number(p.entry).toFixed(2)}</b><span>Mark</span><b>${Number(p.mark).toFixed(2)}</b><span>Peak</span><b>${Number(p.peak).toFixed(2)}</b><span>Since</span><b>${esc(String(p.entry_time).slice(11, 16))}</b></div></div>` : ''}
     <div class="eyebrow" style="margin-top:12px">Last trades</div>
-    <div class="trades">${[...w.trades].reverse().map(t => `<div class="trade"><span>${t.t}</span><span class="${t.side === 'up' ? 'good' : 'bad'}">${t.side === 'up' ? '▲' : '▼'}</span><span class="what">${t.qty} ${w.symbol} · ${t.note}</span><span class="${cls(t.pnl)}">${money(t.pnl)}</span></div>`).join('')}</div>
-    ${w.status === 'brake' ? `
-    <div class="scanner"><div class="title"><span class="eyebrow sc">Signal scanner</span><span class="num" style="font-size:11px;color:var(--ink-2)">profit lock ${DAY.profitLockPct}% on · brake $${brake.toLocaleString()}</span></div>
-      <div class="hit">🏁 PROFIT BRAKE HIT<small>${money(w.earned)} banked ≥ $${brake.toLocaleString()} · done for today</small></div>
-      ${w.thoughts ? `<div class="thoughts"><span class="eyebrow" style="font-size:9px">Thoughts</span> ${w.thoughts}</div>` : ''}</div>` : ''}
-    ${w.why ? `<div class="why">${w.why}</div>` : ''}
-    <div class="stat" style="margin-top:10px;font-size:11px;color:var(--ink-3)">${w.status === 'brake' ? 'The bot clocks out on its own once the day’s profit clears the brake. Nothing more is risked.' : 'Switched off by hand. Trades already closed still count toward the vault.'}</div>`;
+    <div class="trades">${trades.length ? trades.map(t => `<div class="trade"><span>${esc(t.t)}</span><span class="${t.kind === 'call' ? 'good' : 'bad'}">${t.kind === 'call' ? '▲' : '▼'}</span><span class="what">${t.qty} ${esc(t.symbol)} ${esc(t.kind)} · ${esc(t.reason)}</span><span class="${cls(t.pnl)}">${money(t.pnl)}</span></div>`).join('') : '<div class="stat">No closed trades yet today.</div>'}</div>
+    <div class="box"><div class="title"><span class="eyebrow sc">Signal scanner</span><span class="num" style="font-size:11px;color:var(--ink-2)">lock ${r.lock_pct ?? '—'}% · stop ${r.stop_loss_pct ?? '—'}%${brake ? ` · brake $${Number(brake).toLocaleString()}` : ''}</span></div>
+      ${w.status === 'brake' ? `<div class="hit">🏁 PROFIT BRAKE HIT<small>${money(w.earned)} banked ≥ $${Number(brake).toLocaleString()} · done for today</small></div>` : ''}
+      ${w.status === 'loss_limit' ? `<div class="hit red">⛔ LOSS LIMIT HIT<small>${money(w.earned)} ≤ $${Number(r.daily_loss_limit).toLocaleString()} · done for today</small></div>` : ''}
+      ${w.status === 'position' ? `<div class="hit cyan">◉ WORKING A TRADE<small>exits on stop ${r.stop_loss_pct}% · lock ${r.lock_pct}% then trail ${r.trail_pct}% · take profit ${r.take_profit_pct ?? '—'}% · ${r.max_hold_minutes ?? '—'} min max</small></div>` : ''}
+      ${w.status === 'on' ? `<div class="hit cyan" style="border-color:rgba(255,181,74,.5);background:rgba(255,181,74,.08)">👁 WATCHING<small>${r.qty ?? 1} contract${r.qty > 1 ? 's' : ''} · ${r.dte ?? 0}DTE · ${w.trade_count}/${r.max_trades ?? '∞'} trades used</small></div>` : ''}
+      <div class="thoughts"><span class="eyebrow" style="font-size:9px">Thoughts</span>${(w.thoughts || []).length ? w.thoughts.slice().reverse().map(t => `<span>${esc(t)}</span>`).join('') : '<span>nothing yet</span>'}</div></div>
+    <div class="stat" style="margin-top:10px;font-size:11px;color:var(--ink-3)">${w.status === 'brake' ? 'The bot clocks out on its own once the day’s profit clears the brake. Nothing more is risked today.' : w.status === 'off' ? 'Turned off in config/bots.json. Trades already closed still count toward the vault.' : 'Entries only inside the trade window; everything is flattened before the close.'}</div>`;
   d.classList.add('open'); $('#payroll').style.display = 'none';
   $('#closeDetail').addEventListener('click', closeWorker);
-  if (fly) focusWorker(id);
-  w.trades.forEach((t, i) => sendCoin(id, t.pnl, i * 250));
+  if (fly && !wasOpen) { focusWorker(id); (w.trades || []).forEach((t, i) => sendCoin(id, t.pnl, i * 250)); }
 }
 function closeWorker() { openId = null; $('#detail').classList.remove('open'); $('#payroll').style.display = ''; document.querySelectorAll('.focused').forEach(n => n.classList.remove('focused')); }
 
-/* ---------- QQQ chart ---------- */
-(function chart() {
-  const q = DAY.qqq, c = $('#chart');
-  const Wc = 520, Hc = 190, padL = 46, padR = 12, padT = 24, padB = 26;
-  const n = q.prices.length, lo = Math.min(...q.prices) - .4, hi = Math.max(...q.prices) + .6;
-  const X = (i) => padL + i / (n - 1) * (Wc - padL - padR), Y = (v) => padT + (hi - v) / (hi - lo) * (Hc - padT - padB);
-  const minOf = (i) => 570 + i * 2; // 9:30 = 570
-  const pts = q.prices.map((v, i) => [X(i), Y(v)]);
-  const path = 'M' + pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' L');
-  const area = path + ` L${X(n - 1).toFixed(1)},${(Hc - padB).toFixed(1)} L${padL},${(Hc - padB).toFixed(1)} Z`;
-  // trades from the two QQQ bots, placed at their clock times
-  const marks = DAY.workers.filter(w => w.symbol === 'QQQ').flatMap(w => w.trades.map(t => ({ ...t, bot: w.name })));
-  const ticks = []; for (let v = Math.ceil(lo); v <= hi; v += 1) ticks.push(v);
-  const tx = [['9:30', 0], ['10:00', 15], ['10:28', n - 1]];
+/* ---------- chart ---------- */
+function drawChart() {
+  const c = $('#chart'); if (!S) return;
+  const syms = Object.keys(S.series || {});
+  if (!syms.length) { c.innerHTML = '<div class="stat">No price series yet. The runner fills this in on its first pass.</div>'; return; }
+  if (!chartSym || !syms.includes(chartSym)) chartSym = syms.includes('QQQ') ? 'QQQ' : syms[0];
+  const q = S.series[chartSym], n = q.c.length; if (n < 2) { c.innerHTML = '<div class="stat">Waiting for bars…</div>'; return; }
+  const Wc = 520, Hc = 190, padL = 50, padR = 12, padT = 24, padB = 26;
+  const lo = Math.min(...q.c), hi = Math.max(...q.c), span = Math.max(0.5, hi - lo), yLo = lo - span * .15, yHi = hi + span * .25;
+  const X = (i) => padL + i / (n - 1) * (Wc - padL - padR), Y = (v) => padT + (yHi - v) / (yHi - yLo) * (Hc - padT - padB);
+  const pts = q.c.map((v, i) => [X(i), Y(v)]);
+  const path = 'M' + pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' L'), area = path + ` L${X(n - 1).toFixed(1)},${(Hc - padB).toFixed(1)} L${padL},${(Hc - padB).toFixed(1)} Z`;
+  const chg = (q.c[n - 1] / q.c[0] - 1) * 100;
+  const idxOf = (t) => { const i = q.t.indexOf(t); if (i >= 0) return i; const m = toMin(t); let best = 0; for (let k = 0; k < n; k++) if (Math.abs(toMin(q.t[k]) - m) < Math.abs(toMin(q.t[best]) - m)) best = k; return Math.abs(toMin(q.t[best]) - m) <= 2 ? best : -1; };
+  const marks = S.workers.filter(w => w.symbol === chartSym).flatMap(w => w.trades.map(t => ({ ...t, bot: w.name, i: idxOf(t.t) }))).filter(m => m.i >= 0);
+  const opens = S.workers.filter(w => w.symbol === chartSym && w.position).map(w => ({ ...w.position, bot: w.name, i: idxOf(String(w.position.entry_time).slice(11, 16)) })).filter(m => m.i >= 0);
+  const step = span > 4 ? Math.ceil(span / 4) : span > 1 ? 1 : 0.5, ticks = []; for (let v = Math.ceil(yLo / step) * step; v <= yHi; v += step) ticks.push(v);
+  const tx = [[q.t[0], 0], [q.t[Math.floor(n / 2)], Math.floor(n / 2)], [q.t[n - 1], n - 1]];
+  const lineCol = chg >= 0 ? '#3ef08a' : '#ff5d7a';
   c.innerHTML = `
-    <div class="title"><span class="sym">QQQ</span><span>${DAY.date} · ${q.asOf}</span><span class="num" style="color:var(--ink)">${q.last.toFixed(2)}</span><span class="good num">+${q.changePct.toFixed(2)}%</span><span>· ${q.tradesCount} trades</span></div>
-    <svg viewBox="0 0 ${Wc} ${Hc}" role="img" aria-label="QQQ price today with the bots' trades marked" id="qsvg">
-      <defs><linearGradient id="gArea" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#3ef08a" stop-opacity=".35"/><stop offset="1" stop-color="#3ef08a" stop-opacity="0"/></linearGradient></defs>
-      ${ticks.map(v => `<line x1="${padL}" x2="${Wc - padR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#6f66ff" stroke-opacity=".18"/><text x="${padL - 6}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end" font-size="9" font-family="IBM Plex Mono, monospace" fill="#7d78b4">${v}</text>`).join('')}
-      ${tx.map(([l, i]) => `<text x="${X(i).toFixed(1)}" y="${Hc - 8}" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}" font-size="9" font-family="IBM Plex Mono, monospace" fill="#7d78b4">${l}</text>`).join('')}
-      <path d="${area}" fill="url(#gArea)"/>
-      <path d="${path}" fill="none" stroke="#3ef08a" stroke-width="2" stroke-linejoin="round"/>
-      <circle cx="${X(n - 1).toFixed(1)}" cy="${Y(q.last).toFixed(1)}" r="4" fill="#3ef08a" stroke="#0a0930" stroke-width="2"/>
-      ${marks.map((m, k) => { const i = Math.max(0, Math.min(n - 1, Math.round((toMin(m.t) - 570) / 2))); const x = X(i), y = Y(q.prices[i]); const up = m.side === 'up'; const ly = y - 18 - (k % 2) * 14;
-        return `<g class="mark"><title>${m.t} ${up ? 'call' : 'put'} · ${m.qty} ${m.bot} · ${m.note} · ${money(m.pnl)}</title>
+    <div class="title">${syms.map(s => `<button type="button" class="sym${s === chartSym ? '' : ' off'}" data-sym="${esc(s)}">${esc(s)}</button>`).join('')}<span>${esc(q.t[n - 1])}</span><span class="num" style="color:var(--ink)">${q.c[n - 1].toFixed(2)}</span><span class="${cls(chg)} num">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span><span>· ${marks.length} trades</span></div>
+    <svg viewBox="0 0 ${Wc} ${Hc}" role="img" aria-label="${esc(chartSym)} price today with the bots' trades marked" id="qsvg">
+      <defs><linearGradient id="gArea" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${lineCol}" stop-opacity=".35"/><stop offset="1" stop-color="${lineCol}" stop-opacity="0"/></linearGradient></defs>
+      ${ticks.map(v => `<line x1="${padL}" x2="${Wc - padR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#6f66ff" stroke-opacity=".18"/><text x="${padL - 6}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end" font-size="9" font-family="IBM Plex Mono, monospace" font-weight="400" fill="#7d78b4">${Number.isInteger(step) ? Math.round(v) : v.toFixed(1)}</text>`).join('')}
+      ${tx.map(([l, i]) => `<text x="${X(i).toFixed(1)}" y="${Hc - 8}" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}" font-size="9" font-family="IBM Plex Mono, monospace" font-weight="400" fill="#7d78b4">${esc(l)}</text>`).join('')}
+      <path d="${area}" fill="url(#gArea)"/><path d="${path}" fill="none" stroke="${lineCol}" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="${X(n - 1).toFixed(1)}" cy="${Y(q.c[n - 1]).toFixed(1)}" r="4" fill="${lineCol}" stroke="#0a0930" stroke-width="2"/>
+      ${opens.map(m => { const x = X(m.i), y = Y(q.c[m.i]); return `<g><title>${esc(m.bot)} open ${esc(m.kind)} ${m.strike} since ${esc(String(m.entry_time).slice(11, 16))}</title><circle cx="${x}" cy="${y}" r="6" fill="none" stroke="#27d3ff" stroke-width="2"/></g>`; }).join('')}
+      ${marks.map((m, k) => { const x = X(m.i), y = Y(q.c[m.i]), up = m.kind === 'call', ly = y - 18 - (k % 2) * 14, col = m.pnl >= 0 ? '#3ef08a' : '#ff5d7a';
+        return `<g><title>${esc(m.t)} ${esc(m.kind)} · ${m.qty} ${esc(m.bot)} · ${esc(m.reason)} · ${money(m.pnl)}</title>
           <polygon points="${x},${up ? y - 9 : y + 9} ${x - 5},${up ? y - 1 : y + 1} ${x + 5},${up ? y - 1 : y + 1}" fill="${up ? '#3ef08a' : '#ff5d7a'}" stroke="#0a0930" stroke-width="1"/>
-          <rect x="${x - 17}" y="${ly - 9}" width="34" height="12" rx="3" fill="#0a0930" stroke="${m.pnl >= 0 ? '#3ef08a' : '#ff5d7a'}" stroke-opacity=".7"/>
-          <text x="${x}" y="${ly}" text-anchor="middle" font-size="8.5" font-family="IBM Plex Mono, monospace" font-weight="600" fill="${m.pnl >= 0 ? '#3ef08a' : '#ff5d7a'}">${money(m.pnl)}</text></g>`; }).join('')}
+          <rect x="${x - 17}" y="${ly - 9}" width="34" height="12" rx="3" fill="#0a0930" stroke="${col}" stroke-opacity=".7"/>
+          <text x="${x}" y="${ly}" text-anchor="middle" font-size="8.5" font-family="IBM Plex Mono, monospace" font-weight="600" fill="${col}">${money(m.pnl)}</text></g>`; }).join('')}
       <g id="xhair" style="display:none"><line id="xh" y1="${padT}" y2="${Hc - padB}" stroke="#27d3ff" stroke-opacity=".6" stroke-dasharray="3 3"/><circle id="xc" r="4" fill="#27d3ff" stroke="#0a0930" stroke-width="1.5"/></g>
       <rect id="hit" x="${padL}" y="0" width="${Wc - padL - padR}" height="${Hc}" fill="transparent"/>
     </svg>
-    <div class="tip" id="qtip">Hover or touch the line for time and price. Triangles are entries; pills are what each trade paid.</div>`;
+    <div class="tip" id="qtip">Hover or touch the line for time and price. Triangles mark closed trades at exit; rings mark open entries.</div>`;
+  c.querySelectorAll('.sym').forEach(b => b.addEventListener('click', () => { chartSym = b.dataset.sym; drawChart(); }));
   const svg = $('#qsvg'), hit = $('#hit'), xh = $('#xhair');
   const show = (e) => { const r = svg.getBoundingClientRect(); const px = (e.clientX - r.left) / r.width * Wc; const i = Math.max(0, Math.min(n - 1, Math.round((px - padL) / (Wc - padL - padR) * (n - 1))));
-    const m = minOf(i), hh = Math.floor(m / 60), mm = String(m % 60).padStart(2, '0');
-    xh.style.display = ''; $('#xh').setAttribute('x1', X(i)); $('#xh').setAttribute('x2', X(i)); $('#xc').setAttribute('cx', X(i)); $('#xc').setAttribute('cy', Y(q.prices[i]));
-    $('#qtip').textContent = `${hh}:${mm} · QQQ ${q.prices[i].toFixed(2)} · ${((q.prices[i] / q.prices[0] - 1) * 100 >= 0 ? '+' : '')}${((q.prices[i] / q.prices[0] - 1) * 100).toFixed(2)}% from the open`; };
-  hit.addEventListener('pointermove', show); hit.addEventListener('pointerdown', show);
-  hit.addEventListener('pointerleave', () => { xh.style.display = 'none'; });
-})();
-function showChart(on) { $('#chart').classList.toggle('open', on); }
+    xh.style.display = ''; $('#xh').setAttribute('x1', X(i)); $('#xh').setAttribute('x2', X(i)); $('#xc').setAttribute('cx', X(i)); $('#xc').setAttribute('cy', Y(q.c[i]));
+    $('#qtip').textContent = `${q.t[i]} · ${chartSym} ${q.c[i].toFixed(2)} · ${(q.c[i] / q.c[0] - 1) * 100 >= 0 ? '+' : ''}${((q.c[i] / q.c[0] - 1) * 100).toFixed(2)}% from the first bar shown`; };
+  hit.addEventListener('pointermove', show); hit.addEventListener('pointerdown', show); hit.addEventListener('pointerleave', () => { xh.style.display = 'none'; });
+}
+function showChart(on) { $('#chart').classList.toggle('open', on); if (on) drawChart(); }
 
-/* ---------- tour ---------- */
-let step = -1, playing = false, timer = null;
+/* ---------- tour: captions written from the live numbers ---------- */
+let TOUR = [], step = -1, playing = false, timer = null;
+function buildTour() {
+  if (!S) return [];
+  const w = S.workers, asOf = S.as_of ? new Date(S.as_of) : new Date();
+  const when = `${asOf.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} on ${asOf.toLocaleDateString('en-US', { weekday: 'long', month: 'numeric', day: 'numeric' })}`;
+  const mins = Math.max(0, asOf.getHours() * 60 + asOf.getMinutes() - 570);
+  const syms = [...new Set(w.map(x => x.symbol))];
+  const modeWord = S.mode === 'live' ? 'live' : S.mode === 'paper' ? 'paper trading' : S.mode === 'sim' ? 'in simulation' : 'offline';
+  const steps = [{ cap: `So here we are, <em>${modeWord}</em>. It is ${when}.`, focus: 'overview' }];
+  if (!S.runner) { steps.push({ cap: 'The runner is not connected yet. Start <em>python bots/runner.py</em> and the floor comes alive.', focus: 'vault' }); return steps; }
+  steps.push({ cap: `That is what the Python bots have made today: <em>${money(S.total)}</em>${S.market_open ? `, ${mins} minutes after the open` : ''}.`, focus: 'vault' });
+  if (syms.length) steps.push({ cap: `They trade ${syms.join(' and ')}. Here is the <em>${syms.includes('QQQ') ? 'QQQ' : syms[0]} tape</em> with today's trades on it.`, focus: 'chart' });
+  for (const x of w) {
+    const e = money(x.earned);
+    let cap;
+    if (x.status === 'brake') cap = `${x.name} hit its <em>profit brake</em> at ${e}, so it is off duty for the day.`;
+    else if (x.status === 'position') cap = `${x.name} is <em>in a trade</em> right now: ${x.position.kind} ${x.position.strike}, ${money((x.position.mark - x.position.entry) * 100 * x.position.qty)} so far.`;
+    else if (x.status === 'loss_limit') cap = `${x.name} hit its <em>loss limit</em> at ${e}. Done for the day, nothing more is risked.`;
+    else if (x.status === 'off') cap = `${x.name} is <em>turned off</em>. ${e} on the day.`;
+    else if (x.status === 'done') cap = `${x.name} used up its trades for the day: <em>${e}</em>.`;
+    else if (x.status === 'on') cap = `${x.name} is <em>on shift</em>, watching for its next signal. ${e} so far${x.trade_count ? `, ${x.wins} of ${x.trade_count} won` : ''}.`;
+    else cap = `${x.name} is waiting: ${x.status_label}. <em>${e}</em> on the day.`;
+    steps.push({ cap, focus: x.id });
+  }
+  steps.push({ cap: `So that is <em>${money(S.total)}</em> on the day from Python bots trading same-day options${S.mode === 'sim' ? ', in a simulation' : S.mode === 'paper' ? ', on paper' : ''}.`, focus: 'overview' });
+  return steps;
+}
 const prog = $('#progress');
-TOUR.forEach((_, i) => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', 'Step ' + (i + 1)); b.addEventListener('click', () => { stop(); goTo(i); }); prog.appendChild(b); });
-function renderProgress() { [...prog.children].forEach((b, i) => { b.className = i < step ? 'done' : i === step ? 'now' : ''; }); }
+function renderProgress() { prog.innerHTML = ''; TOUR.forEach((_, i) => { const b = document.createElement('button'); b.type = 'button'; b.className = i < step ? 'done' : i === step ? 'now' : ''; b.setAttribute('aria-label', 'Step ' + (i + 1)); b.addEventListener('click', () => { stop(); goTo(i); }); prog.appendChild(b); }); }
 function goTo(i) {
+  if (!TOUR.length) TOUR = buildTour();
+  if (!TOUR.length) return;
   step = Math.max(0, Math.min(TOUR.length - 1, i));
   const s = TOUR[step];
-  $('#captionLine').innerHTML = s.cap;
-  $('#captionStep').textContent = `Step ${step + 1} of ${TOUR.length}`;
+  $('#captionLine').innerHTML = s.cap; $('#captionStep').textContent = `Step ${step + 1} of ${TOUR.length}`;
   renderProgress();
   if (s.focus === 'overview') { closeWorker(); showChart(false); overview(); }
   else if (s.focus === 'vault') { closeWorker(); showChart(false); focusVault(); replayPayouts(); }
@@ -602,18 +589,25 @@ function goTo(i) {
   else { showChart(false); openWorker(s.focus); }
   if (playing) { clearTimeout(timer); const ms = 2600 + s.cap.replace(/<[^>]+>/g, '').length * 55; timer = setTimeout(() => { if (step < TOUR.length - 1) goTo(step + 1); else stop(); }, ms); }
 }
-function play() { playing = true; $('#playBtn').textContent = '❚❚ Pause'; goTo(step < 0 || step >= TOUR.length - 1 ? 0 : step); }
-function stop() { playing = false; clearTimeout(timer); $('#playBtn').textContent = step >= TOUR.length - 1 ? '↺ Replay tour' : '▶ Play tour'; }
+function play() { TOUR = buildTour(); playing = true; $('#playBtn').textContent = '❚❚ Pause'; goTo(step < 0 || step >= TOUR.length - 1 ? 0 : step); }
+function stop() { playing = false; clearTimeout(timer); $('#playBtn').textContent = step >= TOUR.length - 1 && step >= 0 ? '↺ Replay tour' : '▶ Play tour'; }
 $('#playBtn').addEventListener('click', () => playing ? stop() : play());
 $('#prevBtn').addEventListener('click', () => { stop(); goTo(step - 1); });
 $('#nextBtn').addEventListener('click', () => { stop(); goTo(step + 1); });
 $('#overviewBtn').addEventListener('click', () => { stop(); closeWorker(); showChart(false); overview(); });
-$('#chartBtn').addEventListener('click', () => { showChart(!$('#chart').classList.contains('open')); });
+$('#chartBtn').addEventListener('click', () => showChart(!$('#chart').classList.contains('open')));
 $('#replayBtn').addEventListener('click', replayPayouts);
 addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT') return; if (e.key === 'ArrowRight') { stop(); goTo(step + 1); } if (e.key === 'ArrowLeft') { stop(); goTo(step - 1); } if (e.key === 'Escape') { closeWorker(); showChart(false); } });
 
-// First frame: overview with a payout pass so the roads are alive from the start.
-requestAnimationFrame(() => { cam = fitAspect(VIEW); applyCam(); setTimeout(replayPayouts, 600); });
+/* ---------- login ---------- */
+$('#loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ passphrase: $('#passphrase').value }) });
+  if (r.ok) { $('#loginError').hidden = true; $('#passphrase').value = ''; poll(); } else { $('#loginError').textContent = 'Unknown passphrase.'; $('#loginError').hidden = false; }
+});
+
+requestAnimationFrame(() => { cam = fitAspect(VIEW); applyCam(); });
+poll(); setInterval(poll, 3000);
 </script>
 </body>
 </html>

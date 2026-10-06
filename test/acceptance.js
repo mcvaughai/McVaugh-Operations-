@@ -37,6 +37,20 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     a = (await call('GET', '/api/state')).body.agents.find(a => a.id === 'agent-budget-exceptions'); assert.equal(a.runtime.status, 'idle');
   });
   await check('duplicate events are ignored', async () => { const r = await call('POST', '/api/webhooks/n8n', { agent_id: 'agent-budget-exceptions', execution_id: 'e1', status: 'finished' }, { 'X-MOW-Secret': 's3cret' }); assert.equal(r.body.deduplicated, true); });
+  await check('vault state needs a session, then reports the configured workers without a runner', async () => {
+    const anon = await call('GET', '/api/vault/state', null, { Cookie: '' }); assert.equal(anon.status, 401);
+    const r = await call('GET', '/api/vault/state'); assert.equal(r.status, 200); assert.equal(r.body.runner, false); assert.ok(r.body.config_workers.length >= 1); assert.ok(r.body.config_workers[0].id);
+  });
+  await check('vault state serves what the runner writes and flags staleness', async () => {
+    const vd = path.join(dataDir, 'vault'); fs.mkdirSync(vd, { recursive: true });
+    const st = { version: 1, mode: 'sim', as_of: '2026-10-05T10:30:00', market_open: true, total: 42, workers: [{ id: 'qqq0', name: 'QQQ 0σ', symbol: 'QQQ', status: 'on', status_label: 'on shift · watching', earned: 42, wins: 1, trade_count: 1, trades: [], thoughts: [], indicators: {}, position: null, risk: {} }], series: {}, events: [], errors: [] };
+    fs.writeFileSync(path.join(vd, 'state.json'), JSON.stringify(st));
+    let r = await call('GET', '/api/vault/state'); assert.equal(r.body.runner, true); assert.equal(r.body.total, 42); assert.equal(r.body.stale, false); assert.equal(r.body.workers[0].id, 'qqq0');
+    const old = Date.now() / 1000 - 600; fs.utimesSync(path.join(vd, 'state.json'), old, old);
+    r = await call('GET', '/api/vault/state'); assert.equal(r.body.stale, true);
+    fs.writeFileSync(path.join(vd, 'state.json'), '{not json'); r = await call('GET', '/api/vault/state'); assert.equal(r.body.runner, false); assert.ok(r.body.error);
+    fs.rmSync(vd, { recursive: true, force: true });
+  });
   await check('failure stays visible', async () => { await call('POST', '/api/webhooks/n8n', { agent_id: 'agent-trade-commitments', execution_id: 'e2', status: 'failed', label: 'Sheet missing' }, { 'X-MOW-Secret': 's3cret' }); const a = (await call('GET', '/api/state')).body.agents.find(a => a.id === 'agent-trade-commitments'); assert.equal(a.runtime.status, 'failed'); });
   await check('interrupted run shows as stale', async () => { const old = new Date(Date.now() - 45 * 60000).toISOString(); await call('POST', '/api/webhooks/n8n', { agent_id: 'agent-purchasing', execution_id: 'e3', status: 'started', ts: old }, { 'X-MOW-Secret': 's3cret' }); const a = (await call('GET', '/api/state')).body.agents.find(a => a.id === 'agent-purchasing'); assert.equal(a.runtime.status, 'stale'); });
   await check('people are never "inactive" — labeled workflow not reviewed', async () => { const s = (await call('GET', '/api/state')).body; assert.ok(s.people.every(p => p.runtime.status === 'workflow_not_reviewed')); });

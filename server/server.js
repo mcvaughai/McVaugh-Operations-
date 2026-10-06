@@ -189,6 +189,20 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+const VAULT_DIR = path.join(dbm.DATA_DIR, 'vault');
+function vaultState() {
+  const sp = path.join(VAULT_DIR, 'state.json');
+  let cfg = null; try { cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'bots.json'), 'utf8')); } catch { cfg = null; }
+  const configWorkers = cfg ? cfg.workers.map(w => ({ id: w.id, name: w.name, symbol: w.symbol, strategy: w.strategy, enabled: w.enabled !== false, risk: { daily_brake: w.daily_brake, lock_pct: w.lock_pct, qty: w.qty, dte: w.dte } })) : [];
+  const base = { config_workers: configWorkers, server_now: dbm.nowIso() };
+  if (!fs.existsSync(sp)) return { runner: false, ...base };
+  try {
+    const st = JSON.parse(fs.readFileSync(sp, 'utf8'));
+    const ageSec = (Date.now() - fs.statSync(sp).mtimeMs) / 1000;
+    return { runner: true, stale: ageSec > 90, age_seconds: Math.round(ageSec), ...base, ...st };
+  } catch (e) { return { runner: false, error: 'state.json unreadable: ' + e.message, ...base }; }
+}
+
 function requireWrite(role) { if (!can.write(role)) { const e = new Error(role ? 'read-only role' : 'login required'); e.status = 403; throw e; } }
 
 async function api(req, res, url, p, role) {
@@ -225,6 +239,8 @@ async function api(req, res, url, p, role) {
   if (!role) return send(res, 401, { error: 'login required' });
 
   if (p === '/api/state' && m === 'GET') return send(res, 200, stateFor(role));
+  // --- The Vault: read-only view of data/vault/state.json, written by bots/runner.py ---
+  if (p === '/api/vault/state' && m === 'GET') return send(res, 200, vaultState());
   if (p === '/api/export' && m === 'GET') { if (!can.sensitive(role)) return send(res, 403, { error: 'restricted' }); dbm.audit(db, role, 'export'); return send(res, 200, dbm.exportAll(db), { 'Content-Disposition': `attachment; filename="mcvaugh-world-${new Date().toISOString().slice(0, 10)}.json"` }); }
   if (p === '/api/export/pages' && m === 'GET') return send(res, 200, imports.pagesMarkdown(stateFor(role)), { 'Content-Type': MIME['.md'] });
 

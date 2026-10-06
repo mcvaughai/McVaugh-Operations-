@@ -106,6 +106,13 @@ svg#scene text { font-family: var(--display); font-weight: 700; }
 .detail .thoughts { margin-top: 6px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); display: grid; gap: 2px; }
 .detail .kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 11px; color: var(--ink-2); margin-top: 6px; }
 .detail .kv b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
+.detail .actions { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.detail .act { background: rgba(16,12,64,.9); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-family: var(--display); font-weight: 600; letter-spacing: .04em; }
+.detail .act.on { border-color: var(--profit); color: var(--profit); }
+.detail .act.off { border-color: var(--warn); color: var(--warn); }
+.detail .act:hover { border-color: var(--grid); }
+.detail .act:disabled { opacity: .5; cursor: default; }
+.detail .act:focus-visible { outline: 2px solid var(--grid); outline-offset: 2px; }
 
 .chart { grid-column: 2; grid-row: 3; align-self: end; justify-self: center; width: min(100%, 520px); display: none; }
 .chart.open { display: block; }
@@ -493,10 +500,27 @@ function openWorker(id, fly = true) {
       ${w.status === 'position' ? `<div class="hit cyan">◉ WORKING A TRADE<small>exits on stop ${r.stop_loss_pct}% · lock ${r.lock_pct}% then trail ${r.trail_pct}% · take profit ${r.take_profit_pct ?? '—'}% · ${r.max_hold_minutes ?? '—'} min max</small></div>` : ''}
       ${w.status === 'on' ? `<div class="hit cyan" style="border-color:rgba(255,181,74,.5);background:rgba(255,181,74,.08)">👁 WATCHING<small>${r.qty ?? 1} contract${r.qty > 1 ? 's' : ''} · ${r.dte ?? 0}DTE · ${w.trade_count}/${r.max_trades ?? '∞'} trades used</small></div>` : ''}
       <div class="thoughts"><span class="eyebrow" style="font-size:9px">Thoughts</span>${(w.thoughts || []).length ? w.thoughts.slice().reverse().map(t => `<span>${esc(t)}</span>`).join('') : '<span>nothing yet</span>'}</div></div>
-    <div class="stat" style="margin-top:10px;font-size:11px;color:var(--ink-3)">${w.status === 'brake' ? 'The bot clocks out on its own once the day’s profit clears the brake. Nothing more is risked today.' : w.status === 'off' ? 'Turned off in config/bots.json. Trades already closed still count toward the vault.' : 'Entries only inside the trade window; everything is flattened before the close.'}</div>`;
+    ${S.runner && S.can_command ? `<div class="actions">
+      ${w.enabled ? `<button type="button" class="act off" data-action="off" data-bot="${esc(w.id)}">⏻ Clock out${p ? ' &amp; flatten' : ''}</button>` : `<button type="button" class="act on" data-action="on" data-bot="${esc(w.id)}">▶ Clock in</button>`}
+      ${p ? `<button type="button" class="act" data-action="flatten" data-bot="${esc(w.id)}">Flatten now</button>` : ''}
+      <span class="stat" id="actStatus"></span></div>` : S.runner ? '<div class="stat" style="margin-top:10px;font-size:11px;color:var(--ink-3)">Sign in with a role that can write to clock workers in and out.</div>' : ''}
+    <div class="stat" style="margin-top:10px;font-size:11px;color:var(--ink-3)">${w.status === 'brake' ? 'The bot clocks out on its own once the day’s profit clears the brake. Nothing more is risked today.' : w.status === 'off' ? 'Turned off. Trades already closed still count toward the vault; Clock in to let it trade again.' : 'Entries only inside the trade window; everything is flattened before the close. Clock out flattens any open trade first.'}</div>`;
   d.classList.add('open'); $('#payroll').style.display = 'none';
   $('#closeDetail').addEventListener('click', closeWorker);
+  d.querySelectorAll('.act').forEach(b => b.addEventListener('click', () => sendCommand(b.dataset.bot, b.dataset.action, b)));
   if (fly && !wasOpen) { focusWorker(id); (w.trades || []).forEach((t, i) => sendCoin(id, t.pnl, i * 250)); }
+}
+const pendingCmd = {};   // bot -> action the runner has not confirmed yet
+async function sendCommand(bot, action, btn) {
+  const status = $('#actStatus'); if (btn) btn.disabled = true;
+  if (status) status.textContent = 'sending…';
+  try {
+    const r = await fetch('/api/vault/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bot, action }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    pendingCmd[bot] = action;
+    if (status) status.textContent = { on: 'Clock-in queued. The runner picks it up on its next pass.', off: 'Clock-out queued. Any open trade is flattened first.', flatten: 'Flatten queued.' }[action];
+  } catch (e) { if (status) { status.textContent = 'Not sent: ' + e.message; status.className = 'stat bad'; } if (btn) btn.disabled = false; }
 }
 function closeWorker() { openId = null; $('#detail').classList.remove('open'); $('#payroll').style.display = ''; document.querySelectorAll('.focused').forEach(n => n.classList.remove('focused')); }
 

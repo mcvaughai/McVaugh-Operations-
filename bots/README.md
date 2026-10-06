@@ -63,7 +63,9 @@ When a worker's realized profit for the day reaches `daily_brake` it clocks out 
 
 ## Turning a worker on or off
 
-Set `"enabled": false` for that worker in `config/bots.json` and restart the runner. A worker that is turned off with a position open is flattened first.
+Open the worker's card on the dashboard and press **Clock out** (turns it off; any open trade is flattened first), **Clock in**, or **Flatten now**. The button queues a command that the runner picks up on its next pass, usually within `poll_seconds`, so the card updates a few seconds later. Only roles that can write (anything but `viewer`) get the buttons, and every command is written to the audit log.
+
+For a permanent change set `"enabled": false` for that worker in `config/bots.json` and restart the runner.
 
 ## Files the runner writes (`data/vault/`, git-ignored)
 

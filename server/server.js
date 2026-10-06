@@ -240,7 +240,20 @@ async function api(req, res, url, p, role) {
 
   if (p === '/api/state' && m === 'GET') return send(res, 200, stateFor(role));
   // --- The Vault: read-only view of data/vault/state.json, written by bots/runner.py ---
-  if (p === '/api/vault/state' && m === 'GET') return send(res, 200, vaultState());
+  if (p === '/api/vault/state' && m === 'GET') return send(res, 200, { can_command: can.write(role), ...vaultState() });
+  // Queue a command for the runner (it drains data/vault/commands.json on its next pass). Write roles only.
+  if (p === '/api/vault/command' && m === 'POST') {
+    requireWrite(role);
+    const b = await readJson(req);
+    if (!['on', 'off', 'flatten'].includes(b.action) || typeof b.bot !== 'string' || !b.bot) return send(res, 400, { error: 'bot and action (on | off | flatten) required' });
+    fs.mkdirSync(VAULT_DIR, { recursive: true });
+    const cp = path.join(VAULT_DIR, 'commands.json');
+    let q = []; try { q = JSON.parse(fs.readFileSync(cp, 'utf8')); if (!Array.isArray(q)) q = []; } catch { q = []; }
+    q.push({ id: crypto.randomUUID(), bot: b.bot, action: b.action, by: role, ts: dbm.nowIso() });
+    fs.writeFileSync(cp + '.tmp', JSON.stringify(q)); fs.renameSync(cp + '.tmp', cp);
+    dbm.audit(db, role, `vault ${b.action} ${b.bot}`);
+    return send(res, 200, { ok: true, queued: q.length });
+  }
   if (p === '/api/export' && m === 'GET') { if (!can.sensitive(role)) return send(res, 403, { error: 'restricted' }); dbm.audit(db, role, 'export'); return send(res, 200, dbm.exportAll(db), { 'Content-Disposition': `attachment; filename="mcvaugh-world-${new Date().toISOString().slice(0, 10)}.json"` }); }
   if (p === '/api/export/pages' && m === 'GET') return send(res, 200, imports.pagesMarkdown(stateFor(role)), { 'Content-Type': MIME['.md'] });
 

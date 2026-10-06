@@ -51,6 +51,15 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     fs.writeFileSync(path.join(vd, 'state.json'), '{not json'); r = await call('GET', '/api/vault/state'); assert.equal(r.body.runner, false); assert.ok(r.body.error);
     fs.rmSync(vd, { recursive: true, force: true });
   });
+  await check('vault commands are queued for the runner, validated, and need a write role', async () => {
+    let r = await call('POST', '/api/vault/command', { bot: 'qqq0', action: 'off' }); assert.equal(r.status, 200); assert.equal(r.body.queued, 1);
+    r = await call('POST', '/api/vault/command', { bot: 'qqq0', action: 'flatten' }); assert.equal(r.body.queued, 2);
+    const q = JSON.parse(fs.readFileSync(path.join(dataDir, 'vault', 'commands.json'), 'utf8')); assert.deepEqual(q.map(c => c.action), ['off', 'flatten']); assert.equal(q[0].by, 'admin');
+    r = await call('POST', '/api/vault/command', { bot: 'qqq0', action: 'explode' }); assert.equal(r.status, 400);
+    r = await call('POST', '/api/vault/command', { bot: 'qqq0', action: 'on' }, { Cookie: '' }); assert.equal(r.status, 401);
+    const st = (await call('GET', '/api/vault/state')).body; assert.equal(st.can_command, true);
+    fs.rmSync(path.join(dataDir, 'vault'), { recursive: true, force: true });
+  });
   await check('failure stays visible', async () => { await call('POST', '/api/webhooks/n8n', { agent_id: 'agent-trade-commitments', execution_id: 'e2', status: 'failed', label: 'Sheet missing' }, { 'X-MOW-Secret': 's3cret' }); const a = (await call('GET', '/api/state')).body.agents.find(a => a.id === 'agent-trade-commitments'); assert.equal(a.runtime.status, 'failed'); });
   await check('interrupted run shows as stale', async () => { const old = new Date(Date.now() - 45 * 60000).toISOString(); await call('POST', '/api/webhooks/n8n', { agent_id: 'agent-purchasing', execution_id: 'e3', status: 'started', ts: old }, { 'X-MOW-Secret': 's3cret' }); const a = (await call('GET', '/api/state')).body.agents.find(a => a.id === 'agent-purchasing'); assert.equal(a.runtime.status, 'stale'); });
   await check('people are never "inactive" — labeled workflow not reviewed', async () => { const s = (await call('GET', '/api/state')).body; assert.ok(s.people.every(p => p.runtime.status === 'workflow_not_reviewed')); });

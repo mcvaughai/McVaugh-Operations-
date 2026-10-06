@@ -264,7 +264,7 @@ async function api(req, res, url, p, role) {
   }
   if (p === '/api/import/preview' && m === 'POST') {
     const b = await readJson(req); const people = db.prepare('SELECT id, name FROM people').all(), departments = db.prepare('SELECT id, name, short FROM departments').all();
-    if (b.dir) return send(res, 200, imports.importFolder(db, { dir: b.dir, dryRun: true, csvTarget: b.target || 'auto', overrides: b.overrides || {} }, role));
+    if (b.dir) return send(res, 200, imports.importFolder(db, { dir: b.dir, dryRun: true, force: !!b.force, csvTarget: b.target || 'auto', overrides: b.overrides || {} }, role));
     const out = (b.files || []).map(f => /\.csv$/i.test(f.name) ? { name: f.name, kind: 'csv', ...imports.parseCsvFile({ target: b.target || 'auto', filename: f.name, content: f.content }, { aliases: imports.aliasMap(db), people }) } : { name: f.name, kind: 'md', ...imports.parseNote(f, { headings: imports.headingMap(db), people }) });
     return send(res, 200, { files: out });
   }

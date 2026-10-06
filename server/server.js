@@ -120,11 +120,12 @@ function stateFor(role) {
   const ai_configs = db.prepare('SELECT * FROM ai_configs ORDER BY agent_id').all();
   const audit = can.audit(role) ? db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 100').all() : [];
   const demo = db.prepare("SELECT value FROM meta WHERE key = 'demo_mode'").get()?.value === 'on';
+  const documents = db.prepare('SELECT * FROM documents ORDER BY kind, title').all().map(d => (d.sensitive && !sens) ? { id: d.id, title: '(restricted: financial)', kind: d.kind, sensitive: 1, restricted: true, task_id: d.task_id } : d);
   const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
   const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
   const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
-    departments, people, agents, tasks, archived_count, homes, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
+    departments, people, agents, tasks, archived_count, homes, documents, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
     server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET } };
 }
 
@@ -255,7 +256,7 @@ async function api(req, res, url, p, role) {
   }
   if (p === '/api/demo' && m === 'POST') { const { on } = await readJson(req); setDemo(!!on); dbm.audit(db, role, 'demo', null, null, on ? 'on' : 'off'); return send(res, 200, { demo: !!on }); }
   if (p === '/api/integrations/check' && m === 'POST') return send(res, 200, await checkIntegrations());
-  if (p === '/api/import/obsidian' && m === 'POST') { const b = await readJson(req); const r = imports.importMarkdown(db, b.files || [], role); setIntegration('obsidian', 'connected', `Snapshot import: ${r.imported} notes`, { last_import_at: dbm.nowIso() }); return send(res, 200, r); }
+  if (p === '/api/import/obsidian' && m === 'POST') { const b = await readJson(req); const r = imports.importMarkdown(db, b.files || [], role, { overrides: b.overrides || {} }); setIntegration('obsidian', 'connected', `Snapshot import: ${r.imported} notes`, { last_import_at: dbm.nowIso() }); return send(res, 200, r); }
   if (p === '/api/import/csv' && m === 'POST') {
     const b = await readJson(req); const r = imports.importCsv(db, b, role);
     setIntegration(b.target === 'dashboard' ? 'dashboard' : 'excel', 'connected', `Snapshot import: ${b.filename || 'csv'} (${r.imported} rows)`, { last_import_at: dbm.nowIso() });
@@ -263,13 +264,13 @@ async function api(req, res, url, p, role) {
   }
   if (p === '/api/import/preview' && m === 'POST') {
     const b = await readJson(req); const people = db.prepare('SELECT id, name FROM people').all(), departments = db.prepare('SELECT id, name, short FROM departments').all();
-    if (b.dir) return send(res, 200, imports.importFolder(db, { dir: b.dir, dryRun: true, csvTarget: b.target || 'auto' }, role));
+    if (b.dir) return send(res, 200, imports.importFolder(db, { dir: b.dir, dryRun: true, csvTarget: b.target || 'auto', overrides: b.overrides || {} }, role));
     const out = (b.files || []).map(f => /\.csv$/i.test(f.name) ? { name: f.name, kind: 'csv', ...imports.parseCsvFile({ target: b.target || 'auto', filename: f.name, content: f.content }, { aliases: imports.aliasMap(db), people }) } : { name: f.name, kind: 'md', ...imports.parseNote(f, { headings: imports.headingMap(db), people }) });
     return send(res, 200, { files: out });
   }
   if (p === '/api/import/folder' && m === 'POST') {
     if (role !== 'admin' && role !== 'accounting') return send(res, 403, { error: 'admin or accounting only (reads the server filesystem)' });
-    const b = await readJson(req); const r = imports.importFolder(db, { dir: b.dir, dryRun: false, force: !!b.force, csvTarget: b.target || 'auto' }, role);
+    const b = await readJson(req); const r = imports.importFolder(db, { dir: b.dir, dryRun: false, force: !!b.force, csvTarget: b.target || 'auto', overrides: b.overrides || {} }, role);
     if (r.error) return send(res, 400, r);
     setIntegration('obsidian', 'connected', `Folder snapshot: ${r.imported} imported, ${r.skipped_unchanged} unchanged — ${b.dir}`, { last_import_at: dbm.nowIso() });
     dbm.audit(db, role, 'import_folder', 'integration', 'obsidian', b.dir);
@@ -285,7 +286,7 @@ async function api(req, res, url, p, role) {
   if (p === '/api/review/duplicates' && m === 'POST') { const b = await readJson(req); const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(b.id); if (!task) return send(res, 404, { error: 'not found' }); return send(res, 200, imports.duplicateCandidates(db.prepare('SELECT * FROM tasks').all(), task)); }
   if (p === '/api/export/pages/mark' && m === 'POST') { dbm.addEvent(db, { entity_type: 'integration', entity_id: 'pages', kind: 'import', status: 'info', label: 'Manual: handbook export pasted into ChatGPT Pages', source: 'manual', actor: role, external_id: 'pages-' + crypto.randomUUID() }); setIntegration('pages', 'disconnected', 'Manual export workflow; last export ' + dbm.nowIso(), { last_import_at: dbm.nowIso() }); return send(res, 200, { ok: true }); }
   // generic table upsert / delete: /api/<table>[/<id>]
-  const mt = p.match(/^\/api\/(departments|people|agents|tasks|homes|decisions|integrations|ai_configs)(?:\/([^/]+))?$/);
+  const mt = p.match(/^\/api\/(departments|people|agents|tasks|homes|decisions|integrations|ai_configs|documents)(?:\/([^/]+))?$/);
   if (mt) {
     const [, table, id] = mt;
     if (m === 'DELETE' && id) {

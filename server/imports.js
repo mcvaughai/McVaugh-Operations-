@@ -7,6 +7,41 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { upsert, addEvent, slug, nowIso } = require('./db');
 
+
+// ---------- document classification (by file name, then content) ----------
+// Only 'procedure' becomes a task. Everything else is kept as a linked document so the vault's leases,
+// handbooks and cash statements never show up as PROPOSED procedures. Overridable per file in the preview.
+const KIND_RULES = [
+  ['financial', /cash flow|amex|bank.?balance|loan|budgets?\b|financing|lease dates|amounts|p&l|balance sheet|payable|receivable/i],
+  ['org_chart', /org(anizational)? chart|org chart|who does what|responsibilit/i],
+  ['script',    /\.py\b|\.js\b|\.ps1\b|script|generator|build_|updater/i],
+  ['dashboard', /dashboard|hub\b|tracker/i],
+  ['legal',     /lease|llc|agreement|contract|amended|signed|investor|sale proposal/i],
+  ['plan',      /rollout|roadmap|modernization|pilot|plan\b|proposal|analysis|overview/i],
+  ['reference', /handbook|chart of accounts|master|categorization|readme|guide|setup\b/i],
+  ['procedure', /sop\b|procedure|process|how to|checklist|monthly|weekly|first-time|instructions/i],
+];
+const PROCEDURE_HEADINGS = /^#{1,4}\s*(trigger|steps?|procedure|process|how to|owner|responsible|approval|deadline|inputs?)\b/im;
+function classifyNote(name, content) {
+  const base = path.basename(String(name || '')).replace(/\.(md|markdown|txt)$/i, '');
+  const text = String(content || '');
+  let kind = null, reason = '';
+  // procedure wins on name if it says so explicitly; financial wins over everything for sensitivity
+  if (/sop\b|procedure|how to\b|monthly procedure|first-time setup/i.test(base)) { kind = 'procedure'; reason = 'name says SOP/procedure/how-to'; }
+  for (const [k, re] of KIND_RULES) if (!kind && re.test(base)) { kind = k; reason = `name matches "${re.source.split('|')[0].replace(/\\b/g, '')}…"`; }
+  if (!kind && PROCEDURE_HEADINGS.test(text)) { kind = 'procedure'; reason = 'has procedure headings (Trigger/Steps/Owner…)'; }
+  if (!kind) { kind = 'other'; reason = 'no rule matched'; }
+  const sensitive = /cash flow|amex|bank|loan|budget|financing|amounts|payable|balance/i.test(base) || kind === 'financial' ? 1 : 0;
+  const version = base.match(/^(.*?)\s*\((\d+|\d{1,2}\.\d{1,2}\.\d{2,4}|signed|highlighted)\)\s*$/i);
+  return { kind, reason, sensitive, base, versionOf: version ? version[1].trim() : null };
+}
+function summarize(text) { return String(text || '').replace(/^---[\s\S]*?---/, '').replace(/[#*_>`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 280); }
+function upsertDocument(db, { name, content, kind, reason, sensitive, task_id, department_id, source, size }) {
+  const id = 'doc-' + slug(path.basename(name).replace(/\.(md|markdown|txt)$/i, ''));
+  upsert(db, 'documents', { id, title: path.basename(name).replace(/\.(md|markdown|txt)$/i, ''), path: name, kind, kind_reason: reason, sensitive, task_id: task_id || null, department_id: department_id || null, summary: summarize(content), size: Buffer.byteLength(String(content || '')), source, imported_at: nowIso() });
+  return id;
+}
+
 // ---------- markdown ----------
 function parseFrontmatter(text) {
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -65,24 +100,36 @@ function parseNote(file, { headings = DEFAULT_HEADINGS, people = [], departments
   const warnings = [];
   if (ownerName && !row.owner_id) warnings.push(`Owner "${ownerName}" is not a known person`);
   if (backupName && !row.backup_id) warnings.push(`Backup "${backupName}" is not a known person`);
-  if (!mapped.length && !Object.keys(fm).length) warnings.push('No recognized headings or frontmatter; whole note stored as Steps');
-  return { row, mapping: { frontmatter: Object.keys(fm), mapped, unmapped }, warnings };
+  const clsEarly = classifyNote(file.name, file.content);
+  if (clsEarly.kind === 'procedure' && !mapped.length && !Object.keys(fm).length) warnings.push('No recognized headings or frontmatter; whole note stored as Steps');
+  const cls = classifyNote(file.name, file.content);
+  if (cls.kind !== 'procedure') warnings.unshift(`Classified as ${cls.kind} (${cls.reason}) — will be stored as a document, not a task`);
+  if (cls.sensitive) warnings.push('Flagged restricted (financial)');
+  return { row, classification: cls, mapping: { frontmatter: Object.keys(fm), mapped, unmapped }, warnings };
 }
 
 function importMarkdown(db, files, role, opts = {}) {
-  const ts = nowIso(); let imported = 0; const results = [];
+  const ts = nowIso(); let imported = 0; const results = []; const overrides = opts.overrides || {};
   const people = db.prepare('SELECT id, name FROM people').all(), departments = db.prepare('SELECT id, name, short FROM departments').all();
   const headings = headingMap(db);
   for (const f of files) {
+    const cls = classifyNote(f.name, f.content); const kind = overrides[f.name] || cls.kind;
+    const source = `Obsidian import: ${f.name} (${ts.slice(0, 10)})`;
+    if (kind !== 'procedure') { // stored as a document only — never a task
+      const docId = upsertDocument(db, { name: f.name, content: f.content, kind, reason: overrides[f.name] ? 'set by reviewer' : cls.reason, sensitive: cls.sensitive, source });
+      addEvent(db, { entity_type: 'document', entity_id: docId, kind: 'import', status: 'info', label: `Imported document (${kind}): ${f.name}`, source: 'import', actor: role, external_id: 'doc-' + crypto.randomUUID() });
+      imported++; results.push({ id: docId, title: cls.base, kind, warnings: [] }); continue;
+    }
     const { row, warnings } = parseNote(f, { headings, people, departments });
-    row.source = `Obsidian import: ${f.name} (${ts.slice(0, 10)})`;
+    row.source = source; if (cls.sensitive) row.sensitive = 1;
     const existing = db.prepare('SELECT proposed, board, verified, documented, automated, owner_id, backup_id FROM tasks WHERE id = ?').get(row.id);
     if (existing) { // re-import never undoes a review decision; only content fields refresh
       delete row.proposed; delete row.board; if (existing.owner_id) delete row.owner_id; if (existing.backup_id) delete row.backup_id;
     }
     upsert(db, 'tasks', row);
+    upsertDocument(db, { name: f.name, content: f.content, kind: 'procedure', reason: overrides[f.name] ? 'set by reviewer' : cls.reason, sensitive: cls.sensitive, task_id: row.id, department_id: row.department_id, source });
     addEvent(db, { entity_type: 'task', entity_id: row.id, kind: 'import', status: 'info', label: `${existing ? 'Re-imported' : 'Imported'} from Obsidian: ${f.name}`, source: 'import', actor: role, external_id: 'obs-' + crypto.randomUUID() });
-    imported++; results.push({ id: row.id, title: row.title, warnings });
+    imported++; results.push({ id: row.id, title: row.title, kind: 'procedure', warnings });
   }
   return { imported, results, imported_at: ts };
 }
@@ -211,7 +258,7 @@ function walk(dir, out = [], depth = 0) {
 const hashOf = buf => crypto.createHash('sha256').update(buf).digest('hex');
 
 // dryRun=true → mapping report only, nothing written. Otherwise imports changed/new files and records them in import_files.
-function importFolder(db, { dir, dryRun = false, force = false, csvTarget = 'auto' }, role) {
+function importFolder(db, { dir, dryRun = false, force = false, csvTarget = 'auto', overrides = {} }, role) {
   if (!dir || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return { error: `Folder not found on the server: ${dir}` };
   const files = walk(dir);
   const people = db.prepare('SELECT id, name FROM people').all(), departments = db.prepare('SELECT id, name, short FROM departments').all();
@@ -228,8 +275,9 @@ function importFolder(db, { dir, dryRun = false, force = false, csvTarget = 'aut
     try {
       if (entry.kind === 'md') {
         const p = parseNote({ name: rel, content: text }, { headings, people, departments });
-        entry.preview = { title: p.row.title, id: p.row.id, mapping: p.mapping, warnings: p.warnings };
-        if (!dryRun) { importMarkdown(db, [{ name: rel, content: text }], role); entry.status = prev ? 're-imported' : 'imported'; }
+        const kind = overrides[rel] || p.classification.kind;
+        entry.preview = { title: p.row.title, id: kind === 'procedure' ? p.row.id : 'doc-' + slug(p.classification.base), kind, kind_reason: overrides[rel] ? 'set by reviewer' : p.classification.reason, sensitive: p.classification.sensitive, versionOf: p.classification.versionOf, mapping: p.mapping, warnings: p.warnings.filter(w => !w.startsWith('Classified')) };
+        if (!dryRun) { importMarkdown(db, [{ name: rel, content: text }], role, { overrides: { [rel]: kind } }); entry.status = prev ? 're-imported' : 'imported'; }
       } else {
         const p = parseCsvFile({ target: csvTarget, filename: rel, content: text }, { aliases, people, departments });
         entry.preview = { target: p.mapping.target, mapping: p.mapping, rows: p.rows, warnings: p.warnings, sample: p.records.slice(0, 3) };
@@ -242,6 +290,10 @@ function importFolder(db, { dir, dryRun = false, force = false, csvTarget = 'aut
     } catch (e) { entry.status = 'error'; report.errors.push(`${rel}: ${e.message}`); }
     report.files.push(entry);
   }
+  // flag likely version pairs: "X" and "X (2)" / "X (10.24.25)"
+  const bases = new Map(); for (const f of report.files) if (f.preview?.title) bases.set(path.basename(f.path).replace(/\.(md|markdown|txt)$/i, '').toLowerCase(), f);
+  for (const f of report.files) { const v = f.preview?.versionOf; if (v && bases.has(v.toLowerCase())) { const other = bases.get(v.toLowerCase()); f.preview.warnings.push(`Looks like a version of "${other.path}" — decide which is current`); other.preview?.warnings.push(`Has another version: "${f.path}"`); } }
+  report.kinds = {}; for (const f of report.files) if (f.preview?.kind) report.kinds[f.preview.kind] = (report.kinds[f.preview.kind] || 0) + 1;
   if (!dryRun) {
     db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('import_dir', ?)").run(dir);
     addEvent(db, { entity_type: 'integration', entity_id: 'obsidian', kind: 'import', status: 'info', label: `Folder import: ${report.imported} files imported, ${report.skipped_unchanged} unchanged (${dir})`, source: 'import', actor: role, external_id: 'folder-' + crypto.randomUUID() });
@@ -290,4 +342,4 @@ function pagesMarkdown(state) {
   return L.filter(x => x !== undefined).join('\n');
 }
 
-module.exports = { normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };
+module.exports = { classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };

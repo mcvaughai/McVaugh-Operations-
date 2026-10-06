@@ -102,6 +102,12 @@ CREATE TABLE IF NOT EXISTS audit (
 
 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, role TEXT NOT NULL, created_at TEXT NOT NULL);
 
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, path TEXT, kind TEXT NOT NULL,   -- procedure | org_chart | reference | dashboard | plan | legal | script | financial | other
+  kind_reason TEXT, sensitive INTEGER NOT NULL DEFAULT 0, task_id TEXT, department_id TEXT,
+  summary TEXT, size INTEGER, source TEXT, imported_at TEXT, updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS import_files (
   path TEXT PRIMARY KEY, hash TEXT NOT NULL, size INTEGER, imported_at TEXT NOT NULL, kind TEXT, status TEXT
 );
@@ -144,6 +150,7 @@ const TABLES = {
   homes: ['id','address','job_id','active','kind','stage','pilot','notes','source','imported_at','updated_at'],
   decisions: ['id','date','title','reason','decided_by','status','source','created_at'],
   integrations: ['id','name','kind','status','last_checked','last_message','last_import_at','config','notes'],
+  documents: ['id','title','path','kind','kind_reason','sensitive','task_id','department_id','summary','size','source','imported_at','updated_at'],
   ai_configs: ['id','agent_id','purpose','needs_ai','provider','model','why','expected_cost','approval','eval_examples','fallback','updated_at'],
 };
 

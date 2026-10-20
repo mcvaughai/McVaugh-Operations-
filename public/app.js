@@ -422,7 +422,7 @@
     } else if (type === 'ai') {
       body = `<p>${esc(obj.purpose)}</p>${section('Needs AI', esc(obj.needs_ai))}${section('Provider / model', esc(obj.provider) + ' ' + esc(obj.model))}${section('Why', esc(obj.why))}${section('Expected cost', esc(obj.expected_cost))}${section('Approval', esc(obj.approval))}${section('Eval examples', esc(obj.eval_examples))}${section('Fallback', esc(obj.fallback))}`;
     }
-    const title = obj.name || obj.title || obj.address || obj.purpose || id;
+    const title = obj.name || obj.title || obj.item || obj.address || obj.purpose || id;
     $('#detail').innerHTML = `<header><div><div class="kind">${esc(type)}</div><h2>${esc(title)}</h2></div><div><button class="small ghost" id="closeDetail" aria-label="Close">✕</button></div></header>
       ${body}
       <h4>Activity history</h4>${history}

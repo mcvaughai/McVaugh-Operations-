@@ -411,10 +411,14 @@ const vm = require('node:vm');
 const HUB_CATEGORY_DEPT = { preconstruction: 'construction', construction: 'construction', 'change management': 'estimating', financial: 'accounting', operations: 'purchasing', sales: 'marketing', design: 'design', 'hr / admin': 'exec' };
 const HUB_PROCESS_DEPT = { budget_review: 'estimating', budget_revision: 'estimating', budget_spec: 'estimating', change_order_budget: 'estimating', permitting: 'permits', president_plan_selection: 'permits', back_charge: 'accounting', work_order_ap: 'accounting', new_work_order: 'purchasing', framed_mirror_purchase: 'purchasing', interior_designer_hoa_rocc: 'hoa' };
 function parseOpsHub(text) {
-  const src = String(text || '');
+  let src = String(text || '');
+  if (/^\s*<!DOCTYPE|<html/i.test(src)) { // the built hub is an .html with the data inside a <script type="text/babel"> block
+    const blocks = [...src.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
+    src = blocks.find(b => /const\s+INITIAL_PROCESSES\s*=/.test(b)) || '';
+  }
   if (!/const\s+INITIAL_PROCESSES\s*=/.test(src)) return null;
   const end = src.search(/export\s+default|function\s+MCHOpsHub/); const body = (end > 0 ? src.slice(0, end) : src).replace(/^\s*import[^\n]*\n/gm, '');
-  const ctx = vm.createContext(Object.create(null));
+  const ctx = vm.createContext(Object.assign(Object.create(null), { React: { useState() {}, useEffect() {}, useRef() {} }, window: {}, document: {} })); // the built hub destructures React at the top; stubbed, never rendered
   vm.runInContext(body + '\n;this.__out = { roles: typeof INITIAL_ROLES !== "undefined" ? INITIAL_ROLES : [], processes: INITIAL_PROCESSES, team: typeof CURRENT_TEAM !== "undefined" ? CURRENT_TEAM : [] };', ctx, { timeout: 2000 });
   const out = ctx.__out;
   return { roles: out.roles || [], processes: out.processes || [], team: out.team || [] };
@@ -431,7 +435,9 @@ function importOpsHub(db, { filename, content }, role) {
   for (const t of hub.team) {
     const pid = idFor(t); const ex = db.prepare('SELECT id FROM people WHERE id = ?').get(pid);
     for (const r of t.absorbs || []) roleOwner[r] = pid;
-    const row = { id: pid, responsibilities: JSON.stringify(t.responsibilities || []), legacy_roles: JSON.stringify((t.absorbs || []).map(r => roleTitle[r] || r)) };
+    const all = t.responsibilities || [];
+    const crossed = all.filter(r => /^\s*\[N\/A\]/i.test(r)).map(r => r.replace(/^\s*\[N\/A\]\s*/i, ''));
+    const row = { id: pid, responsibilities: JSON.stringify(all.filter(r => !/^\s*\[N\/A\]/i.test(r))), crossed_off: JSON.stringify(crossed), legacy_roles: JSON.stringify((t.absorbs || []).map(r => roleTitle[r] || r)) };
     if (!ex) Object.assign(row, { name: String(t.name || t.id).split(' ')[0], full_name: t.name, title: t.title, confirmed: 0, review_status: 'not_reviewed', departments: [normalizeDept(t.department, db.prepare('SELECT id, name, short FROM departments').all())].filter(d => db.prepare('SELECT 1 FROM departments WHERE id = ?').get(d)), source: src, notes: 'Imported from the old ops hub; not in the handoff or org chart.' });
     upsert(db, 'people', row); peopleUpdated++;
   }
@@ -440,7 +446,7 @@ function importOpsHub(db, { filename, content }, role) {
     docs++;
   }
   for (const p of hub.processes) {
-    const id = 'hub-' + p.id; const ex = db.prepare('SELECT id, proposed, board, owner_id FROM tasks WHERE id = ?').get(id);
+    const id = 'hub-' + p.id; const ex = db.prepare('SELECT id, proposed, board, owner_id, missing_info, verification_result, next_action, step_review FROM tasks WHERE id = ?').get(id);
     const owner_id = roleOwner[p.owner] || null;
     const participants = (p.participants || []).map(r => `${roleTitle[r] || r}${roleOwner[r] ? ' → ' + personNameFromDb(db, roleOwner[r]) : ' → unassigned'}`);
     const department_id = HUB_PROCESS_DEPT[p.id] || HUB_CATEGORY_DEPT[String(p.category || '').toLowerCase()] || null;
@@ -451,6 +457,7 @@ function importOpsHub(db, { filename, content }, role) {
       missing_info: [old ? `SOP dated ${p.date}: written for the old org (DOC/DOP/CFO roles). Confirm which steps still apply.` : null, !owner_id ? `Legacy owner "${roleTitle[p.owner] || p.owner}" is not absorbed by anyone on the current team.` : null].filter(Boolean).join(' ') || null,
       next_action: 'Review with ' + (owner_id ? personNameFromDb(db, owner_id) : 'the team') + ': confirm the steps still match how it is done today.' };
     if (!ex) Object.assign(row, { proposed: 1, board: 'next' });
+    else if (ex.step_review || ex.verification_result) { delete row.missing_info; delete row.next_action; } // a re-import refreshes SOP content but never overwrites a written review
     upsert(db, 'tasks', row);
     upsertDocument(db, { name: `hub-process-${p.id}.md`, content: `# ${p.name}\n${p.description || ''}\n\n${steps}`, kind: 'procedure', reason: 'SOP from old ops hub', sensitive: 0, task_id: id, department_id, source: src });
     addEvent(db, { entity_type: 'task', entity_id: id, kind: 'import', status: 'info', label: `${ex ? 'Re-imported' : 'Imported'} SOP from old ops hub: ${p.name}`, source: 'import', actor: role, external_id: 'hub-' + crypto.randomUUID() });

@@ -241,6 +241,61 @@ const UPDATES = [
     upsert(db, 'documents', { id: 'doc-procedures-for-the-mch-database', title: 'Procedures for the MCH Database', path: 'PROCEDURES FOR THE MCH DATABASE.doc', kind: 'procedure', kind_reason: 'Word 97 .doc, text extracted by the build (binary scan)', sensitive: 0, task_id: id, department_id: 'construction', summary: 'Subcontractor-facing guide to accepting and completing work orders in db.mcvaugh.com.', content: text, size: text.length, source: src, imported_at: nowIso(), underlying_path: 'PROCEDURES FOR THE MCH DATABASE.doc', underlying_status: 'extracted' });
     addEvent(db, { entity_type: 'task', entity_id: id, kind: 'import', status: 'info', label: 'Imported: Procedures for the MCH Database (.doc text, 2019)', source: 'import', actor: 'system', external_id: 'update-db-procedures-2026-10-06' });
   } },
+  { key: 'ops-hub-2026-10-20', apply(db) {
+    // Updated hub supplied 2026-10-20 (mch-ops-hub.html). Same importer; review decisions on existing tasks are kept.
+    const { importOpsHub } = require('./imports');
+    const content = fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8');
+    importOpsHub(db, { filename: 'seed/mch-ops-hub.json (2026-10-20)', content }, 'system');
+    upsert(db, 'integrations', { id: 'dashboard', status: 'connected', last_import_at: nowIso(), last_message: 'Snapshot: ops hub re-imported from the 2026-10-20 .html (25 SOPs; Maria\'s [N/A] cross-offs recorded).' });
+    addEvent(db, { entity_type: 'integration', entity_id: 'dashboard', kind: 'import', status: 'info', label: 'Hub 2026-10-20: +4 accounting SOPs; Maria +58/−29 responsibilities (19 crossed off); James +13; Ernesto new purchasing-manager job description; Brittany +50; Kenneth +25', source: 'import', actor: 'system', external_id: 'update-ops-hub-2026-10-20' });
+  } },
+  { key: 'succession-2026-10-20', apply(db) {
+    const S = require('../seed/succession-2026-10-20.js');
+    const ts = nowIso();
+    // 1. meetings as dated documents with provenance
+    for (const m of S.MEETINGS) {
+      const text = fs.readFileSync(path.join(__dirname, '..', m.file), 'utf8');
+      upsert(db, 'documents', { id: m.id, title: m.title, path: m.file, kind: 'meeting', kind_reason: 'meeting transcript', sensitive: 0, summary: m.summary, content: text, size: text.length,
+        source: m.source, imported_at: ts, meeting_date: m.date, attendees: JSON.stringify(m.attendees), cite_key: m.cite, underlying_status: 'extracted' });
+      addEvent(db, { entity_type: 'document', entity_id: m.id, kind: 'import', status: 'info', label: `Meeting transcript stored: ${m.date} ${m.title}`, source: 'import', actor: 'brittany', external_id: 'meeting-' + m.id });
+    }
+    // 2. step-by-step reconciliation written into each task
+    const verdictWord = { match: 'MATCH', changed: 'CHANGED', no_longer: 'NO LONGER DONE', not_mentioned: 'NOT MENTIONED', new: 'NEW (confirmed)' };
+    for (const [taskId, rows] of Object.entries(S.STEP_REVIEWS)) {
+      const t = db.prepare('SELECT id, missing_info, verification_result FROM tasks WHERE id = ?').get(taskId); if (!t) continue;
+      const counts = {}; for (const r of rows) counts[r.verdict] = (counts[r.verdict] || 0) + 1;
+      const summary = Object.entries(counts).map(([k, n]) => `${n} ${verdictWord[k].toLowerCase()}`).join(', ');
+      const notMentioned = rows.filter(r => r.verdict === 'not_mentioned').map(r => `step ${r.n}: ${r.old}`);
+      const vr = `Reconciled against meetings 2026-10-12 (Jim) and 2026-10-16 (Maria): ${summary}. Steps marked MATCH or CHANGED/NEW with a citation are confirmed current; everything else stays "from old SOP, unconfirmed". See the step table on this task.`;
+      const mi = [t.missing_info, notMentioned.length ? `Not mentioned in either meeting (unconfirmed): ${notMentioned.join('; ')}.` : null].filter(Boolean).join(' ');
+      upsert(db, 'tasks', { id: taskId, step_review: JSON.stringify(rows), verification_result: vr, missing_info: mi, verified: 0 });
+      addEvent(db, { entity_type: 'task', entity_id: taskId, kind: 'setup', status: 'info', label: `Step review written from transcripts (${summary})`, source: 'import', actor: 'brittany', external_id: 'stepreview-' + taskId });
+    }
+    // 3. procedures confirmed in the transcripts that had no SOP
+    for (const n of S.NEW_TASKS) { const ex = db.prepare('SELECT id FROM tasks WHERE id = ?').get(n.id); upsert(db, 'tasks', { ...n, source: n.source + ' (transcript)', ...(ex ? { proposed: undefined, board: undefined } : {}) }); }
+    // 4. flow charts
+    for (const [taskId, flow] of Object.entries(S.FLOWS)) { if (db.prepare('SELECT 1 FROM tasks WHERE id = ?').get(taskId)) upsert(db, 'tasks', { id: taskId, flow: JSON.stringify(flow) }); }
+    // 5. job status
+    for (const h of S.HOME_STATUS) {
+      const home = db.prepare('SELECT id FROM homes WHERE lower(address) = lower(?)').get(h.match); if (!home) continue;
+      upsert(db, 'homes', { id: home.id, stage: h.stage, permits: h.permits, trades: h.trades, issues: h.issues, next_milestone: h.next_milestone, status_cite: h.cite + ' (Maria meeting 2026-10-16)' });
+      addEvent(db, { entity_type: 'home', entity_id: home.id, kind: 'note', status: 'info', label: `Status from Maria meeting 2026-10-16: ${h.stage}`, source: 'import', actor: 'brittany', external_id: 'homestatus-' + home.id });
+    }
+    for (const home of db.prepare("SELECT id, notes FROM homes WHERE active = 'active' AND (address LIKE '%Royal Oaks Run%' OR address LIKE '%Royal Oaks Banner%')").all()) {
+      upsert(db, 'homes', { id: home.id, permits: 'Waiting for permits (Brittany 10/06). ' + S.VILLAS_NOTE.active_waiting, status_cite: S.VILLAS_NOTE.cite + ' (Maria meeting 2026-10-16)', next_milestone: 'Confirm with Maria whether this lot is one of the 7 with permits approved/near-complete; pay impact fees when the bank/Jim says start.' });
+    }
+    // 6. handover items
+    for (const h of S.HANDOVER) upsert(db, 'handover_items', { ...h, person_id: 'maria', status: 'open' });
+    upsert(db, 'people', { id: 'maria', notes: 'LEAVING — succession pass in progress (meetings 2026-10-12 with Jim, 2026-10-16 with Maria). See the Handover tab.' });
+    upsert(db, 'decisions', { id: 'dec-maria-succession', date: '2026-10-20', title: 'Maria is leaving; her work is being documented for a successor', reason: 'Maria knows and is putting everything in Public > Company information > MCH > Workflow processes > "Maria leaving". A construction manager who can schedule on site is needed (Maria, 2026-10-16 23:06).', decided_by: 'Brittany, Jim', status: 'approved', source: 'Maria meeting 2026-10-16' });
+    db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`).run(ts, 'map',
+      'Succession pass for Maria: transcripts reconciled against the old SOPs; Handover tab lists what only she does.',
+      'Hub refreshed to the 2026-10-20 version. Two meeting transcripts stored. 12 SOPs step-reviewed; 13 procedures confirmed from the meetings; 6 flow charts; 11603/11602 status recorded.',
+      'Open the Handover tab, read the "no backup" items, then take the generated agenda into the next meeting with Maria (Landing is the planned topic).',
+      'Maria (permit document, schedule document, vendor/rate list, 11603 calendar copy, Frank scope doc); Jim (WO approval chain after Maria)',
+      'Who approves work orders after Maria leaves; Teresa vs James for Leander ARC; who owns vendor insurance.',
+      'Added by the succession pass.', 'system');
+  } },
   { key: 'stage2-checkpoint-2026-10-06', apply(db) {
     db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`).run(nowIso(), 'gather',
       'Stage 2: the old ops hub (21 SOPs, responsibilities for all 8 people) and the org chart are imported. Work through the Review tab one item at a time.',

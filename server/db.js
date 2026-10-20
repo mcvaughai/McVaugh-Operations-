@@ -108,6 +108,13 @@ CREATE TABLE IF NOT EXISTS documents (
   summary TEXT, size INTEGER, source TEXT, imported_at TEXT, updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS handover_items (
+  id TEXT PRIMARY KEY, person_id TEXT NOT NULL, item TEXT NOT NULL, basis TEXT,
+  documented TEXT, current TEXT, backup TEXT, risk TEXT, capture TEXT, cite TEXT,
+  status TEXT NOT NULL DEFAULT 'open',   -- open | captured | reassigned | dropped
+  note TEXT, updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS import_files (
   path TEXT PRIMARY KEY, hash TEXT NOT NULL, size INTEGER, imported_at TEXT NOT NULL, kind TEXT, status TEXT
 );
@@ -144,6 +151,17 @@ const MIGRATIONS = [
   ['documents', 'content', 'TEXT'],           // extracted text (capped)
   ['documents', 'hubs', 'TEXT'],
   ['documents', 'entities', 'TEXT'],
+  ['documents', 'meeting_date', 'TEXT'],
+  ['documents', 'attendees', 'TEXT'],       // JSON array for kind = meeting
+  ['documents', 'cite_key', 'TEXT'],        // short citation key used in step reviews, e.g. "M", "J 10/12"
+  ['tasks', 'step_review', 'TEXT'],         // JSON: [{n, old, verdict, said, cite}]
+  ['tasks', 'flow', 'TEXT'],                // JSON flow chart: {title, nodes, edges}
+  ['people', 'crossed_off', 'TEXT'],        // JSON array: hub responsibilities the person marked [N/A]
+  ['homes', 'permits', 'TEXT'],
+  ['homes', 'trades', 'TEXT'],
+  ['homes', 'issues', 'TEXT'],
+  ['homes', 'next_milestone', 'TEXT'],
+  ['homes', 'status_cite', 'TEXT'],
 ];
 function migrate(db) {
   for (const [table, column, type] of MIGRATIONS) {
@@ -155,13 +173,14 @@ function migrate(db) {
 // ---------- generic helpers ----------
 const TABLES = {
   departments: ['id','name','short','description','setup_stage','gx','gy','hue','sort'],
-  people: ['id','name','role_summary','confirmed','departments','review_status','notes','source','reviewed_at','reviewed_by','full_name','title','reports_to','email','responsibilities','legacy_roles','created_at','updated_at'],
+  people: ['id','name','role_summary','confirmed','departments','review_status','notes','source','reviewed_at','reviewed_by','full_name','title','reports_to','email','responsibilities','legacy_roles','crossed_off','created_at','updated_at'],
   agents: ['id','name','department_id','purpose','setup_stage','approach','approach_note','enabled','paused','human_authority','initial_output','n8n_workflow_id','next_run','proposed','created_at','updated_at'],
-  tasks: ['id','title','department_id','owner_id','backup_id','agent_id','trigger','inputs','steps','deadline','evidence','approval_rules','automation_approach','verification_result','source_link','documented','automated','verified','board','proposed','project_stage','missing_info','blocker','waiting_on','next_action','sensitive','source','archived','merged_into','review_note','reviewed_at','reviewed_by','created_at','updated_at'],
-  homes: ['id','address','job_id','active','kind','stage','pilot','notes','source','imported_at','updated_at'],
+  tasks: ['id','title','department_id','owner_id','backup_id','agent_id','trigger','inputs','steps','deadline','evidence','approval_rules','automation_approach','verification_result','source_link','documented','automated','verified','board','proposed','project_stage','missing_info','blocker','waiting_on','next_action','sensitive','source','archived','merged_into','review_note','reviewed_at','reviewed_by','step_review','flow','created_at','updated_at'],
+  homes: ['id','address','job_id','active','kind','stage','pilot','notes','source','imported_at','updated_at','permits','trades','issues','next_milestone','status_cite'],
   decisions: ['id','date','title','reason','decided_by','status','source','created_at'],
   integrations: ['id','name','kind','status','last_checked','last_message','last_import_at','config','notes'],
-  documents: ['id','title','path','kind','kind_reason','sensitive','task_id','department_id','summary','size','source','imported_at','updated_at','underlying_path','underlying_status','content','hubs','entities'],
+  documents: ['id','title','path','kind','kind_reason','sensitive','task_id','department_id','summary','size','source','imported_at','updated_at','underlying_path','underlying_status','content','hubs','entities','meeting_date','attendees','cite_key'],
+  handover_items: ['id','person_id','item','basis','documented','current','backup','risk','capture','cite','status','note','updated_at'],
   ai_configs: ['id','agent_id','purpose','needs_ai','provider','model','why','expected_cost','approval','eval_examples','fallback','updated_at'],
 };
 

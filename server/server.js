@@ -127,11 +127,12 @@ function stateFor(role) {
   const audit = can.audit(role) ? db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 100').all() : [];
   const demo = db.prepare("SELECT value FROM meta WHERE key = 'demo_mode'").get()?.value === 'on';
   const documents = db.prepare('SELECT * FROM documents ORDER BY kind, title').all().map(d => (d.sensitive && !sens) ? { id: d.id, title: '(restricted: financial)', kind: d.kind, sensitive: 1, restricted: true, task_id: d.task_id } : { ...d, content: d.content ? d.content.slice(0, 20000) : null });
+  const handover_items = db.prepare('SELECT * FROM handover_items ORDER BY id').all();
   const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
   const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
   const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db), hubs: imports.hubMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
-    departments, people, agents, tasks, archived_count, homes, documents, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
+    departments, people, agents, tasks, archived_count, homes, documents, handover_items, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
     server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET, n8n_url: N8N_URL } };
 }
 
@@ -212,6 +213,38 @@ function startFolderWatch() {
   console.log(`Watching QuickBooks export folder: ${QB_DIR}`);
 }
 
+// ---------- succession: "if this person were gone tomorrow, what stops?" ----------
+const BACKUP_NONE = v => !v || /^(none|nobody|n\/a|-)?\s*$/i.test(v) || /nobody assigned|nobody else/i.test(v);
+function handoverView(pid, role) {
+  const person = db.prepare('SELECT * FROM people WHERE id = ?').get(pid); if (!person) return { error: 'no such person' };
+  const items = db.prepare('SELECT * FROM handover_items WHERE person_id = ? ORDER BY id').all(pid)
+    .map(i => ({ ...i, no_backup: BACKUP_NONE(i.backup) || /unconfirmed/i.test(i.backup || '') }));
+  const riskRank = { high: 0, medium: 1, low: 2 };
+  items.sort((a, b) => (a.no_backup === b.no_backup ? 0 : a.no_backup ? -1 : 1) || (riskRank[a.risk] ?? 3) - (riskRank[b.risk] ?? 3) || a.item.localeCompare(b.item));
+  const tasks = db.prepare('SELECT * FROM tasks WHERE archived = 0 AND (owner_id = ? OR backup_id = ?) ORDER BY title').all(pid, pid)
+    .map(t => ({ id: t.id, title: t.title, role: t.owner_id === pid ? 'owner' : 'backup', backup_id: t.backup_id, owner_id: t.owner_id, documented: t.documented, verified: t.verified, proposed: t.proposed, department_id: t.department_id, has_flow: !!t.flow, has_review: !!t.step_review,
+      review_counts: t.step_review ? JSON.parse(t.step_review).reduce((a, r) => (a[r.verdict] = (a[r.verdict] || 0) + 1, a), {}) : null, sensitive: t.sensitive, restricted: t.sensitive && !can.sensitive(role) }));
+  const homes = db.prepare("SELECT * FROM homes WHERE active = 'active' ORDER BY address").all();
+  const notMentioned = []; for (const t of db.prepare('SELECT id, title, step_review FROM tasks WHERE step_review IS NOT NULL AND owner_id = ?').all(pid)) for (const r of JSON.parse(t.step_review)) if (r.verdict === 'not_mentioned') notMentioned.push({ task_id: t.id, task: t.title, step: r.n, old: r.old });
+  return { person: { ...person, departments: JSON.parse(person.departments || '[]'), responsibilities: JSON.parse(person.responsibilities || '[]'), crossed_off: JSON.parse(person.crossed_off || '[]'), legacy_roles: JSON.parse(person.legacy_roles || '[]'), email: can.sensitive(role) ? person.email : undefined },
+    items, tasks, homes, not_mentioned: notMentioned, generated_at: dbm.nowIso() };
+}
+function agendaMarkdown(h) {
+  const L = [`# Handover meeting agenda — ${h.person.full_name || h.person.name}`, `Generated ${h.generated_at.slice(0, 10)} from the Handover view. Ordered by risk: items nobody else can do today come first. Each line cites where the gap was found.`, '',
+    '## A. Walk me through what only you do (no backup today)'];
+  let n = 1;
+  for (const i of h.items.filter(i => i.no_backup && i.status === 'open')) L.push(`${n++}. **${i.item}** — walk me through how you do this today, step by step. Who else could do this today? What would someone need to know on day one? *(to capture: ${i.capture})* ${i.cite}`);
+  L.push('', '## B. Steps in the old procedures you did not mention — still done, changed, or gone?');
+  const byTask = {}; for (const x of h.not_mentioned) (byTask[x.task] = byTask[x.task] || []).push(x);
+  for (const [task, rows] of Object.entries(byTask)) { L.push(`- **${task}**:`); for (const r of rows) L.push(`  - step ${r.step}: "${r.old}" — is this still done? by whom? If gone, what replaced it?`); }
+  L.push('', '## C. Items with a possible backup — confirm the person can actually do it');
+  for (const i of h.items.filter(i => !i.no_backup && i.status === 'open')) L.push(`- **${i.item}** — you said ${i.backup || 'someone'} could cover this. Have they done it alone? What would you show them first? ${i.cite}`);
+  L.push('', '## D. Each active job: where does it stand on the day you leave?');
+  for (const hm of h.homes) L.push(`- **${hm.address}** — stage: ${hm.stage || '?'}; next milestone: ${hm.next_milestone || '?'}; open issues: ${hm.issues || 'none recorded'}. Who is the trade contact for the next step?`);
+  L.push('', '## E. Documents you said you would leave', '- Permit step-by-step document; per-lot permit status list (which 7 villa lots are permitted)', '- Schedule document with durations; order-of-construction document; copy of the 11603 calendar', '- Vendor list with $/sq ft rates; square footage per plan per trade', '- Frank scope document (Landing); CBUSA reporting process; insurance spreadsheet path; walkthrough checklist location; warranty procedure location');
+  return L.join('\n');
+}
+
 // ---------- router ----------
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -268,6 +301,12 @@ async function api(req, res, url, p, role) {
 
   if (p === '/api/state' && m === 'GET') return send(res, 200, stateFor(role));
   if (p === '/api/export' && m === 'GET') { if (!can.sensitive(role)) return send(res, 403, { error: 'restricted' }); dbm.audit(db, role, 'export'); return send(res, 200, dbm.exportAll(db), { 'Content-Disposition': `attachment; filename="mcvaugh-world-${new Date().toISOString().slice(0, 10)}.json"` }); }
+  if (p.startsWith('/api/handover') && m === 'GET') {
+    const pid = url.searchParams.get('person') || 'maria';
+    const h = handoverView(pid, role);
+    if (p === '/api/handover/agenda') return send(res, 200, agendaMarkdown(h), { 'Content-Type': MIME['.md'] });
+    return send(res, 200, h);
+  }
   if (p === '/api/export/pages' && m === 'GET') return send(res, 200, imports.pagesMarkdown(stateFor(role)), { 'Content-Type': MIME['.md'] });
 
   if (m === 'GET') return send(res, 404, { error: 'not found' });
@@ -329,7 +368,7 @@ async function api(req, res, url, p, role) {
   if (p === '/api/review/duplicates' && m === 'POST') { const b = await readJson(req); const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(b.id); if (!task) return send(res, 404, { error: 'not found' }); return send(res, 200, imports.duplicateCandidates(db.prepare('SELECT * FROM tasks').all(), task)); }
   if (p === '/api/export/pages/mark' && m === 'POST') { dbm.addEvent(db, { entity_type: 'integration', entity_id: 'pages', kind: 'import', status: 'info', label: 'Manual: handbook export pasted into ChatGPT Pages', source: 'manual', actor: role, external_id: 'pages-' + crypto.randomUUID() }); setIntegration('pages', 'disconnected', 'Manual export workflow; last export ' + dbm.nowIso(), { last_import_at: dbm.nowIso() }); return send(res, 200, { ok: true }); }
   // generic table upsert / delete: /api/<table>[/<id>]
-  const mt = p.match(/^\/api\/(departments|people|agents|tasks|homes|decisions|integrations|ai_configs|documents)(?:\/([^/]+))?$/);
+  const mt = p.match(/^\/api\/(departments|people|agents|tasks|homes|decisions|integrations|ai_configs|documents|handover_items)(?:\/([^/]+))?$/);
   if (mt) {
     const [, table, id] = mt;
     if (m === 'DELETE' && id) {

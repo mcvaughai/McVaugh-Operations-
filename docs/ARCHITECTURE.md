@@ -119,10 +119,24 @@ Roles: `admin`, `accounting`, `construction`, `design_sales`, `viewer`. Passphra
 * **Health.** Integrations → *Check connections* probes `MOW_N8N_URL` (`/healthz`), reports whether the secret is set and when the last authenticated event arrived; n8n down with past events = *failing*.
 * **Not assumed:** connectors for QuickBooks Desktop or the McVaugh database inside n8n. Both need credentials that do not exist yet; the folder watcher is deliberately the first step because it needs none.
 
-## 12. Known limits after Stage 3
+## 12. Succession pass for Maria (2026-10-20)
+
+Inputs: the updated hub (`mch-ops-hub.html`, 2026-10-20), a transcript of Jim on the work-order process (call 2026-10-12, pasted), and the Teams transcript of Brittany's 1h12m meeting with Maria (2026-10-16, villas part). Everything derived from them lives in `seed/succession-2026-10-20.js` with a citation per claim (`[M mm:ss]`, `[J 10/12]`, `[HUB 10/20]`); inferences are labeled.
+
+* **Hub refresh.** `parseOpsHub` now reads the built `.html` (data in a `<script type="text/babel">`; React stubbed in the VM). Diff vs 10/06: +4 SOPs (Lowes/Home Depot bill, accounting weekly/monthly/quarterly-yearly), 0 removed, 0 edited; Maria +58/−29 responsibilities of which 20 are her own `[N/A]` cross-offs (stored separately as `people.crossed_off`, shown struck through); James +13 (purchasing/bids, backcharges, permitting coordination); Ernesto's list replaced by a formal purchasing-manager job description (+28/−40); Brittany +50 and Kenneth +25 accounting cadences. Review decisions on existing tasks were kept (verified by test).
+* **Meetings as documents** (`documents.kind = 'meeting'`, `meeting_date`, `attendees`, `source`, `cite_key`, full text). Future transcripts: same shape, same keyed-update pattern.
+* **Step reviews** (`tasks.step_review`): per old SOP step → verdict `match | changed | no_longer | not_mentioned | new` → what was said → citation. 12 SOPs plus the warranty and HOA placeholders. `verification_result` summarizes; `missing_info` lists the not-mentioned steps so the Review queue shows them. `verified` stays 0: a step is current only when a transcript confirms it.
+* **13 procedures confirmed from the meetings** that had no SOP (`tr-*` tasks: Leander ARC review, permit per address, per-sq-ft pricing, material POs, field verification and draws, scheduling and trade calls, vendor onboarding/insurance, walkthroughs, CBUSA, Landing/Frank, selections vendors, single-point WO approval, database budget enforcement).
+* **Flow charts** (`tasks.flow`, rendered client-side as SVG): work order bid→payment, budget check/variance (Jim's rules), permit per address, foundation sequence, warranty request, Leander review. Overlays: GAP (unowned / in Maria's head), agent (rules-sufficient checks: budget exception, permit/lead-time reminders, DB-vs-QB reconciliation), human authority (Jim approvals, spending, physical acceptance, HOA decision).
+* **Handover view** (`GET /api/handover?person=maria`, Handover tab): 20 items from her SOPs, hub responsibilities, legacy roles, active jobs and the transcripts; each with documented?, current?, backup, risk, capture-before-she-leaves, citation; sorted no-backup first then by risk; status editable (open/captured/reassigned/dropped).
+* **Job status** on homes (`permits`, `trades`, `issues`, `next_milestone`, `status_cite`): 11603 and 11602 Royal Parkside from the transcript; the ten Royal Oaks Run/Banner Way lots carry the villas note (15 lots left, 7 permitted or near; which seven is unconfirmed).
+* **Agenda** (`GET /api/handover/agenda`): generated from no-backup items and not-mentioned steps, phrased as direct handover questions, plus the per-job status check and the list of documents Maria said she would leave.
+
+## 13. Known limits after the succession pass
 
 * No `.xlsx` parsing (CSV only). No live MCH DB data pulls (reachability only). No Pages sync.
 * Duplicate detection is title-based; it will miss procedures described with different words and will suggest false matches on generic titles — it only suggests, never merges on its own.
+* Only the villas were covered on 2026-10-16; Landing, the townhomes, custom homes, the TA/HOA work and warranty details are planned for the next meeting. "Frank" at Landing is unidentified. Which seven villa lots are permitted is unknown.
 * The hub's SOPs are 2004–2022 vintage and written for roles that no longer exist as such; every one is PROPOSED with a note saying so. Responsibility lists on people are the hub's claims, not verified facts, until Brittany marks the person Verified.
 
 * The world is a 2D-SVG isometric scene, not WebGL; it is deliberately light so it runs anywhere.

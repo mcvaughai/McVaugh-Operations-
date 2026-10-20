@@ -278,3 +278,90 @@ const HANDOVER = [
 ];
 
 module.exports = { MEETINGS, STEP_REVIEWS, NEW_TASKS, FLOWS, HOME_STATUS, VILLAS_NOTE, HANDOVER };
+
+// ---------- links between handover items, procedures and the documents Maria referred to ----------
+// Placeholder documents are created for files that exist on the company drives but are not attached yet;
+// Brittany uploads the real file from the handover panel when she has it.
+const DOC_PLACEHOLDERS = [
+  { id: 'doc-homeowner-walkthrough-checklist', title: 'Homeowner walkthrough checklist', kind: 'procedure', summary: 'The checklist used at homeowner walkthroughs; homeowner signs it and punch items are listed on it. Location not stated.', cite: '[M 50:50–51:12]', task_id: 'tr-homeowner-walkthrough' },
+  { id: 'doc-sow-excel', title: 'SOW Excel (scope of work / order of construction / documents to provide / lead times)', kind: 'reference', summary: 'Lists necessary documents per trade for bidding, order of construction, and lead-time notes (windows at lot scrape, cabinets at foundation pour). Now in OneDrive; a "Purchasing" folder under "Maria leaving" was proposed.', cite: '[M 11:40–13:36, 25:24–27:21]', task_id: 'tr-bids-and-sqft-rates' },
+  { id: 'doc-leander-arc-howto', title: 'Leander ARC Review how-to', kind: 'procedure', summary: 'Word document in Public > Company information > MCH > Workflow processes > "Maria leaving" folder, describing master and address-specific plan approvals. Maria will add the guidelines file path.', cite: '[M 0:14–3:16]', task_id: 'tr-leander-arc-review' },
+  { id: 'doc-permit-stepbystep', title: 'Permit process step-by-step (being written)', kind: 'procedure', summary: 'Maria: "I\'m typing a big document for everything because there\'s a lot to that." Per-address submission list to be in the workflow folder.', cite: '[M 9:25, 15:45]', task_id: 'tr-permit-per-address' },
+  { id: 'doc-11603-schedule', title: '11603 Royal Parkside schedule (pencil calendar → copy)', kind: 'reference', summary: 'Hand-drawn calendar, current to ~10/16; Maria to update by Monday and give Brittany a copy. No digital version exists.', cite: '[M 21:46–22:40]', task_id: 'tr-schedule-and-trade-coordination' },
+  { id: 'doc-schedule-durations', title: 'Schedule document with phase durations (being written)', kind: 'procedure', summary: 'How long concrete, foundation, plumbing etc. take; Maria will finish before leaving.', cite: '[M 26:34]', task_id: 'tr-schedule-and-trade-coordination' },
+  { id: 'doc-insurance-spreadsheet', title: 'Subcontractor insurance tracking spreadsheet', kind: 'reference', summary: 'Maria checks it, sends reminders, gives copies to Kenneth; location to be sent.', cite: '[M 59:33–1:00:35]', task_id: 'tr-vendor-onboarding-insurance' },
+  { id: 'doc-warranty-procedure', title: 'Warranty procedure', kind: 'procedure', summary: '"There\'s a warranty procedure" — location not stated.', cite: '[M 1:03:24]', task_id: 'proc-warranty' },
+  { id: 'doc-frank-scope', title: 'Landing: what we do vs what Frank does (Word, with Maria\'s redlines)', kind: 'plan', summary: 'Shared in Teams chat with Brittany and James; to be finalized by Mon/Tue.', cite: '[M 41:00–41:54]', task_id: 'tr-landing-frank-scope' },
+  { id: 'doc-vendor-rate-list', title: 'Vendor list with $/sq ft rates (to be left by Maria)', kind: 'reference', summary: '"I will leave a good list of people at least to send the bids to." Plus square footage per plan per trade (created for Ernesto; location unknown).', cite: '[M 18:59, 39:25]', task_id: 'tr-bids-and-sqft-rates' },
+  { id: 'doc-foundation-checklist', title: 'Foundation / framing check-off lists (do not exist yet)', kind: 'procedure', summary: 'No written check-off lists exist; Maria recommends the foundation first. To be dictated.', cite: '[M 44:02–46:36]', task_id: 'tr-field-verification-and-draws' },
+];
+const HANDOVER_LINKS = {
+  'ho-scheduling': { tasks: ['tr-schedule-and-trade-coordination', 'hub-homebuilding'], docs: ['doc-11603-schedule', 'doc-schedule-durations', 'doc-sow-excel'] },
+  'ho-trade-calls': { tasks: ['tr-schedule-and-trade-coordination', 'tr-field-verification-and-draws'], docs: ['doc-sow-excel'] },
+  'ho-field-acceptance': { tasks: ['tr-field-verification-and-draws', 'hub-work_order_ap'], docs: ['doc-foundation-checklist'] },
+  'ho-wo-approval': { tasks: ['tr-wo-approval-single-point', 'hub-work_order_ap'], docs: [] },
+  'ho-permits': { tasks: ['tr-permit-per-address', 'hub-permitting'], docs: ['doc-permit-stepbystep'] },
+  'ho-work-orders': { tasks: ['tr-bids-and-sqft-rates', 'hub-new_work_order', 'obs-procedures-for-the-mch-database'], docs: ['doc-vendor-rate-list', 'doc-sow-excel', 'doc-procedures-for-the-mch-database'] },
+  'ho-hoa-repairs': { tasks: ['proc-hoa'], docs: [] },
+  'ho-warranty': { tasks: ['proc-warranty'], docs: ['doc-warranty-procedure'] },
+  'ho-cbusa': { tasks: ['tr-cbusa-reporting'], docs: [] },
+  'ho-landing-frank': { tasks: ['tr-landing-frank-scope'], docs: ['doc-frank-scope'] },
+  'ho-purchase-orders': { tasks: ['tr-purchase-orders-materials'], docs: [] },
+  'ho-bids-vendors': { tasks: ['tr-bids-and-sqft-rates', 'hub-new_work_order'], docs: ['doc-vendor-rate-list'] },
+  'ho-punch-out': { tasks: ['tr-punch-out'], docs: [] },
+  'ho-selections': { tasks: ['tr-selections-vendor-bidding', 'hub-interior_designer_selection'], docs: [] },
+  'ho-budget-check': { tasks: ['hub-budget_revision', 'tr-database-budget-enforcement', 'hub-budget_review'], docs: [] },
+  'ho-vendor-insurance': { tasks: ['tr-vendor-onboarding-insurance'], docs: ['doc-insurance-spreadsheet'] },
+  'ho-walkthrough': { tasks: ['tr-homeowner-walkthrough', 'hub-homebuyer_expectations'], docs: ['doc-homeowner-walkthrough-checklist'] },
+  'ho-leander': { tasks: ['tr-leander-arc-review'], docs: ['doc-leander-arc-howto'] },
+  'ho-legacy-roles': { tasks: [], docs: ['doc-legacy-role-doc', 'doc-legacy-role-superintendent', 'doc-legacy-role-project-mgr', 'doc-legacy-role-construction-asst'] },
+  'ho-crossed-off': { tasks: [], docs: [] },
+};
+const EXTRA_TASKS = [
+  { id: 'tr-punch-out', title: 'Punch-out during construction and before handover', department_id: 'quality', owner_id: 'maria', backup_id: 'pam', proposed: 0, documented: 0, board: 'next',
+    trigger: 'Continuous during construction; a final pass before handover; for spec homes whenever Pam sends punch items.',
+    steps: 'Walk the house at each stage and look for: missing fixtures, missing cover plates, bad sheetrock, paint touch-ups, trim out of square, doors that do not close — fix as you go, do not leave it all for the end. Final: everything done and looks right, as if handing to a homeowner. City inspections and finals run through the process. Office people (Pam, Teresa) walking the house is useful as a different set of eyes.',
+    verification_result: 'Confirmed [M 49:25–51:38]. No written check sheet exists ("you just know").', missing_info: 'A stage-by-stage check sheet (after sheetrock, after paint, after trim, final). Where Pam\'s punch items are sent/kept.', next_action: 'Record one walk of 11603 with Maria narrating; turn it into the check sheet.', source: 'Maria meeting 2026-10-16 (transcript)' },
+];
+const EXTRA_FLOWS = {
+  'tr-punch-out': { title: 'Punch-out', nodes: [
+    { id: 'a', type: 'trigger', label: 'A stage completes (sheetrock, paint, trim…) or Pam sends punch items', owner: 'Maria / Pam', status: 'confirmed', cite: '[M 49:25, 51:25]' },
+    { id: 'b', type: 'step', label: 'Walk the house: fixtures, cover plates, sheetrock, paint, trim, doors', owner: 'Maria', status: 'confirmed', flags: ['gap'], note: 'No check sheet; only Maria knows what to look for', cite: '[M 49:54]' },
+    { id: 'c', type: 'decision', label: 'Anything wrong?', owner: 'Maria', status: 'confirmed', cite: '[M 50:19]' },
+    { id: 'd', type: 'handoff', label: 'Tell the trade; rework before the next draw', owner: 'Maria → trade', status: 'confirmed', flags: ['authority'], note: 'Draw held until fixed', cite: '[M 43:44–44:00]' },
+    { id: 'e', type: 'step', label: 'Final pass + city finals before handover', owner: 'Maria', status: 'confirmed', cite: '[M 49:25]' },
+    { id: 'f', type: 'end', label: 'Ready for homeowner walkthrough', owner: '', status: 'confirmed', cite: '[M 50:34]' },
+  ], edges: [['a', 'b'], ['b', 'c'], ['c', 'd', 'yes'], ['d', 'b', 'recheck'], ['c', 'e', 'no'], ['e', 'f']] },
+  'tr-homeowner-walkthrough': { title: 'Homeowner walkthrough', nodes: [
+    { id: 'a', type: 'trigger', label: 'House sold / ready; walkthrough scheduled', owner: 'Sales', status: 'confirmed', cite: '[M 50:34]' },
+    { id: 'b', type: 'step', label: 'Walk the whole house with the homeowner; show how everything works', owner: 'Maria (James attends)', status: 'confirmed', flags: ['gap'], note: 'Maria does all of them today; sales could', cite: '[M 50:34–50:50]' },
+    { id: 'c', type: 'step', label: 'Fill the checklist; list punch items', owner: 'Maria', status: 'confirmed', cite: '[M 50:50]' },
+    { id: 'd', type: 'step', label: 'Homeowner signs', owner: 'Homeowner', status: 'confirmed', flags: ['authority'], note: 'Acceptance', cite: '[M 51:00]' },
+    { id: 'e', type: 'handoff', label: 'Punch items to trades; fixed before closing', owner: 'Maria → trades', status: 'unconfirmed', cite: '[old SOP step 15]' },
+    { id: 'f', type: 'end', label: 'Closing; warranty portal access', owner: '', status: 'unconfirmed', cite: '[old SOP steps 17–22]' },
+  ], edges: [['a', 'b'], ['b', 'c'], ['c', 'd'], ['d', 'e'], ['e', 'f']] },
+};
+const HANDOVER_WHY = {
+  'ho-wo-approval': 'A work-order process exists (Work Order AP SOP, 2006, and the 2019 database guide) and Maria follows it. What is missing is not the steps — it is the people: the SOP has three approvers (Superintendent clicks pay, PM confirms, DOC gives final approval) and Jim confirmed Maria is all three today. When she leaves, nobody is named for any of them, and the database roles still point at her. Also unreviewed from the SOP: steps 8–10 (what happens when a WO is disapproved).',
+  'ho-scheduling': 'No schedule process exists in writing. The old Homebuilding SOP has phase day-counts nobody confirmed; Maria\'s actual schedule is a pencil calendar she re-plans daily and does not keep. A successor has nothing to start from.',
+  'ho-trade-calls': 'Not in any SOP. The order in which trades are called back (forms → grounds → makeup → island power → pour) exists only as Maria\'s knowledge; the old Start Packet / Homebuilding SOPs never describe it.',
+  'ho-field-acceptance': 'The Work Order AP SOP says "Superintendent clicks pay if 100% complete" but never says how completion is checked. Maria confirmed there is no check sheet; she walks it and knows. The foundation walk before pour is the riskiest unwritten check.',
+  'ho-permits': 'The Permitting SOP (2004) describes a CA, a permitting company and a precon log that no longer exist. Maria submits per address to the city herself; she is writing the real step-by-step now. Seven villa lots are part-way through and only her folders show where.',
+  'ho-work-orders': 'The New Work Order SOP (2006) assumes a CA, a PM and a Purchasing Manager. Today Maria prices by $/sq ft × trade square footage with standard draws and writes the WO herself. The rates, the square-footage-per-plan sheet and the draw percentages are not written anywhere a successor could find.',
+  'ho-hoa-repairs': 'Not in any SOP. Teresa decides HOA responsibility and files it as a warranty request under ROCVTA; the construction-side fix is Maria\'s by default with nobody else named.',
+  'ho-warranty': 'The handoff has a warranty placeholder "owner to confirm". The real mechanism (portal request → emailed to the assigned manager) is confirmed, but the manager in the database is Maria and the written procedure\'s location is unknown.',
+  'ho-cbusa': 'Not in any SOP; Maria said she still has to write it. The hub assigns the yearly vendor report to Kenneth, unconfirmed.',
+  'ho-landing-frank': 'Landing has no SOP of its own; the repeat submissions and the split of work with Frank exist only in a Word document Maria is still redlining.',
+  'ho-purchase-orders': 'The old SOPs mention POs only as a line ("purchase orders entered by purchasing"). Maria confirmed the real rules (bid scrutiny, quote number on PO, never modify the original, extras as separate POs, folder structure). Ernesto is the hub\'s purchasing manager but it is unconfirmed he has done one end to end.',
+  'ho-bids-vendors': 'The SOP says "send plans to subcontractors for bidding" — but which subs, at what rates, and when to send them (price timing) is Maria\'s judgment. She promised to leave a list.',
+  'ho-punch-out': 'No SOP covers punch-out during construction. Maria does it continuously by eye; there is no check sheet. (The homeowner walkthrough checklist is a different, documented thing.)',
+  'ho-selections': 'The Interior Designer Selection SOP (2005) describes a CA and ROCC packets that are gone. The current practice (Pam involved, Maria pricing with new vendors, Danielle starting) was only described in the meeting and is in flux.',
+  'ho-budget-check': 'The Budget Revision SOP exists and Jim confirmed its rules on 10/12. What is missing: the database does not enforce them, the logs were crossed off, and only Maria checks a bid against the remaining budget before a WO — how she checks it was not described.',
+  'ho-vendor-insurance': 'Not on anyone\'s task list (Maria said so). The spreadsheet exists; the owner does not. James and Kenneth can both do it.',
+  'ho-walkthrough': 'Documented and others can do it; it is here only because Maria does every walkthrough today. Low effort to hand over.',
+  'ho-leander': 'Documented (how-to exists) and Teresa is copied on everything; only the decision of who takes it is open. Not on Maria\'s old responsibility list at all.',
+  'ho-legacy-roles': 'The hub shows Maria absorbed four former positions. Nothing says which of those a replacement must cover versus which parts move to James, Ernesto or Teresa — that decision shapes the job description.',
+  'ho-crossed-off': 'Housekeeping: Maria crossed these off herself. Listed so Jim/Kenneth can confirm none is still wanted (e.g. the proforma, the budget revision log).',
+};
+module.exports.HANDOVER_WHY = HANDOVER_WHY;
+module.exports.DOC_PLACEHOLDERS = DOC_PLACEHOLDERS; module.exports.HANDOVER_LINKS = HANDOVER_LINKS; module.exports.EXTRA_TASKS = EXTRA_TASKS; module.exports.EXTRA_FLOWS = EXTRA_FLOWS;

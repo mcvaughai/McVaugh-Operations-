@@ -73,6 +73,7 @@ function roleOf(req) {
   const row = db.prepare('SELECT role FROM sessions WHERE token = ?').get(tok);
   return row ? row.role : null;
 }
+const UPLOAD_MIME = { '.pdf': 'application/pdf', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.doc': 'application/msword', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xls': 'application/vnd.ms-excel', '.csv': 'text/csv', '.md': 'text/markdown', '.txt': 'text/plain', '.html': 'text/html', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.md': 'text/markdown; charset=utf-8' };
 
 // ---------- derived runtime state ----------
@@ -219,7 +220,7 @@ const BACKUP_NONE = v => !v || /^(none|nobody|n\/a|-)?\s*$/i.test(v) || /nobody 
 function handoverView(pid, role) {
   const person = db.prepare('SELECT * FROM people WHERE id = ?').get(pid); if (!person) return { error: 'no such person' };
   const items = db.prepare('SELECT * FROM handover_items WHERE person_id = ? ORDER BY id').all(pid)
-    .map(i => ({ ...i, no_backup: BACKUP_NONE(i.backup) || /unconfirmed/i.test(i.backup || '') }));
+    .map(i => ({ ...i, task_ids: JSON.parse(i.task_ids || '[]'), doc_ids: JSON.parse(i.doc_ids || '[]'), no_backup: BACKUP_NONE(i.backup) || /unconfirmed/i.test(i.backup || '') }));
   const riskRank = { high: 0, medium: 1, low: 2 };
   items.sort((a, b) => (a.no_backup === b.no_backup ? 0 : a.no_backup ? -1 : 1) || (riskRank[a.risk] ?? 3) - (riskRank[b.risk] ?? 3) || a.item.localeCompare(b.item));
   const tasks = db.prepare('SELECT * FROM tasks WHERE archived = 0 AND (owner_id = ? OR backup_id = ?) ORDER BY title').all(pid, pid)
@@ -253,6 +254,13 @@ const server = http.createServer(async (req, res) => {
   const role = roleOf(req);
   try {
     if (p.startsWith('/api/')) return await api(req, res, url, p, role);
+    if (p.startsWith('/files/')) { // uploaded documents; same role rules as the document record
+      if (!role) return send(res, 401, 'login required');
+      const d = db.prepare('SELECT * FROM documents WHERE id = ?').get(decodeURIComponent(p.slice(7)));
+      if (!d || !d.file_path || !fs.existsSync(d.file_path)) return send(res, 404, 'no file');
+      if (d.sensitive && !can.sensitive(role)) return send(res, 403, 'restricted');
+      return send(res, 200, fs.readFileSync(d.file_path), { 'Content-Type': d.mime || 'application/octet-stream', 'Content-Disposition': `inline; filename="${path.basename(d.file_path).replace(/"/g, '')}"` });
+    }
     // static
     let f = p === '/' ? '/index.html' : p;
     if (f.startsWith('/docs/')) { const fp = path.join(__dirname, '..', f); if (fs.existsSync(fp) && fs.statSync(fp).isFile()) return send(res, 200, fs.readFileSync(fp), { 'Content-Type': MIME['.md'] }); }
@@ -351,6 +359,27 @@ async function api(req, res, url, p, role) {
     setIntegration('obsidian', 'connected', `Folder snapshot: ${r.imported} imported, ${r.skipped_unchanged} unchanged — ${b.dir}`, { last_import_at: dbm.nowIso() });
     dbm.audit(db, role, 'import_folder', 'integration', 'obsidian', b.dir);
     return send(res, 200, r);
+  }
+  if (p === '/api/documents/upload' && m === 'POST') { // attach a real file (walkthrough checklist, SOW Excel, permit doc…) to a task or handover item
+    const b = await readJson(req);
+    const name = path.basename(String(b.name || 'file')); const ext = path.extname(name).toLowerCase();
+    if (!UPLOAD_MIME[ext]) return send(res, 400, { error: `File type ${ext || '(none)'} not accepted` });
+    const buf = Buffer.from(String(b.data || ''), 'base64'); if (!buf.length || buf.length > 25 * 1024 * 1024) return send(res, 400, { error: 'empty or over 25 MB' });
+    const id = b.doc_id || ('doc-' + dbm.slug(name.replace(ext, '')));
+    const dir = path.join(dbm.DATA_DIR, 'uploads'); fs.mkdirSync(dir, { recursive: true });
+    const fp = path.join(dir, id + ext); fs.writeFileSync(fp, buf);
+    let text = null, status = 'stored';
+    try { if (ext === '.docx') { text = imports.docxText(buf); status = 'extracted'; } else if (ext === '.html') { text = imports.htmlText(buf); status = 'extracted'; } else if (['.md', '.txt', '.csv'].includes(ext)) { text = buf.toString('utf8'); status = 'extracted'; } } catch (e) { status = 'stored (text extraction failed: ' + e.message + ')'; }
+    const ex = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    const cls = imports.classifyNote(name, text || '');
+    dbm.upsert(db, 'documents', { id, title: ex?.title || name.replace(ext, ''), path: name, kind: ex?.kind || (b.kind || cls.kind), kind_reason: ex ? undefined : 'uploaded by ' + role, sensitive: ex ? undefined : cls.sensitive, task_id: b.task_id || ex?.task_id || null,
+      summary: ex?.summary || (text ? text.replace(/\s+/g, ' ').slice(0, 280) : `Uploaded ${name} (${buf.length} bytes)`), size: buf.length, source: `Uploaded by ${role} on ${dbm.nowIso().slice(0, 10)}${b.note ? ' — ' + b.note : ''}`, imported_at: dbm.nowIso(),
+      file_path: fp, mime: UPLOAD_MIME[ext], content: text ? text.slice(0, 200 * 1024) : undefined, underlying_status: status, underlying_path: name });
+    const link = (table, key) => { if (!b[key]) return; const row = db.prepare(`SELECT doc_ids FROM ${table} WHERE id = ?`).get(b[key]); if (!row) return; const ids = JSON.parse(row.doc_ids || '[]'); if (!ids.includes(id)) ids.push(id); dbm.upsert(db, table, { id: b[key], doc_ids: ids }); };
+    link('handover_items', 'handover_id'); link('tasks', 'task_id');
+    dbm.addEvent(db, { entity_type: 'document', entity_id: id, kind: 'import', status: 'info', label: `Manual: uploaded ${name}` + (b.handover_id ? ` for handover item ${b.handover_id}` : b.task_id ? ` for task ${b.task_id}` : ''), source: 'manual', actor: role, external_id: 'upload-' + crypto.randomUUID() });
+    dbm.audit(db, role, 'upload', 'documents', id, name);
+    return send(res, 200, db.prepare('SELECT id, title, kind, underlying_status, mime, size FROM documents WHERE id = ?').get(id));
   }
   if (p === '/api/import/opshub' && m === 'POST') {
     const b = await readJson(req); const r = imports.importOpsHub(db, { filename: b.filename, content: b.content }, role);

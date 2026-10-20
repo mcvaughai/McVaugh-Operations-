@@ -128,6 +128,48 @@
     return `<table style="font-size:12px"><thead><tr><th>#</th><th>Old SOP step</th><th>Verdict</th><th>What was said</th><th>Cite</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.n)}</td><td>${esc(r.old)}</td><td>${chip(VERDICT[r.verdict]?.[0] || r.verdict, VERDICT[r.verdict]?.[1] || 'gray')}</td><td>${esc(r.said)}</td><td class="src">${esc(r.cite)}</td></tr>`).join('')}</tbody></table>`;
   }
 
+
+  // ---------- documents, process and upload helpers for the side panel ----------
+  const DOC_ICON = { pdf: '📕', docx: '📘', doc: '📘', xlsx: '📗', xls: '📗', csv: '📗', md: '📄', txt: '📄', html: '🌐', png: '🖼', jpg: '🖼', jpeg: '🖼' };
+  function docCards(ids, { handover_id, task_id } = {}) {
+    const w = S.permissions.write;
+    const docs = (ids || []).map(id => S.documents.find(d => d.id === id)).filter(Boolean);
+    if (!docs.length && !w) return '<p class="empty">No documents linked.</p>';
+    return docs.map(d => { const ext = (d.mime ? d.path : d.path || '').split('.').pop().toLowerCase(); const attached = !!d.file_path || d.underlying_status === 'extracted' || !!d.content;
+      return `<div class="doc-card ${attached ? '' : 'missing'}"><div class="ico">${attached ? (DOC_ICON[ext] || '📄') : '⬚'}</div><div style="flex:1"><b>${esc(d.restricted ? '(restricted)' : d.title)}</b><br><small class="src">${attached ? (d.file_path ? `${esc(ext.toUpperCase())} · ${Math.round((d.size || 0) / 1024)} KB · ${esc(d.source || '')}` : esc(d.source || '')) : 'Not attached yet — ' + esc((d.summary || '').slice(0, 120))}</small></div>
+        <div style="display:flex;gap:4px;flex-direction:column">${d.file_path ? `<a href="/files/${encodeURIComponent(d.id)}" target="_blank" rel="noopener"><button class="small primary">Open</button></a>` : ''}${attached ? `<button class="small" data-open="document:${d.id}">Details</button>` : ''}${w ? `<button class="small" data-upload="${d.id}" data-upload-h="${handover_id || ''}" data-upload-t="${task_id || d.task_id || ''}">${attached ? 'Replace' : 'Upload'}</button>` : ''}</div></div>`; }).join('')
+      + (w ? `<button class="small" data-upload="" data-upload-h="${handover_id || ''}" data-upload-t="${task_id || ''}">+ Attach another document</button>` : '');
+  }
+  function processBlock(t) {
+    if (!t) return '';
+    const flow = t.flow ? JSON.parse(t.flow) : null;
+    const gaps = flow ? flow.nodes.filter(n => (n.flags || []).includes('gap')) : [];
+    const steps = (t.steps || '').split(/\n/).map(x => x.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean);
+    return `<div class="card" style="padding:12px;margin:8px 0"><div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(t.restricted ? '(restricted)' : t.title)}</b><span>${t.proposed ? chip('PROPOSED', 'amber') : chip('reviewed', 'ok')}${t.documented ? chip('documented', 'blue') : chip('not documented', 'red')}<a href="#" data-open="task:${t.id}" class="src">open task</a></span></div>
+      ${t.trigger ? `<div class="trigger-box"><b>When it starts:</b> ${esc(t.trigger)}</div>` : ''}
+      ${steps.length ? `<ol class="proc-steps">${steps.slice(0, 12).map(x => `<li>${esc(x)}</li>`).join('')}${steps.length > 12 ? `<li class="src">… ${steps.length - 12} more on the task</li>` : ''}</ol>` : '<p class="empty">No steps written.</p>'}
+      ${gaps.length ? `<h4 style="color:var(--red)">Gaps in this process</h4><ul class="gap-list">${gaps.map(g => `<li><b>${esc(g.label)}</b> — ${esc(g.note || 'unowned or only in Maria\'s head')} <span class="src">${esc(g.cite || '')}</span></li>`).join('')}</ul>` : ''}
+      ${flow ? `<h4>Flow chart <button class="small" data-flow="${t.id}">Open large</button></h4>${flowSvg(flow)}` : ''}
+      ${t.step_review ? `<details><summary class="src">Step-by-step review against the meetings (${JSON.parse(t.step_review).length} rows)</summary>${stepReviewTable(JSON.parse(t.step_review))}</details>` : ''}</div>`;
+  }
+  function flowModal(taskId) {
+    const t = S.tasks.find(x => x.id === taskId); if (!t || !t.flow) return;
+    const flow = JSON.parse(t.flow); const m = $('#modal'), c = $('#modalCard'); c.classList.add('wide');
+    c.innerHTML = `<h2>${esc(flow.title)}</h2><p class="src">${esc(t.title)}</p>${flowSvg(flow)}<div class="actions"><button id="mcancel">Close</button></div>`;
+    m.hidden = false; $('#mcancel').onclick = () => { m.hidden = true; c.classList.remove('wide'); };
+  }
+  function uploadModal(docId, handoverId, taskId) {
+    const d = docId ? S.documents.find(x => x.id === docId) : null; const m = $('#modal'), c = $('#modalCard');
+    c.innerHTML = `<h2>${d ? 'Attach the real file: ' + esc(d.title) : 'Attach a document'}</h2><p class="src">PDF, Word (.docx), Excel (.xlsx/.csv), Markdown or text. Stored in <code>data/uploads</code> on the server, never in git; viewable by anyone who can sign in (restricted documents stay restricted).${d && d.summary ? '<br>' + esc(d.summary) : ''}</p>
+      <form id="mform"><input type="file" id="upFile" required>${d ? '' : '<label class="field"><span>Title (optional)</span><input id="upTitle"></label>'}<label class="field"><span>Note (where it came from, date)</span><input id="upNote" placeholder="e.g. from Maria, Teams 10/21"></label><div class="actions"><button type="submit" class="primary">Upload</button><button type="button" id="mcancel">Cancel</button></div></form>`;
+    m.hidden = false; $('#mcancel').onclick = () => m.hidden = true;
+    $('#mform').onsubmit = async e => { e.preventDefault(); const f = $('#upFile').files[0]; if (!f) return; const data = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(f); });
+      const r = await api('POST', '/api/documents/upload', { name: f.name, data, doc_id: docId || undefined, handover_id: handoverId || undefined, task_id: taskId || undefined, note: $('#upNote').value });
+      if (!docId && $('#upTitle')?.value) await api('POST', `/api/documents/${r.id}`, { title: $('#upTitle').value });
+      m.hidden = true; toast(`Attached ${f.name} (${r.underlying_status})`); HO_dirty = true; await refresh(); };
+  }
+  document.addEventListener('click', e => { const u = e.target.closest('[data-upload]'); if (u) { e.preventDefault(); uploadModal(u.dataset.upload, u.dataset.uploadH, u.dataset.uploadT); return; } const f = e.target.closest('[data-flow]'); if (f) { e.preventDefault(); flowModal(f.dataset.flow); } });
+
   // ---------- Handover view: "if this person were gone tomorrow, what stops?" ----------
   let HO = null, HO_dirty = true;
   async function renderHandover(force) {
@@ -140,7 +182,7 @@
     const docChip = d => chip('documented: ' + d, /^yes/.test(d) ? 'ok' : /^no/.test(d) ? 'red' : 'amber');
     const itemRow = i => `<div class="card-t" style="border-left-color:${i.risk === 'high' ? 'var(--red)' : i.risk === 'medium' ? 'var(--amber)' : 'var(--gray)'};opacity:${i.status === 'open' ? 1 : .55}" data-open="handover:${i.id}"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(i.item)}</b><span>${chip(i.risk + ' risk', i.risk === 'high' ? 'red' : i.risk === 'medium' ? 'amber' : 'gray')}${i.status !== 'open' ? chip(i.status, 'blue') : ''}</span></div>
       <small>${docChip(i.documented)} ${chip('current: ' + i.current, /^confirmed/.test(i.current) ? 'ok' : 'gray')} ${chip(i.no_backup ? 'NO BACKUP TODAY' : 'backup: ' + i.backup, i.no_backup ? 'red' : 'ok')}</small>
-      <small><b>Capture from Maria:</b> ${esc(i.capture)}</small><small class="src">${esc(i.basis)} · ${esc(i.cite)}${i.note ? ' · note: ' + esc(i.note) : ''}</small></div>`;
+      <small><b>Capture from Maria:</b> ${esc(i.capture)}</small><small class="src">${(i.task_ids || []).length ? '🗺 ' + (i.task_ids || []).length + ' process' + ((i.task_ids || []).length > 1 ? 'es' : '') + ' · ' : ''}${(i.doc_ids || []).length ? '📄 ' + (i.doc_ids || []).filter(id => { const d = S.documents.find(x => x.id === id); return d && (d.file_path || d.content); }).length + '/' + (i.doc_ids || []).length + ' documents attached · ' : ''}${esc(i.basis)} · ${esc(i.cite)}${i.note ? ' · note: ' + esc(i.note) : ''}</small></div>`;
     v.innerHTML = `<div class="table-wrap">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0">If ${esc(P.full_name || P.name)} were gone tomorrow, what stops?</h2>${chip(P.title || '', 'gray')}${P.legacy_roles.map(r => chip(r, 'gray')).join('')}<span class="hint">Built from her ${HO.tasks.filter(t => t.role === 'owner').length} owned tasks, ${P.responsibilities.length} hub responsibilities (${P.crossed_off.length} crossed off), ${P.legacy_roles.length} legacy roles, ${HO.homes.length} active jobs, and the meetings of 10/12 and 10/16.</span>
         <a href="/api/handover/agenda?person=maria" target="_blank"><button class="small primary">Next-meeting agenda (Markdown)</button></a></div>
@@ -323,7 +365,7 @@
     decision: () => [{ key: 'date', label: 'Date (YYYY-MM-DD)', default: new Date().toISOString().slice(0, 10) }, { key: 'title', label: 'Decision' }, { key: 'reason', label: 'Reason', type: 'textarea' }, { key: 'decided_by', label: 'Decided by' }, { key: 'status', label: 'Status', type: 'select', options: [['approved', 'Approved'], ['proposed', 'Proposed'], ['superseded', 'Superseded']] }, { key: 'source', label: 'Source' }],
     department: () => [{ key: 'name', label: 'Name' }, { key: 'description', label: 'Description', type: 'textarea' }, { key: 'setup_stage', label: 'Setup maturity', type: 'select', options: SETUP_STAGES.map(s => [s, World.SETUP[s].label]) }],
     integration: () => [{ key: 'status', label: 'Status (manual override)', type: 'select', options: [['disconnected', 'Disconnected'], ['connected', 'Connected'], ['failing', 'Failing']] }, { key: 'notes', label: 'Notes', type: 'textarea' }, ...(S.permissions.integrationConfig ? [{ key: 'config', label: 'Config (JSON; no secrets — use env vars)', type: 'textarea' }] : [])],
-    handover: () => [{ key: 'item', label: 'Item' }, { key: 'basis', label: 'Basis' }, { key: 'documented', label: 'Documented? (yes/partial/no/in progress)' }, { key: 'current', label: 'Current? (confirmed/unconfirmed)' }, { key: 'backup', label: 'Who else can do it today (blank = nobody)' }, { key: 'risk', label: 'Risk', type: 'select', options: [['high', 'high'], ['medium', 'medium'], ['low', 'low']] }, { key: 'capture', label: 'Capture from Maria', type: 'textarea' }, { key: 'cite', label: 'Source / citation' }, { key: 'note', label: 'Note', type: 'textarea' }],
+    handover: () => [{ key: 'item', label: 'Item' }, { key: 'basis', label: 'Basis' }, { key: 'documented', label: 'Documented? (yes/partial/no/in progress)' }, { key: 'current', label: 'Current? (confirmed/unconfirmed)' }, { key: 'backup', label: 'Who else can do it today (blank = nobody)' }, { key: 'risk', label: 'Risk', type: 'select', options: [['high', 'high'], ['medium', 'medium'], ['low', 'low']] }, { key: 'why', label: 'Why this is here (what exists / what is missing)', type: 'textarea' }, { key: 'capture', label: 'Capture from Maria', type: 'textarea' }, { key: 'cite', label: 'Source / citation' }, { key: 'task_ids_text', label: 'Linked task ids (comma separated)' }, { key: 'doc_ids_text', label: 'Linked document ids (comma separated)' }, { key: 'note', label: 'Note', type: 'textarea' }],
     ai: () => [{ key: 'purpose', label: 'Purpose' }, { key: 'needs_ai', label: 'Needs AI?', type: 'select', options: [['no_rules', 'No — deterministic rules'], ['yes', 'Yes'], ['undecided', 'Undecided']] }, { key: 'provider', label: 'Provider' }, { key: 'model', label: 'Model id (verify availability first)' }, { key: 'why', label: 'Why appropriate', type: 'textarea' }, { key: 'expected_cost', label: 'Expected cost' }, { key: 'approval', label: 'Approval requirement' }, { key: 'eval_examples', label: 'Evaluation examples', type: 'textarea' }, { key: 'fallback', label: 'Fallback' }],
   };
   const TABLE = { handover: 'handover_items', document: 'documents', person: 'people', task: 'tasks', agent: 'agents', home: 'homes', decision: 'decisions', department: 'departments', integration: 'integrations', ai: 'ai_configs' };
@@ -331,7 +373,9 @@
   function editEntity(type, obj) {
     const values = obj ? { ...obj } : {};
     if (type === 'person') values.responsibilities_text = JSON.parse(obj?.responsibilities || '[]').join('\n');
-    modal((obj ? 'Edit ' : 'Add ') + type, FIELDS[type](), values, async v => { if (obj) v.id = obj.id; if (type === 'person') { v.responsibilities = v.responsibilities_text.split('\n').map(x => x.trim()).filter(Boolean); delete v.responsibilities_text; } await save(TABLE[type], v); });
+    if (type === 'handover') { values.task_ids_text = JSON.parse(obj?.task_ids || '[]').join(', '); values.doc_ids_text = JSON.parse(obj?.doc_ids || '[]').join(', '); }
+    modal((obj ? 'Edit ' : 'Add ') + type, FIELDS[type](), values, async v => { if (obj) v.id = obj.id; if (type === 'person') { v.responsibilities = v.responsibilities_text.split('\n').map(x => x.trim()).filter(Boolean); delete v.responsibilities_text; }
+    if (type === 'handover') { v.task_ids = v.task_ids_text.split(',').map(x => x.trim()).filter(Boolean); v.doc_ids = v.doc_ids_text.split(',').map(x => x.trim()).filter(Boolean); delete v.task_ids_text; delete v.doc_ids_text; } await save(TABLE[type], v); });
   }
   function checkpointForm() {
     const cp = S.checkpoint || {};
@@ -393,7 +437,8 @@
         ${section('Verification result', esc(obj.verification_result))}${section('Source-system link / file', obj.source_link ? (/^https?:/.test(obj.source_link) ? `<a href="${esc(obj.source_link)}" target="_blank" rel="noopener">${esc(obj.source_link)}</a>` : `<code>${esc(obj.source_link)}</code>`) : '')}
         ${section('Missing information', esc(obj.missing_info))}${section('Blocker / approval needed', esc(obj.blocker))}${section('Waiting on', esc(obj.waiting_on))}
         ${obj.step_review ? `<h4>Step-by-step review against the meetings</h4>${stepReviewTable(JSON.parse(obj.step_review))}` : ''}
-        ${obj.flow ? `<h4>Flow chart — ${esc(JSON.parse(obj.flow).title)}</h4>${flowSvg(JSON.parse(obj.flow))}` : ''}
+        <h4>Documents</h4>${docCards(JSON.parse(obj.doc_ids || '[]'), { task_id: obj.id })}
+        ${obj.flow ? `<h4>Flow chart — ${esc(JSON.parse(obj.flow).title)} <button class="small" data-flow="${obj.id}">Open large</button></h4>${flowSvg(JSON.parse(obj.flow))}` : ''}
         ${obj.next_action ? `<div class="next-action"><b>Next small action</b><br>${esc(obj.next_action)}</div>` : ''}
         ${section('Linked agent', obj.agent_id ? `<a href="#" data-open="agent:${obj.agent_id}">${esc(agent(obj.agent_id)?.name || obj.agent_id)}</a>` : '')}
         ${section('Source', esc(obj.source))}${obj.reviewed_at ? section('Reviewed', fmt(obj.reviewed_at) + ' by ' + esc(obj.reviewed_by) + (obj.review_note ? ' — ' + esc(obj.review_note) : '')) : ''}`;
@@ -409,9 +454,15 @@
     } else if (type === 'integration') {
       body = `${chip(obj.kind, 'gray')} ${chip(obj.status, obj.status === 'connected' ? 'ok' : obj.status === 'failing' ? 'red' : 'gray')}<p>${esc(obj.notes)}</p>${section('Last checked', fmt(obj.last_checked) + (obj.last_message ? ' — ' + esc(obj.last_message) : ''))}${section('Last import', fmt(obj.last_import_at))}${section('Config', obj.config ? `<code>${esc(obj.config)}</code>` : '')}`;
     } else if (type === 'handover') {
-      body = `${chip(obj.risk + ' risk', obj.risk === 'high' ? 'red' : obj.risk === 'medium' ? 'amber' : 'gray')} ${chip(obj.status, obj.status === 'open' ? 'amber' : 'ok')}
-        ${section('Basis', esc(obj.basis))}${section('Documented?', esc(obj.documented))}${section('Current?', esc(obj.current))}${section('Who else can do it today', obj.backup ? esc(obj.backup) : '<span class="error">Nobody</span>')}
-        ${section('Capture from Maria before she leaves', esc(obj.capture))}${section('Source', esc(obj.cite))}${section('Note', esc(obj.note))}
+      const taskIds = JSON.parse(obj.task_ids || '[]'), docIds = JSON.parse(obj.doc_ids || '[]');
+      const linkedTasks = taskIds.map(id => S.tasks.find(t => t.id === id)).filter(Boolean);
+      const noBackup = !obj.backup || /^(none|nobody|n\/a|-)?\s*$/i.test(obj.backup) || /unconfirmed|nobody/i.test(obj.backup);
+      body = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px">${chip(obj.risk + ' risk', obj.risk === 'high' ? 'red' : obj.risk === 'medium' ? 'amber' : 'gray')}${chip('documented: ' + obj.documented, /^yes/.test(obj.documented) ? 'ok' : /^no/.test(obj.documented) ? 'red' : 'amber')}${chip('current: ' + obj.current, /^confirmed/.test(obj.current) ? 'ok' : 'gray')}${chip(noBackup ? 'NO BACKUP TODAY' : 'backup: ' + obj.backup, noBackup ? 'red' : 'ok')}${chip(obj.status, obj.status === 'open' ? 'amber' : 'ok')}</div>
+        ${obj.why ? `<h4>Why this is here — what exists and what is missing</h4><p style="margin:4px 0 8px">${esc(obj.why)}</p>` : ''}
+        <div class="next-action"><b>Capture from Maria before she leaves</b><br>${esc(obj.capture)}</div>
+        <h4>Documents (${docIds.length})</h4>${docCards(docIds, { handover_id: obj.id })}
+        <h4>The process${linkedTasks.length > 1 ? 'es' : ''} (${linkedTasks.length})</h4>${linkedTasks.map(processBlock).join('') || '<p class="empty">No procedure linked yet — edit the item to add task ids.</p>'}
+        ${section('Basis', esc(obj.basis))}${section('Source', esc(obj.cite))}${section('Note', esc(obj.note))}
         ${w ? `<h4>Status</h4><div class="milestones">${[['open', 'Open'], ['captured', 'Captured'], ['reassigned', 'Reassigned'], ['dropped', 'Dropped']].map(([k, l]) => `<button class="${obj.status === k ? 'on' : ''}" data-set="status:${k}">${l}</button>`).join('')}</div>` : ''}`;
     } else if (type === 'document') {
       body = obj.restricted ? `<p class="error">Restricted: financial document. Sign in with an accounting or admin passphrase.</p>` : `${chip(obj.kind, obj.kind === 'procedure' ? 'ok' : obj.kind === 'financial' ? 'red' : 'gray')} ${obj.sensitive ? chip('Restricted', 'red') : ''}<p class="src">${esc(obj.kind_reason || '')}</p>

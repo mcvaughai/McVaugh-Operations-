@@ -305,6 +305,17 @@ const UPDATES = [
       'Who approves work orders after Maria leaves; Teresa vs James for Leander ARC; who owns vendor insurance.',
       'Added by the succession pass.', 'system');
   } },
+  { key: 'handover-links-2026-10-20', apply(db) {
+    const S = require('../seed/succession-2026-10-20.js'); const ts = nowIso();
+    for (const t of S.EXTRA_TASKS) { const ex = db.prepare('SELECT id FROM tasks WHERE id = ?').get(t.id); upsert(db, 'tasks', { ...t, ...(ex ? { proposed: undefined, board: undefined } : {}) }); }
+    for (const [taskId, flow] of Object.entries(S.EXTRA_FLOWS)) if (db.prepare('SELECT 1 FROM tasks WHERE id = ?').get(taskId)) upsert(db, 'tasks', { id: taskId, flow: JSON.stringify(flow) });
+    for (const d of S.DOC_PLACEHOLDERS) {
+      if (db.prepare('SELECT file_path FROM documents WHERE id = ?').get(d.id)?.file_path) continue; // already uploaded by Brittany
+      upsert(db, 'documents', { id: d.id, title: d.title, path: null, kind: d.kind, kind_reason: 'referred to in a meeting; not attached yet', sensitive: 0, task_id: d.task_id, summary: d.summary + ' ' + d.cite, source: 'Maria meeting 2026-10-16 ' + d.cite, imported_at: ts, underlying_status: 'not_attached' });
+      const t = db.prepare('SELECT doc_ids FROM tasks WHERE id = ?').get(d.task_id); if (t) { const ids = JSON.parse(t.doc_ids || '[]'); if (!ids.includes(d.id)) upsert(db, 'tasks', { id: d.task_id, doc_ids: [...ids, d.id] }); }
+    }
+    for (const [hid, l] of Object.entries(S.HANDOVER_LINKS)) if (db.prepare('SELECT 1 FROM handover_items WHERE id = ?').get(hid)) upsert(db, 'handover_items', { id: hid, task_ids: l.tasks, doc_ids: l.docs, why: S.HANDOVER_WHY[hid] || null });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

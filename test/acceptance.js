@@ -140,6 +140,18 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const agenda = (await call('GET', '/api/handover/agenda?person=maria')).body; assert.match(agenda, /walk me through how you do this today/); assert.match(agenda, /11603 Royal Parkside Place/); assert.match(agenda, /\[M \d/);
     await call('POST', '/api/handover_items/ho-leander', { status: 'reassigned', note: 'Teresa' }); assert.equal((await call('GET', '/api/state')).body.handover_items.find(i => i.id === 'ho-leander').status, 'reassigned');
   });
+  await check('handover items link processes and documents; upload attaches a file that can be opened', async () => {
+    const ho = (await call('GET', '/api/handover?person=maria')).body; const wo = ho.items.find(i => i.id === 'ho-wo-approval');
+    assert.ok(wo.why && /three approvers/.test(wo.why)); assert.deepEqual(wo.task_ids, ['tr-wo-approval-single-point', 'hub-work_order_ap']);
+    const walk = ho.items.find(i => i.id === 'ho-walkthrough'); assert.deepEqual(walk.doc_ids, ['doc-homeowner-walkthrough-checklist']);
+    let d = (await call('GET', '/api/state')).body.documents.find(x => x.id === 'doc-homeowner-walkthrough-checklist'); assert.equal(d.underlying_status, 'not_attached');
+    const r = (await call('POST', '/api/documents/upload', { name: 'walkthrough.md', data: Buffer.from('# Walkthrough\n- faucet\n').toString('base64'), doc_id: 'doc-homeowner-walkthrough-checklist', handover_id: 'ho-walkthrough' })).body; assert.equal(r.underlying_status, 'extracted');
+    d = (await call('GET', '/api/state')).body.documents.find(x => x.id === 'doc-homeowner-walkthrough-checklist'); assert.match(d.content, /faucet/); assert.equal(d.mime, 'text/markdown');
+    const f = await fetch(B + '/files/doc-homeowner-walkthrough-checklist', { headers: { Cookie: cookie } }); assert.equal(f.status, 200); assert.match(await f.text(), /faucet/);
+    const anon = await fetch(B + '/files/doc-homeowner-walkthrough-checklist'); assert.equal(anon.status, 401);
+    const bad = await call('POST', '/api/documents/upload', { name: 'x.exe', data: 'AAAA' }); assert.equal(bad.status, 400);
+    assert.ok((await call('GET', '/api/state')).body.tasks.find(t => t.id === 'tr-punch-out' && t.flow));
+  });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('export contains everything', async () => { const x = (await call('GET', '/api/export')).body; assert.equal(x.format, 'mcvaugh-operations-world/1'); assert.ok(x.tasks.length > 0 && x.events.length > 0 && x.checkpoints.length > 0); });
   await stop(); await start();

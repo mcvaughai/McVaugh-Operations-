@@ -37,7 +37,8 @@ function loadCredentials() {
   const f = path.join(dbm.DATA_DIR, 'n8n.env'); if (!fs.existsSync(f)) return;
   for (const line of fs.readFileSync(f, 'utf8').split(/\r?\n/)) { const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/); if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2]; }
 })();
-const N8N_SECRET = process.env.MOW_N8N_SECRET || '';
+const N8N_SECRET = (process.env.MOW_N8N_SECRET || '').trim();
+if (process.env.MOW_N8N_SECRET !== undefined && !N8N_SECRET) console.warn('MOW_N8N_SECRET is present but blank (data/n8n.env) — delete the file and rerun scripts/setup-n8n, or type a value after the =');
 const N8N_URL = process.env.MOW_N8N_URL || `http://localhost:${process.env.N8N_PORT || 5678}`;
 
 const can = {
@@ -179,7 +180,7 @@ async function checkIntegrations() {
   let n8nUp = false, n8nMsg = '';
   try { const c = new AbortController(); const t = setTimeout(() => c.abort(), 4000); const r = await fetch(N8N_URL + '/healthz', { signal: c.signal }); clearTimeout(t); n8nUp = r.ok; n8nMsg = `n8n at ${N8N_URL} ${r.ok ? 'is running' : 'answered HTTP ' + r.status}`; }
   catch (e) { n8nMsg = `n8n not reachable at ${N8N_URL} (${e.cause?.code || e.name}) — run scripts/start-all`; }
-  if (!N8N_SECRET) setIntegration('n8n', 'disconnected', `${n8nMsg}. MOW_N8N_SECRET not set (run scripts/setup-n8n); webhook refuses all calls.`);
+  if (!N8N_SECRET) setIntegration('n8n', 'disconnected', `${n8nMsg}. MOW_N8N_SECRET is ${process.env.MOW_N8N_SECRET !== undefined ? 'BLANK in data/n8n.env — type a value after the = and restart' : 'not set (run scripts/setup-n8n, then start with scripts/start-all)'}; webhook refuses all calls.`);
   else if (!n8nSeen) setIntegration('n8n', n8nUp ? 'disconnected' : 'disconnected', `${n8nMsg}. Secret set; no authenticated event received yet — import and activate n8n/mow-heartbeat.json, then open ${N8N_URL}/webhook/mow-heartbeat.`);
   else setIntegration('n8n', !n8nUp ? 'failing' : minutesAgo(n8nSeen) > 24 * 60 ? 'failing' : 'connected', `${n8nMsg}. Last authenticated event ${n8nSeen}${minutesAgo(n8nSeen) > 24 * 60 ? ' (over 24 h ago)' : ''}`);
   setIntegration('pages', 'disconnected', 'No supported API verified for ChatGPT Business Pages; use Export → paste.');

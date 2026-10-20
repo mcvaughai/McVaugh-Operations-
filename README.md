@@ -53,6 +53,12 @@ npm test
 ```
 Runs `test/acceptance.js`: spawns a server on a temp folder and checks persistence across restart, milestone → visual state, ready-but-idle vs running, n8n start/finish/duplicate/failure/stale handling, role restrictions, demo separation, Obsidian import provenance, export.
 
-## Connecting n8n (Stage 3)
+## n8n on the same machine (Stage 3)
 
-Add an HTTP Request node at the start and end of a workflow: `POST http://<host>:8787/api/webhooks/n8n`, header `X-MOW-Secret`, JSON body `{ "agent_id": "...", "execution_id": "{{$execution.id}}", "status": "started" }` then `"finished"` or `"failed"`. Set the agent's *n8n workflow id* in the app to route by `workflow_id` instead.
+1. `scripts\setup-n8n.cmd` once (installs n8n into `n8n-runtime\`, writes `data\n8n.env` with a shared secret, creates `C:\McVaugh\qb-exports`).
+2. `scripts\start-all.cmd` every time (opens two windows: the world on 8787, n8n on 5678).
+3. In http://localhost:5678 create the owner account, then *Workflows → Import from file*: `n8n\mow-heartbeat.json` and `n8n\mow-qb-export-watch.json`; switch both **Active**.
+4. Open http://localhost:5678/webhook/mow-heartbeat — the Executive reporting agent should animate for 8 seconds in the world and the event shows up tagged N8N in History.
+5. Drop a QuickBooks CSV export into `C:\McVaugh\qb-exports` — the Accounting reconciliation agent turns amber (*waiting for approval*) with the file name.
+
+To add your own workflow: add an HTTP Request node at the start and end of a workflow: `POST http://<host>:8787/api/webhooks/n8n`, header `X-MOW-Secret`, JSON body `{ "agent_id": "...", "execution_id": "{{$execution.id}}", "status": "started" }` then `"finished"` or `"failed"`. Set the agent's *n8n workflow id* in the app to route by `workflow_id` instead.

@@ -109,7 +109,16 @@ Roles: `admin`, `accounting`, `construction`, `design_sales`, `viewer`. Passphra
 * **Procedures for the MCH Database (.doc).** LibreOffice could not open the Word 97 file in the build sandbox, so the text (246 words; screenshots omitted) was recovered by scanning the binary and is checked in as `seed/procedures-for-the-mch-database.txt`, seeded as a task owned by Maria (author) with evidence/approval rules drawn from the text.
 * **Keyed data updates.** Facts Brittany supplies in conversation are applied once per database via `seed.js` `UPDATES` (tracked in `meta.applied_updates`), so a fresh database on her machine gets them too. First entry: the 12 active jobs (10 waiting for permits on Royal Oaks Run Dr / Royal Oaks Banner Way, 2 Royal Parkside Place in progress) from her loan-tracking screen on 2026-10-06; loan and bank figures were deliberately not stored.
 
-## 11. Known limits after Stage 2
+## 11. Stage 3 — n8n on the same machine, one real workflow
+
+* **Install.** `scripts\setup-n8n.cmd` (Windows) / `scripts/setup-n8n.sh` installs n8n into `./n8n-runtime` (local, not global), writes `data/n8n.env` with a fresh `MOW_N8N_SECRET`, `MOW_URL`, n8n port and flags, and creates `C:\McVaugh\qb-exports`. n8n 2.x requires Node 24; on Node 22/23 the script installs n8n 1.x (same workflow format). `scripts\start-all.cmd` starts both servers with that env file; the app also reads `data/n8n.env` itself, so the secret is never typed into a browser or committed (`data/` is git-ignored).
+* **Workflows** (`n8n/*.json`, import via n8n → Workflows → Import from file, then switch Active):
+  * `mow-heartbeat.json` — hourly schedule **and** a manual trigger at `GET http://localhost:5678/webhook/mow-heartbeat`. Posts `started` → waits 8 s → posts `finished` for `agent-exec-reporting`, labeled "n8n heartbeat (connection check)". It proves the real path n8n → app → world animation without inventing company activity.
+  * `mow-qb-export-watch.json` — n8n's Local File Trigger on the QB export folder. When a QuickBooks CSV lands there (a real act by Brittany/Kenneth), posts `started` then `waiting_approval` on `agent-reconciliation` with the file name, so the Accounting agent turns amber: "Reconciliation input ready — run mch-ap-reconciliation and record the result". The actual reconciliation still runs through the existing skill; recording the result is a manual *Finish* on the agent card (labeled Manual) until the skill's output is posted back automatically.
+* **Health.** Integrations → *Check connections* probes `MOW_N8N_URL` (`/healthz`), reports whether the secret is set and when the last authenticated event arrived; n8n down with past events = *failing*.
+* **Not assumed:** connectors for QuickBooks Desktop or the McVaugh database inside n8n. Both need credentials that do not exist yet; the folder watcher is deliberately the first step because it needs none.
+
+## 12. Known limits after Stage 3
 
 * No `.xlsx` parsing (CSV only). No live MCH DB data pulls (reachability only). No Pages sync.
 * Duplicate detection is title-based; it will miss procedures described with different words and will suggest false matches on generic titles — it only suggests, never merges on its own.

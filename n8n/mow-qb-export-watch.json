@@ -1,0 +1,14 @@
+{
+  "name": "MOW — QuickBooks export landed → reconciliation ready",
+  "nodes": [
+    { "parameters": { "triggerOn": "folder", "path": "C:\\McVaugh\\qb-exports", "events": [ "add" ], "options": { "awaitWriteFinish": true, "ignoreInitial": true } }, "id": "b1", "name": "QB export folder", "type": "n8n-nodes-base.localFileTrigger", "typeVersion": 1, "position": [0, 0] },
+    { "parameters": { "method": "POST", "url": "={{ $env.MOW_URL }}/api/webhooks/n8n", "sendHeaders": true, "headerParameters": { "parameters": [ { "name": "X-MOW-Secret", "value": "={{ $env.MOW_N8N_SECRET }}" } ] }, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ agent_id: 'agent-reconciliation', execution_id: $execution.id, status: 'started', label: 'New QuickBooks export: ' + $json.path.split(/[\\\\/]/).pop() }) }}", "options": {} }, "id": "b2", "name": "Tell MOW: started", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [260, 0] },
+    { "parameters": { "method": "POST", "url": "={{ $env.MOW_URL }}/api/webhooks/n8n", "sendHeaders": true, "headerParameters": { "parameters": [ { "name": "X-MOW-Secret", "value": "={{ $env.MOW_N8N_SECRET }}" } ] }, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ agent_id: 'agent-reconciliation', execution_id: $execution.id, status: 'waiting_approval', label: 'Reconciliation input ready: ' + $('QB export folder').item.json.path.split(/[\\\\/]/).pop() + ' — run mch-ap-reconciliation and record the result' }) }}", "options": {} }, "id": "b3", "name": "Tell MOW: waiting for Brittany", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [520, 0] }
+  ],
+  "connections": {
+    "QB export folder": { "main": [ [ { "node": "Tell MOW: started", "type": "main", "index": 0 } ] ] },
+    "Tell MOW: started": { "main": [ [ { "node": "Tell MOW: waiting for Brittany", "type": "main", "index": 0 } ] ] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": true
+}

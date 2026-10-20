@@ -32,7 +32,13 @@ function loadCredentials() {
   }
   return JSON.parse(fs.readFileSync(CRED_PATH, 'utf8'));
 }
+// data/n8n.env (written by scripts/setup-n8n) supplies the shared secret and URLs when the env vars are not set.
+(function loadEnvFile() {
+  const f = path.join(dbm.DATA_DIR, 'n8n.env'); if (!fs.existsSync(f)) return;
+  for (const line of fs.readFileSync(f, 'utf8').split(/\r?\n/)) { const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/); if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2]; }
+})();
 const N8N_SECRET = process.env.MOW_N8N_SECRET || '';
+const N8N_URL = process.env.MOW_N8N_URL || `http://localhost:${process.env.N8N_PORT || 5678}`;
 
 const can = {
   write: role => role && role !== 'viewer',
@@ -126,7 +132,7 @@ function stateFor(role) {
   const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db), hubs: imports.hubMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
     departments, people, agents, tasks, archived_count, homes, documents, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
-    server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET } };
+    server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET, n8n_url: N8N_URL } };
 }
 
 // ---------- demo mode (clearly labeled; source = 'demo') ----------
@@ -169,9 +175,12 @@ async function checkIntegrations() {
     setIntegration('mchdb', 'disconnected', `Not reachable from this server: ${e.cause?.code || e.name || e.message}`);
   }
   const n8nSeen = db.prepare("SELECT MAX(ts) AS ts FROM events WHERE source = 'n8n'").get().ts;
-  if (!N8N_SECRET) setIntegration('n8n', 'disconnected', 'MOW_N8N_SECRET not set; webhook refuses all calls.');
-  else if (!n8nSeen) setIntegration('n8n', 'disconnected', 'Secret set; no authenticated event received yet.');
-  else setIntegration('n8n', minutesAgo(n8nSeen) > 24 * 60 ? 'failing' : 'connected', `Last authenticated event ${n8nSeen}`);
+  let n8nUp = false, n8nMsg = '';
+  try { const c = new AbortController(); const t = setTimeout(() => c.abort(), 4000); const r = await fetch(N8N_URL + '/healthz', { signal: c.signal }); clearTimeout(t); n8nUp = r.ok; n8nMsg = `n8n at ${N8N_URL} ${r.ok ? 'is running' : 'answered HTTP ' + r.status}`; }
+  catch (e) { n8nMsg = `n8n not reachable at ${N8N_URL} (${e.cause?.code || e.name}) — run scripts/start-all`; }
+  if (!N8N_SECRET) setIntegration('n8n', 'disconnected', `${n8nMsg}. MOW_N8N_SECRET not set (run scripts/setup-n8n); webhook refuses all calls.`);
+  else if (!n8nSeen) setIntegration('n8n', n8nUp ? 'disconnected' : 'disconnected', `${n8nMsg}. Secret set; no authenticated event received yet — import and activate n8n/mow-heartbeat.json, then open ${N8N_URL}/webhook/mow-heartbeat.`);
+  else setIntegration('n8n', !n8nUp ? 'failing' : minutesAgo(n8nSeen) > 24 * 60 ? 'failing' : 'connected', `${n8nMsg}. Last authenticated event ${n8nSeen}${minutesAgo(n8nSeen) > 24 * 60 ? ' (over 24 h ago)' : ''}`);
   setIntegration('pages', 'disconnected', 'No supported API verified for ChatGPT Business Pages; use Export → paste.');
   return db.prepare('SELECT * FROM integrations').all();
 }

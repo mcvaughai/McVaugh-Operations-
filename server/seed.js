@@ -249,6 +249,15 @@ const UPDATES = [
     upsert(db, 'integrations', { id: 'dashboard', status: 'connected', last_import_at: nowIso(), last_message: 'Snapshot: ops hub re-imported from the 2026-10-20 .html (25 SOPs; Maria\'s [N/A] cross-offs recorded).' });
     addEvent(db, { entity_type: 'integration', entity_id: 'dashboard', kind: 'import', status: 'info', label: 'Hub 2026-10-20: +4 accounting SOPs; Maria +58/−29 responsibilities (19 crossed off); James +13; Ernesto new purchasing-manager job description; Brittany +50; Kenneth +25', source: 'import', actor: 'system', external_id: 'update-ops-hub-2026-10-20' });
   } },
+  { key: 'stage2-checkpoint-2026-10-06', apply(db) {
+    db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`).run(nowIso(), 'gather',
+      'Stage 2: the old ops hub (21 SOPs, responsibilities for all 8 people) and the org chart are imported. Work through the Review tab one item at a time.',
+      'Stage 1 build (visual world, registry, saved state). Stage 2 build (folder import with skip-unchanged, import preview, review queue with merge). 12 active jobs recorded.',
+      'Review tab → Maria first: her card now lists 54 responsibilities absorbed from DOC / Superintendent / PM / CA. Mark what is right, note what is not.',
+      'Brittany (old dashboard export and a few real Obsidian notes, so the mapping can be checked); Brittany (which job is the 13th active home)',
+      'Confirm the SQLite store decision; confirm the reuse decision for the existing skills.',
+      'Added by the Stage 2 build. Save your own checkpoint when you stop.', 'system');
+  } },
   { key: 'succession-2026-10-20', apply(db) {
     const S = require('../seed/succession-2026-10-20.js');
     const ts = nowIso();
@@ -295,15 +304,6 @@ const UPDATES = [
       'Maria (permit document, schedule document, vendor/rate list, 11603 calendar copy, Frank scope doc); Jim (WO approval chain after Maria)',
       'Who approves work orders after Maria leaves; Teresa vs James for Leander ARC; who owns vendor insurance.',
       'Added by the succession pass.', 'system');
-  } },
-  { key: 'stage2-checkpoint-2026-10-06', apply(db) {
-    db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`).run(nowIso(), 'gather',
-      'Stage 2: the old ops hub (21 SOPs, responsibilities for all 8 people) and the org chart are imported. Work through the Review tab one item at a time.',
-      'Stage 1 build (visual world, registry, saved state). Stage 2 build (folder import with skip-unchanged, import preview, review queue with merge). 12 active jobs recorded.',
-      'Review tab → Maria first: her card now lists 54 responsibilities absorbed from DOC / Superintendent / PM / CA. Mark what is right, note what is not.',
-      'Brittany (old dashboard export and a few real Obsidian notes, so the mapping can be checked); Brittany (which job is the 13th active home)',
-      'Confirm the SQLite store decision; confirm the reuse decision for the existing skills.',
-      'Added by the Stage 2 build. Save your own checkpoint when you stop.', 'system');
   } },
 ];
 function applyUpdates(db) {

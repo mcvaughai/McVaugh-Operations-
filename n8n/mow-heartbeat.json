@@ -1,18 +1,163 @@
 {
+  "id": "mowheartbeat00001",
   "name": "MOW — n8n connection heartbeat",
   "nodes": [
-    { "parameters": { "rule": { "interval": [ { "field": "hours", "hoursInterval": 1 } ] } }, "id": "a1", "name": "Every hour", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [0, 0] },
-    { "parameters": { "httpMethod": "GET", "path": "mow-heartbeat", "responseMode": "onReceived", "options": {} }, "id": "a2", "name": "Run now (GET /webhook/mow-heartbeat)", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [0, 200], "webhookId": "mow-heartbeat" },
-    { "parameters": { "method": "POST", "url": "={{ $env.MOW_URL }}/api/webhooks/n8n", "sendHeaders": true, "headerParameters": { "parameters": [ { "name": "X-MOW-Secret", "value": "={{ $env.MOW_N8N_SECRET }}" } ] }, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ agent_id: 'agent-exec-reporting', execution_id: $execution.id, status: 'started', label: 'n8n heartbeat (connection check)' }) }}", "options": {} }, "id": "a3", "name": "Tell MOW: started", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [260, 100] },
-    { "parameters": { "amount": 8, "unit": "seconds" }, "id": "a4", "name": "Work (8 s)", "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [500, 100], "webhookId": "mow-heartbeat-wait" },
-    { "parameters": { "method": "POST", "url": "={{ $env.MOW_URL }}/api/webhooks/n8n", "sendHeaders": true, "headerParameters": { "parameters": [ { "name": "X-MOW-Secret", "value": "={{ $env.MOW_N8N_SECRET }}" } ] }, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ agent_id: 'agent-exec-reporting', execution_id: $execution.id, status: 'finished', label: 'n8n heartbeat (connection check)' }) }}", "options": {} }, "id": "a5", "name": "Tell MOW: finished", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [740, 100] }
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "a1",
+      "name": "Every hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "mow-heartbeat",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a2",
+      "name": "Run now (GET /webhook/mow-heartbeat)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "mow-heartbeat"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MOW_URL }}/api/webhooks/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-MOW-Secret",
+              "value": "={{ $env.MOW_N8N_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'agent-exec-reporting', execution_id: $execution.id, status: 'started', label: 'n8n heartbeat (connection check)' }) }}",
+        "options": {}
+      },
+      "id": "a3",
+      "name": "Tell MOW: started",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 8,
+        "unit": "seconds"
+      },
+      "id": "a4",
+      "name": "Work (8 s)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        500,
+        100
+      ],
+      "webhookId": "mow-heartbeat-wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MOW_URL }}/api/webhooks/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-MOW-Secret",
+              "value": "={{ $env.MOW_N8N_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'agent-exec-reporting', execution_id: $execution.id, status: 'finished', label: 'n8n heartbeat (connection check)' }) }}",
+        "options": {}
+      },
+      "id": "a5",
+      "name": "Tell MOW: finished",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        100
+      ]
+    }
   ],
   "connections": {
-    "Every hour": { "main": [ [ { "node": "Tell MOW: started", "type": "main", "index": 0 } ] ] },
-    "Run now (GET /webhook/mow-heartbeat)": { "main": [ [ { "node": "Tell MOW: started", "type": "main", "index": 0 } ] ] },
-    "Tell MOW: started": { "main": [ [ { "node": "Work (8 s)", "type": "main", "index": 0 } ] ] },
-    "Work (8 s)": { "main": [ [ { "node": "Tell MOW: finished", "type": "main", "index": 0 } ] ] }
+    "Every hour": {
+      "main": [
+        [
+          {
+            "node": "Tell MOW: started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run now (GET /webhook/mow-heartbeat)": {
+      "main": [
+        [
+          {
+            "node": "Tell MOW: started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tell MOW: started": {
+      "main": [
+        [
+          {
+            "node": "Work (8 s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Work (8 s)": {
+      "main": [
+        [
+          {
+            "node": "Tell MOW: finished",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1", "errorWorkflow": "" },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": ""
+  },
   "active": true
 }

@@ -185,6 +185,33 @@ async function checkIntegrations() {
   return db.prepare('SELECT * FROM integrations').all();
 }
 
+
+// ---------- QuickBooks export folder watcher → n8n ----------
+// n8n 2.x dropped the Local File Trigger, so the app (which has filesystem access anyway) watches the folder
+// and hands the event to n8n's webhook. Deterministic: no model involved. Set MOW_QB_EXPORT_DIR to enable.
+const QB_DIR = process.env.MOW_QB_EXPORT_DIR || '';
+const seenFiles = new Map();
+function startFolderWatch() {
+  if (!QB_DIR) return;
+  if (!fs.existsSync(QB_DIR)) { console.warn(`MOW_QB_EXPORT_DIR does not exist: ${QB_DIR}`); return; }
+  const notify = async (name) => {
+    const full = path.join(QB_DIR, name);
+    let st; try { st = fs.statSync(full); } catch { return; }
+    if (!st.isFile() || !/\.(csv|xlsx|xls|txt)$/i.test(name)) return;
+    const key = `${name}:${st.size}:${st.mtimeMs}`; if (seenFiles.get(name) === key) return; seenFiles.set(name, key);
+    dbm.addEvent(db, { entity_type: 'integration', entity_id: 'quickbooks', kind: 'import', status: 'info', label: `Export file detected: ${name} (${st.size} bytes) — handed to n8n`, source: 'system', external_id: 'qbfile-' + key });
+    try {
+      const r = await fetch(N8N_URL + '/webhook/mow-qb-export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: name, path: full, size: st.size, detected_at: dbm.nowIso() }) });
+      if (!r.ok) setIntegration('n8n', 'failing', `n8n webhook /webhook/mow-qb-export answered HTTP ${r.status} for ${name} — is the QB export workflow imported and Active?`);
+    } catch (e) { setIntegration('n8n', 'failing', `Could not reach n8n to report ${name}: ${e.cause?.code || e.message}`); }
+    setIntegration('quickbooks', 'connected', `Export folder watched: ${QB_DIR}. Last file ${name} at ${dbm.nowIso()}`, { last_import_at: dbm.nowIso() });
+  };
+  let timers = {};
+  fs.watch(QB_DIR, (ev, name) => { if (!name) return; clearTimeout(timers[name]); timers[name] = setTimeout(() => notify(name), 2500); }); // debounce until the file is fully written
+  setIntegration('quickbooks', 'connected', `Export folder watched: ${QB_DIR} (snapshot files; no QuickBooks API).`);
+  console.log(`Watching QuickBooks export folder: ${QB_DIR}`);
+}
+
 // ---------- router ----------
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -330,7 +357,7 @@ async function api(req, res, url, p, role) {
 }
 
 server.listen(PORT, () => {
-  loadCredentials();
+  loadCredentials(); startFolderWatch();
   console.log(`McVaugh Operations World → http://localhost:${PORT}  (db: ${dbm.DB_PATH}${seeded ? ', seeded from handoff' : ''})`);
   console.log(`Role passphrases: ${CRED_PATH}`);
 });

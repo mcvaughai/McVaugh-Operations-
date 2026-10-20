@@ -20,6 +20,7 @@ if not exist data\n8n.env (
     echo MOW_N8N_SECRET=%SECRET%
     echo MOW_URL=http://localhost:8787
     echo N8N_PORT=5678
+    echo N8N_LISTEN_ADDRESS=127.0.0.1
     echo N8N_SECURE_COOKIE=false
     echo N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     echo N8N_DIAGNOSTICS_ENABLED=false

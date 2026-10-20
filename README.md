@@ -59,6 +59,8 @@ Runs `test/acceptance.js`: spawns a server on a temp folder and checks persisten
 2. `scripts\start-all.cmd` every time (opens two windows: the world on 8787, n8n on 5678).
 3. In http://localhost:5678 create the owner account, then *Workflows → Import from file*: `n8n\mow-heartbeat.json` and `n8n\mow-qb-export-watch.json`; switch both **Active**.
 4. Open http://localhost:5678/webhook/mow-heartbeat — the Executive reporting agent should animate for 8 seconds in the world and the event shows up tagged N8N in History.
-5. Drop a QuickBooks CSV export into `C:\McVaugh\qb-exports` — the Accounting reconciliation agent turns amber (*waiting for approval*) with the file name.
+5. Drop a QuickBooks CSV export into `C:\McVaugh\qb-exports` (the folder in `MOW_QB_EXPORT_DIR`) — the app notices the file, hands it to n8n, and the Accounting reconciliation agent turns amber (*waiting for approval*) with the file name.
+
+n8n 2.x needs **Node.js 24**; the setup script installs n8n 1.x instead if you have an older Node, but Node 24 is the better choice (the world runs on it too).
 
 To add your own workflow: add an HTTP Request node at the start and end of a workflow: `POST http://<host>:8787/api/webhooks/n8n`, header `X-MOW-Secret`, JSON body `{ "agent_id": "...", "execution_id": "{{$execution.id}}", "status": "started" }` then `"finished"` or `"failed"`. Set the agent's *n8n workflow id* in the app to route by `workflow_id` instead.

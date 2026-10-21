@@ -1,0 +1,3656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCH Operations Hub - McVaugh Custom Homes</title>
+  <style>* { margin: 0; padding: 0; box-sizing: border-box; } body { background: #0F172A; overflow-x: hidden; } ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #1E293B; } ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; } input:focus { outline: none; border-color: #F59E0B !important; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <script type="text/babel" data-type="module">
+    const { useState, useEffect, useRef } = React;
+
+
+const INITIAL_ROLES = [
+  {
+    id: "president",
+    title: "President",
+    name: "Jim McVaugh",
+    department: "Executive",
+    color: "#DC2626",
+    responsibilities: [
+      "Signs purchase contracts (30 days to close)",
+      "Decides on house plans and approves them",
+      "Decides bank for funding, communicates to CFO",
+      "Reviews and approves budgets, establishes sales price",
+      "Enters change order budgets into QuickBooks",
+      "Reviews change order log and forwards to CFO",
+      "Reviews and approves budget revision log at tactical meetings",
+      "Signs off on plans and forwards to designer within 2 days",
+      "Approves over $1,000 budget overages",
+      "Reviews bonus requests and makes necessary changes with DOC",
+      "Approves or denies bonus requests for final processing",
+      "Reviews proposed plans from architect for spec homes",
+      "Meets with architect to discuss plan design for specific lots if plans not approved",
+      "Meets with designers and sales to review preliminary plan if modifications needed",
+      "Returns approved plan to Admin Assistant",
+      "Signs off and initials contract binder"
+    ],
+    processes: ["preconstruction_planning", "budget_spec", "change_order_budget", "budget_revision", "change_order_request", "bonus_request", "president_plan_selection"]
+  },
+  {
+    id: "doc",
+    title: "Director of Construction (DOC)",
+    name: "",
+    department: "Construction",
+    color: "#059669",
+    responsibilities: [
+      "Assigns superintendent and designer per project",
+      "Orders survey and begins start process",
+      "Enters new address in permit/HOA log",
+      "Reviews database inbox daily for approved change orders",
+      "Logs change orders into change order budget log",
+      "Prints log copies weekly for tactical meeting",
+      "Forwards change order log to CFO",
+      "Approves/denies change order requests with delay days noted",
+      "Clicks back charge approval in database",
+      "Reviews invoices weekly and verifies backcharges",
+      "Receives plan, attaches check set tracking form for president approval",
+      "Reviews plan against 2nd redline",
+      "Modifies database budget when bid/quote approved",
+      "Logs overage into budget revision log",
+      "Prints budget revision log each week for tactical meeting",
+      "Forwards budget revision log to CFO",
+      "Prepares budget and specs",
+      "Sends budget to president for approval",
+      "Forwards budget to Dir of Sales",
+      "Prepares proforma and forwards to CFO",
+      "And/or super redlines additional items if necessary",
+      "Marks second check set with redline items for reference within 2 days",
+      "Assigns super and designer",
+      "Approves work orders (with PM)",
+      "Reviews Occ and Sub paperwork for bonus to verify signatures are complete",
+      "Reviews job status for completion time frame and budget for total extras",
+      "Calculates appropriate bonus based on above information",
+      "Fills out Bonus Request Form with necessary info",
+      "Meets with superintendent to review bonus and sign off",
+      "Submits bonus request to President for final approval",
+      "Notifies superintendent of disapproval due to time frame if applicable",
+      "Files Occ and Sub in job file",
+      "Fills out start date and super on start memo",
+      "Makes copy of start memo and distributes with start packet to super and designer",
+      "Places original start memo in job file outbox",
+      "Updates construction status with start date"
+    ],
+    processes: ["preconstruction_planning", "preconstruction_spec", "change_order_budget", "change_order_request", "back_charge", "budget_revision", "budget_spec", "preconstruction_redline", "work_order_ap", "bonus_request", "permitting"]
+  },
+  {
+    id: "dop",
+    title: "Director of Purchasing / Operations (DOP)",
+    name: "",
+    department: "Operations",
+    color: "#DB2777",
+    responsibilities: [
+      "Enters house info into database upon start request",
+      "Orders plan from architect",
+      "Makes job folder after database entry",
+      "Orders soils report (4-week process for custom)",
+      "Sends soils report and plan to engineer (3-4 week process)",
+      "Gives complete plan to DOC to redline",
+      "Sends plan to designer",
+      "Requests CAD file from architect and engineer",
+      "Informs sales/marketing that CAD file is available",
+      "Sends plan to truss companies for bidding",
+      "Calls permit company to pick up plan and truss plan, sends to city",
+      "Enters change order budgets into database",
+      "Receives notification from FINA, checks march of completion",
+      "Requests final checklist plan",
+      "Logs in plan and pre-con start log dates",
+      "Updates preconstruction start log",
+      "Follows up with architect/engineer on status of plans",
+      "Delivers checklist plans to DOC",
+      "Receives initial checklist plans from architect (3-8 weeks)",
+      "Verifies budget in database",
+      "Receives SPEC Writer (including interior selections) from purchasing",
+      "Orders ESI IDs from Reliant Energy",
+      "Receives memo from accounting that financing is approved",
+      "[ROCC] Sends exterior selections to HOA for approval",
+      "[ROCC] Resends plan changes to HOA for architectural approval",
+      "Sends landscape drawing to DOS before resubmitting to HOA",
+      "[ROCC] Receives approval/disapproval from HOA"
+    ],
+    processes: ["start_packet", "preconstruction_spec", "change_order_budget", "preconstruction_planning"]
+  },
+  {
+    id: "cfo",
+    title: "CFO",
+    name: "",
+    department: "Finance",
+    color: "#2563EB",
+    responsibilities: [
+      "Prepares financing and database setup",
+      "Updates QuickBooks with revised budget numbers",
+      "Receives change order log from DOC",
+      "Receives budget revision log from DOC",
+      "Receives proforma from DOC"
+    ],
+    processes: ["preconstruction_planning", "budget_revision", "change_order_budget", "accounting_weekly", "accounting_monthly", "accounting_quarterly_yearly"]
+  },
+  {
+    id: "superintendent",
+    title: "Superintendent",
+    name: "",
+    department: "Construction",
+    color: "#92400E",
+    responsibilities: [
+      "Reviews blueprints, specs, upgrade sheet, scheduling",
+      "Conducts pre-construction check list and Q&A session with client",
+      "Confirms meeting with client, sales, and designer if applicable",
+      "Contacts client to set up pre-construction meeting within 1 week of receipt",
+      "Confirms with CA that HOA approval is received",
+      "Holds until start memo and permit are issued",
+      "Notifies designer and sales of applicable meeting date/time/location",
+      "Returns sales redlined plans to construction asst",
+      "Contacts client and responds in writing or email for issue resolution",
+      "Copies items onto master redline set for use",
+      "Signs off on redlined plans with client",
+      "Notifies Sales/DOC when change order is 100% complete",
+      "Notes rework items requiring back charge",
+      "Contacts trade that caused repair, gives opportunity to repair",
+      "Negotiates price with trade performing repair",
+      "Schedules repair/rework",
+      "Reviews invoice on Friday morning",
+      "Initials invoice and notes 'backcharge' on database",
+      "Must notify subcontractor of backcharge",
+      "Fills out database backcharge completely",
+      "Clicks complete on backcharge once all requirements met",
+      "Reviews bid/quote against budget",
+      "Forwards bid/quote to DOC for review if over budget",
+      "Enters work order in database if amount is within budget",
+      "Enters work order once DOC modifies budget",
+      "Clicks 'pay' if job is 100% complete",
+      "Verifies completion and approves work orders",
+      "Reviews budget weekly as they process accounts payable",
+      "Completes final walk through with homebuyer",
+      "Makes copy of Occ and Sub paperwork, gives original to DOC",
+      "Works on completing items on list until 100% signed off",
+      "Submits completed Occ and Sub paperwork to DOC",
+      "Receives bonus on pay check after approval",
+      "Verifies HOA/ROCC approval with CA prior to start of home",
+      "Retrieves plan #5 to be used as master set",
+      "Reviews HOA/ROCC approval and makes necessary changes to plan",
+      "Waits for all selections prior to starting home if selections incomplete",
+      "Contacts designer and buyer to schedule redline meeting",
+      "Retrieves master #3 plan from redline rack for meeting",
+      "Conducts redline meeting and reviews specifics with buyer, has plans signed",
+      "Transfers redlined items to plan #5",
+      "Returns #3 plan to CA for redline plan rack",
+      "Notifies PM or DOC of delay due to non-approval from HOA/ROCC",
+      "Proceeds with T-pole, lot stake, and lot prep only if HOA not approved",
+      "Notifies PM or DOC of delay due to lack of selections",
+      "Gives measurements for framed mirrors to interior designer when house starts",
+      "Schedules trim carpenter to install mirrors when ready"
+    ],
+    processes: ["preconstruction_redline", "change_order_request", "back_charge", "budget_revision", "work_order_ap", "budget_review", "bonus_request", "permitting", "framed_mirror_purchase"]
+  },
+  {
+    id: "dir_sales",
+    title: "Director of Sales (DOS)",
+    name: "",
+    department: "Sales",
+    color: "#7C3AED",
+    responsibilities: [
+      "Reviews change order requests",
+      "Communicates upcoming projects to sales to update database",
+      "Reviews specs from Dir of Purchasing",
+      "Enters sales price into database",
+      "Prepares marketing specifications",
+      "Routes budget to accounting assistant",
+      "Reviews landscape drawings before HOA submission"
+    ],
+    processes: ["change_order_request", "preconstruction_planning", "budget_spec"]
+  },
+  {
+    id: "sales_exec",
+    title: "Sales Executive",
+    name: "",
+    department: "Sales",
+    color: "#16A34A",
+    responsibilities: [
+      "Distributes copies of contract, specs, and upgrades to DOC, DOP, Controller, and DFO",
+      "Submits change order requests (customer or internal)",
+      "Follows up on customer approval of change orders",
+      "Reviews floorplan choices, design options, and upgrade possibilities with buyer",
+      "Schedules series of walk-throughs during construction (mechanical rough-in, cabinets/trim, closing walk-through)",
+      "Confirms closing date with buyer",
+      "Schedules New Home Orientation",
+      "Schedules Homeowner Acceptance meeting"
+    ],
+    processes: ["change_order_request", "preconstruction_redline", "homebuyer_expectations"]
+  },
+  {
+    id: "purchasing_mgr",
+    title: "Purchasing Manager",
+    name: "",
+    department: "Operations",
+    color: "#0891B2",
+    responsibilities: [
+      "Determines price/value to customer for change orders",
+      "Receives bid from truss companies, selects one, signs contract, sends PO",
+      "Determines most competitive bid and creates work order",
+      "Returns work order to CA for start package",
+      "Collects bids",
+      "Enters work orders in database",
+      "Calls subcontractors for bids if not received within 1 week"
+    ],
+    processes: ["change_order_request", "start_packet", "new_work_order", "work_order_ap", "lowes_bill_process"]
+  },
+  {
+    id: "project_mgr",
+    title: "Project Manager (PM)",
+    name: "",
+    department: "Construction",
+    color: "#4338CA",
+    responsibilities: [
+      "Approves or disapproves work orders (with DOC)",
+      "Types note and disapproves if work order has issues",
+      "Responds same day to superintendent direction/answer requests"
+    ],
+    processes: ["work_order_ap", "back_charge", "preconstruction_redline"]
+  },
+  {
+    id: "acct_asst",
+    title: "Accounting Assistant",
+    name: "",
+    department: "Finance",
+    color: "#0D9488",
+    responsibilities: [
+      "Receives back charge electronically for processing",
+      "Prints back charge from inbox",
+      "Enters back charge in QuickBooks for future credit",
+      "Staples back charge to back of check to be distributed",
+      "Files back charge in appropriate file per company",
+      "Keeps back charge in folder for review if credit not applied",
+      "Makes copy of back charge if credit not yet applied",
+      "Initials off on budget tracking form and forwards budget to CA",
+      "Logs budget into QuickBooks",
+      "Processes Actual to Budget reports weekly into Excel"
+    ],
+    processes: ["back_charge", "budget_spec", "budget_review", "lowes_bill_process", "accounting_weekly", "accounting_monthly", "accounting_quarterly_yearly"]
+  },
+  {
+    id: "construction_asst",
+    title: "Construction Assistant (CA)",
+    name: "",
+    department: "Construction",
+    color: "#E11D48",
+    responsibilities: [
+      "Makes copies of contract package (listed items)",
+      "Reviews status report and distributes contract package to super and designer within 24 hours",
+      "Files redline plan rack with labeled tab",
+      "Requests current bid list from PM",
+      "Receives bid list and sends plans to subcontractors for bidding",
+      "Advises purchasing manager of address, date, and subcontractor details",
+      "Returns redlined plans to architect for changes",
+      "Logs return date into permit/HOA log",
+      "Files redline in redline plan rack",
+      "Coordinates plan pick up",
+      "Removes plans 1 and 2 and sets aside for permitting",
+      "Fills out check request for impact fee (if any) and water/meter fee",
+      "Retrieves DOC signature for check request and delivers to accounting assistant",
+      "Contacts permitting company and requests pick up of plans",
+      "Fills out rescheck paperwork and faxes to company",
+      "Forwards CAD file to rescheck company for analysis",
+      "Receives rescheck analysis within 48 hours and returns to CA",
+      "Verifies with permit company those permits due within 1 week",
+      "Reviews precon start log daily",
+      "Logs comments into precon start log",
+      "Logs delivery date into precon start log",
+      "Logs project number into database",
+      "Makes a copy of permit card and places in job file",
+      "Attaches plan binder to permit set and places in permit rack",
+      "Delivers original permit card to DOP",
+      "Logs in estimated return date into precon start log",
+      "Requests estimated return date from permitting company",
+      "Logs notification date in precon start log",
+      "Retrieves plan #4 for interior designer",
+      "Notifies DOP for designer start packet",
+      "Puts together designer packet (design notification form, plan, budget, specs) and delivers to designer",
+      "Makes note of notification date on designer tracking form",
+      "Files notification form in job file",
+      "Logs in submit date into HOA/ROCC log",
+      "Makes copy and puts original in HOA binder",
+      "Submits application and selections to Debby Duffy with ROCC",
+      "Fills out ROCC application",
+      "Follows up on submittal with ROCC after one week",
+      "Receives ROCC letter",
+      "Delivers approval copy to designer and superintendent immediately upon receipt",
+      "Delivers disapproval letter copy to designer if selections not approved",
+      "Resubmits revised selections to HOA/ROCC",
+      "Places redlined #3 plan in redline plan rack",
+      "Has check cut and signed within 24 hours, returns to CA"
+    ],
+    processes: ["preconstruction_redline", "new_work_order", "preconstruction_planning", "permitting", "interior_designer_selection", "interior_designer_hoa_rocc"]
+  },
+  {
+    id: "admin_asst",
+    title: "Admin Assistant",
+    name: "",
+    department: "Administration",
+    color: "#EA580C",
+    responsibilities: [
+      "Hands signed contract to admin assistant (Day 1)",
+      "Sends signed contract to Title Co. (Day 1)",
+      "Distributes copies of contract to CFO, DOC, DOS (Day 1)",
+      "Coordinates pickup of preliminary plans from architect",
+      "Orders 3 sets of checkset plans",
+      "Returns prelim plan to architect and orders 3 sets of checkset plans if approved with no changes",
+      "Returns prelim plan to architect for modifications if changes needed",
+      "Receives contract binder and monies from sales executive",
+      "Updates check log (Public/Company Information/MCH/Properties/Check Log)",
+      "Makes copies of checks for Michael, Pat, Sales packet, and Job Folder",
+      "Deposits check plus copy of check and broker agreement to Controller",
+      "Emails Home Sale Memo to all employees",
+      "Contacts Title Company (Dawn Phillips Texas American Title, 713-667-9191)",
+      "Enters client information into McVaugh database (New Client, Green House Icon, Jobs)",
+      "Updates MLS with Pending/Continue to Show (90 days from date entering)",
+      "Updates database with Pending Sale",
+      "Updates Sales & Closing Report and Closing List",
+      "Updates Property Map as Reserved",
+      "Updates Available Home Listings",
+      "Reviews Completion Date Report with Marc",
+      "Contacts client for lender information",
+      "Relays lender information to Title Company",
+      "Obtains closing date from PM/DOC",
+      "Orders Account Reconciliation from Controller",
+      "Orders Final Survey from Title Company",
+      "Ensures Controller faxes signed Account Reconciliation to Title Company",
+      "Contacts Title Company to verify closing date",
+      "Requests Keys, Openers, and Manuals from Construction for Welcome Packet",
+      "Schedules Jim to sign HUD",
+      "Copies signed HUD and distributes to CFO & Controller",
+      "Receives final HUD from Title Company and copies to Controller",
+      "Updates MLS as Sold, updates database as Sold",
+      "Updates Sales & Closing Report, Property Map as Sold",
+      "Removes from Availability Listings",
+      "Delivers Welcome Packet and Welcome Gift to homeowners"
+    ],
+    processes: ["preconstruction_planning", "president_plan_selection", "in_house_contract"]
+  },
+  {
+    id: "controller",
+    title: "Controller",
+    name: "",
+    department: "Finance",
+    color: "#6D28D9",
+    responsibilities: [
+      "Issues start memo",
+      "Provides Account Reconciliation for closing process",
+      "Faxes signed Account Reconciliation to Title Company"
+    ],
+    processes: ["preconstruction_redline", "in_house_contract"]
+  },
+  {
+    id: "interior_designer",
+    title: "Interior Designer",
+    name: "",
+    department: "Design",
+    color: "#C026D3",
+    responsibilities: [
+      "Calls client to set up design selection orientation within 1 week",
+      "Interior HOA/ROCC selection process",
+      "Redlines plan and returns to DOC within 2 days",
+      "Selects Phase 1 selections for HOA/ROCC submittal",
+      "Continues to do all other selections while Phase 1 is submitted",
+      "Puts together packet of required selections for HOA/ROCC approval",
+      "Delivers packet to CA for submittal",
+      "Receives approved architectural review letter from CA",
+      "Makes modifications and returns selections to CA if disapproved",
+      "Receives notification packet from CA with design notification form, plan, budget, and specs",
+      "Initials off notification form upon receipt and returns to CA",
+      "Marks address on cardboard edges of mirrors in casita",
+      "Gives superintendent list of sizes and frame names per home",
+      "Picks out several different sizes and styles of framed mirrors at Verno",
+      "Responsible for keeping inventory of mirrors",
+      "When mirror inventory is low, goes to Verno to pick out more or orders same types (faxed to Brandon's)",
+      "Files notification form in job file"
+    ],
+    processes: ["preconstruction_redline", "preconstruction_planning", "interior_designer_selection", "interior_designer_hoa_rocc", "framed_mirror_purchase"]
+  },
+  {
+    id: "selection_coordinator",
+    title: "Selection Coordinator",
+    name: "",
+    department: "Sales",
+    color: "#F472B6",
+    responsibilities: [
+      "Calls buyer within 24-48 hours to set up consultation",
+      "Guides buyer through interior and exterior scheme selections",
+      "Helps buyer bring pictures, samples, or anything applicable to design consultation"
+    ],
+    processes: ["homebuyer_expectations"]
+  },
+  {
+    id: "customer_care",
+    title: "Customer Care Department",
+    name: "",
+    department: "Administration",
+    color: "#14B8A6",
+    responsibilities: [
+      "Contacts homeowner within 24 hours when warranty request is submitted",
+      "Handles post-closing warranty items"
+    ],
+    processes: ["homebuyer_expectations"]
+  }
+];
+
+const INITIAL_PROCESSES = [
+  {
+    id: "preconstruction_planning",
+    name: "Preconstruction Planning Process",
+    owner: "doc",
+    date: "October 1, 2004 (Revised 11/05/04)",
+    category: "Preconstruction",
+    description: "End-to-end preconstruction planning from contract signing through plan approval, budget preparation, financing setup, and sales price establishment. Covers new and existing plans, architect coordination, HOA review, interior design, and permitting.",
+    steps: [
+      "President signs purchase contract (30 days to close)",
+      "President decides on plan (Day 1)",
+      "If new plan: Dir of Sales communicates upcoming project to sales for database update",
+      "If old plan: Dir of Sales communicates upcoming project to sales for database update",
+      "CFO prepares financing and database setup",
+      "President decides on bank for funding, communicates to CFO",
+      "DOC assigns super and designer",
+      "DOC orders survey and begins start process (Day 2, takes 2 days)",
+      "DOC enters new address in permit/HOA log (Day 2)",
+      "DOC orders soil report (Day 2)",
+      "DOC receives survey and sends to architect to design plan (takes 2 weeks preliminary)",
+      "Architect works new plan/pulls stock plan for lot",
+      "Architect sends back 3 preliminary sets for approval to DOC",
+      "DOC receives plan, attaches check set tracking form, sends to president for approval",
+      "If plan approved: President signs off on plans and forwards to designer within 2 days",
+      "If plan not approved: President returns plan to DOC to request another option from architect",
+      "Interior designer redlines plan and returns to DOC within 2 days",
+      "DOC and/or super redline additional items if necessary",
+      "DOC marks second check set with redline items and retains for reference within 2 days",
+      "CA returns redlined plans to architect for changes",
+      "Architect makes revisions, sends back revised check set to DOC",
+      "DOC reviews plan against 2nd redline",
+      "If all redlined changes made: DOC returns plan to CA for ordering",
+      "If not: DOC contacts architect and requests revisions",
+      "CA contacts architect, orders 15 sets of plans and AutoCAD file",
+      "CA logs plan order date into permit and HOA log",
+      "Architect sends CAD file via email to Dir of Sales",
+      "Dir of Sales files CAD file in property folder",
+      "Construction Asst coordinates plan pick up",
+      "DOC prepares budget and specs",
+      "DOC sends budget to president for approval",
+      "If budget not approved: President returns budget marked up to Dir of Purchasing for revision",
+      "If budget approved: President signs off on budget and establishes sales price",
+      "DOC forwards budget to Dir of Sales",
+      "Dir of Sales enters sales price into database",
+      "Dir of Sales routes budget to accounting assistant",
+      "Accounting assistant logs budget into QuickBooks",
+      "DOC prepares proforma and forwards to CFO"
+    ],
+    participants: ["president", "doc", "cfo", "dir_sales", "dop", "admin_asst", "construction_asst", "interior_designer"]
+  },
+  {
+    id: "preconstruction_spec",
+    name: "Preconstruction Start Process - Spec Home",
+    owner: "doc",
+    date: "May 18, 2022",
+    category: "Preconstruction",
+    description: "Detailed preconstruction start process specific to spec homes, including soil testing, plan review cycles with president approval, redline coordination, engineer involvement, permitting, and final plan delivery for purchasing.",
+    steps: [
+      "DOP files redline in redline plan rack",
+      "DOC returns redline to DOP for filing",
+      "DOC distributes 3rd plan to DOP for filing",
+      "Bank performs spec home financing process",
+      "Sales process begins",
+      "DOC assigns super and designer",
+      "DOC notifies DOP to order survey",
+      "DOP logs in preconstruction start log",
+      "DOP orders soil testing",
+      "DOC logs soil test order date in precon start log",
+      "DOP updates preconstruction start log",
+      "DOP receives survey cert and notifies architect",
+      "DOP receives initial checklist plans from architect (3-8 weeks)",
+      "DOP logs in checklist plans",
+      "DOP delivers checklist plans to DOC",
+      "DOC receives plan, attaches check set tracking form for president approval",
+      "Is plan approved by president?",
+      "If yes: President signs off on plans and forwards to designer within 2 days",
+      "If no: President returns plan to DOC to request another option",
+      "DOC and/or super redline additional items if necessary",
+      "DOC marks second check set with redline items for reference within 2 days",
+      "Do redlines reflect changes preventing plan from going to engineer?",
+      "If yes: DOC returns redlined plan to architect",
+      "If no: DOC notifies architect to send plans to engineer",
+      "DOP receives returned plans from architect for changes",
+      "DOP logs returned date and performs start log updates",
+      "DOP receives notification from FINA, checks march of completion",
+      "DOP requests final checklist plan",
+      "DOP updates into preconstruction start log",
+      "DOP reviews plan against DOC redline",
+      "DOC delivers final check set to DOC",
+      "DOP saves copy of CAD file in job file on public drive",
+      "DOP requests CAD file from architect",
+      "If yes: DOC returns plan to CA for ordering",
+      "DOP contacts architect, orders 15 sets of plans and AutoCAD file",
+      "DOP receives 15 sets of plans from architect",
+      "DOP logs in delivery date into precon start log",
+      "DOP numbers plans 1-5, labels plan storage shelf and places plans on shelf",
+      "DOP keeps plan #8",
+      "Director of Purchasing notifies DOP 15 sets ready for pick up",
+      "DOP coordinates purchasing plan pick up",
+      "Budget and home specification process begins",
+      "HOA/ROCC review process",
+      "Interior design HOA/ROCC selection process",
+      "Permitting process",
+      "Truss plan approval process",
+      "DOP follows up with architect/engineer on status of plans"
+    ],
+    participants: ["doc", "dop", "president", "superintendent", "construction_asst"]
+  },
+  {
+    id: "preconstruction_redline",
+    name: "Preconstruction & Redline with Buyer - Custom Home",
+    owner: "doc",
+    date: "March 30, 2004 (Updated 11/1/04)",
+    category: "Preconstruction",
+    description: "The preconstruction and redline process specifically for custom homes involving buyer participation. Covers contract distribution, start memo issuance, blueprint review, pre-construction meetings, design selection, redline sign-off, and issue resolution.",
+    steps: [
+      "Sales Exec distributes copies of contract, specs, upgrades to DOC, DOP, Controller, DFO",
+      "Controller issues start memo",
+      "DOC and Area/Project Manager select superintendent and designer per project within 24 hours",
+      "DOC updates status report",
+      "Dir of Construction gives contract to Construction Asst",
+      "Construction Asst makes copies of contract package",
+      "Construction Asst reviews status report and distributes package to super and designer within 24 hours",
+      "Designer calls client to set up design selection orientation within 1 week",
+      "Interior designer HOA/ROCC selection process",
+      "Superintendent reviews blueprints, specs, upgrade sheet, scheduling if necessary",
+      "Pre-construction check list and Q&A session",
+      "Was an issue discussed and not resolved?",
+      "If no: Superintendent and client sign off on redlined plans",
+      "If yes: Superintendent tells client they will discuss with PM or DOC - respond within 24 hours",
+      "Superintendent contacts PM or DOC for direction/answer",
+      "PM or DOC responds same day",
+      "Superintendent contacts client and responds in writing or email",
+      "Super copies items onto master redline set for use",
+      "Superintendent returns sales redlined plans to construction asst",
+      "Construction Asst files redline plan rack with labeled tab",
+      "Superintendent confirms meeting with client, sales, designer if applicable",
+      "Superintendent retrieves plan #3 from CA and redlines/prints as necessary",
+      "Does superintendent have start memo and permit?",
+      "If no: Superintendent holds until start memo and permit are issued",
+      "If yes: Custom Home Start Process begins",
+      "Superintendent contacts client to set up pre-construction meeting within 1 week of receipt",
+      "Superintendent notifies designer and sales of applicable meeting date, time, and location - project manager attendance optional",
+      "Superintendent confirms with Construction Asst that HOA approval is received"
+    ],
+    participants: ["doc", "sales_exec", "controller", "construction_asst", "superintendent", "interior_designer", "project_mgr"]
+  },
+  {
+    id: "homebuilding",
+    name: "Homebuilding Process - Estate, Villas & Custom",
+    owner: "doc",
+    date: "",
+    category: "Construction",
+    description: "The 10-phase construction timeline from permitting through closing for three product types: Estate Series, Villas, and Custom homes. Each series has different durations per phase.",
+    steps: [
+      "Phase 1: Permitting and Financing Finalized (Estate: 34 days, Villas: 14 days, Custom: 24 days)",
+      "Phase 2: Foundation (Estate: 40 days, Villas: 21 days, Custom: 29 days)",
+      "Phase 3: Framing (Estate: 28 days, Villas: 11 days, Custom: 15 days)",
+      "Phase 4: Dry-In - Roof Deck, Cornice, Windows, Tile or Shingles (Estate: 45 days, Villas: 22 days, Custom: 32 days)",
+      "Phase 5: Rough-In - Plumbing, Electrical, HVAC (Estate: 28 days, Villas: 11 days, Custom: 15 days)",
+      "Phase 6: Sheetrock (Estate: 21 days, Villas: 11 days, Custom: 15 days)",
+      "Phase 7: Trim and Cabinets (Estate: 28 days, Villas: 13 days, Custom: 17 days)",
+      "Phase 8: Paint (Estate: 28 days, Villas: 13 days, Custom: 20 days)",
+      "Phase 9: Tile and Counter Tops (Estate: 28 days, Villas: 17 days, Custom: 22 days)",
+      "Phase 10: Mechanicals (Estate: 21 days, Villas: 12 days, Custom: 17 days)",
+      "Phase 11: Final (Estate: 45 days, Villas: 20 days, Custom: 25 days)",
+      "Homeowner Walk Through (Estate: 1-7 days, Villas: 1-7 days, Custom: 1-7 days)",
+      "Homeowner Closing (Estate: 7 days, Villas: 7 days, Custom: 7 days)"
+    ],
+    participants: ["superintendent", "doc"]
+  },
+  {
+    id: "change_order_request",
+    name: "Change Order Request Process",
+    owner: "dir_sales",
+    date: "May 2022",
+    category: "Change Management",
+    description: "Process for handling customer or sales executive-initiated change order requests, including review chain through Dir of Sales, DOC approval, purchasing pricing, customer approval (for non-spec), and final execution steps.",
+    steps: [
+      "Change order request initiated by customer/sales executive",
+      "Request clarity check (Is your request clear?)",
+      "Dir of Sales reviews request",
+      "DOC approves or denies, notes number of delay days",
+      "Purchasing determines price/value to customer",
+      "Is it a spec home?",
+      "If yes: Superintendent notifies Sales/DOC when 100% complete",
+      "If no: Electronically sent to customer's Box for approval (Sales follows up)",
+      "Customer approves?",
+      "If no: Process ends",
+      "If yes: Collect funds, Increase budget (database & QuickBooks), Create WO, Create PO, Adjust cost/sales price",
+      "Notified parties: Accounting, Superintendent, Project Mgr, DOC, Sales Mgr, Sales"
+    ],
+    participants: ["sales_exec", "dir_sales", "doc", "purchasing_mgr", "superintendent"]
+  },
+  {
+    id: "change_order_budget",
+    name: "Change Order Budget Entry",
+    owner: "doc",
+    date: "May 18, 2022",
+    category: "Change Management",
+    description: "Process for entering approved change orders into the budget system, from buyer approval through DOC logging, president review, QuickBooks entry, and database updates.",
+    steps: [
+      "Change order is approved by buyer",
+      "DOC reviews database inbox daily for approved change orders",
+      "DOC logs change order into change order budget log",
+      "DOC prints out copy of log each week for tactical meeting",
+      "President reviews change order log",
+      "DOC forwards change order log to CFO",
+      "President enters change order budgets into QuickBooks",
+      "DOC prints out copy of reviewed log and forwards to CA",
+      "DOP enters change order budgets into database"
+    ],
+    participants: ["doc", "president", "cfo", "dop", "construction_asst"]
+  },
+  {
+    id: "back_charge",
+    name: "Back Charge Process",
+    owner: "doc",
+    date: "December 9, 2004",
+    category: "Financial",
+    description: "Process for handling back charges against subcontractors when rework is needed. Covers superintendent initiation, trade notification, DOC approval, accounting entry, and credit tracking.",
+    steps: [
+      "Superintendent notes rework item or situation requiring back charge",
+      "Super contacts trade that caused repair and gives opportunity to repair if feasible",
+      "Super negotiates price with trade performing repair",
+      "Super schedules repair/rework",
+      "Work is completed by subcontractor and submitted for payment",
+      "Superintendent reviews invoice on Friday morning",
+      "Super initials invoice and notes 'backcharge on database'",
+      "Superintendent must notify subcontractor of backcharge",
+      "Once notified, name/contact/date must be entered into general description box on backcharge form",
+      "Super fills out database backcharge completely (used as both backcharge and payment)",
+      "Superintendent clicks complete on backcharge once all requirements are met",
+      "Database back charges are sent electronically to DOC online box for approval",
+      "DOC clicks back charge in database",
+      "Back charge is sent electronically to Acct Asst for processing",
+      "Acct Asst prints back charge from inbox",
+      "Acct Asst enters back charge in QuickBooks for future credit",
+      "Acct Asst files back charge in appropriate file per company",
+      "DOC reviews invoices weekly and verifies backcharges were entered and approved",
+      "Acct Asst staples back charge copy to check to be distributed",
+      "Is back charge credit applied?",
+      "If yes: Acct Asst staples back charge to back of check",
+      "If no: Acct Asst keeps back charge in folder for review the following week"
+    ],
+    participants: ["superintendent", "doc", "acct_asst", "project_mgr"]
+  },
+  {
+    id: "budget_review",
+    name: "Weekly Budget Review",
+    owner: "doc",
+    date: "June 13, 2005",
+    category: "Financial",
+    description: "Weekly process for budget monitoring. Accounting updates budgets weekly, downloads reports to Excel on the public drive for superintendent review during AP processing.",
+    steps: [
+      "Accounting updates budgets weekly",
+      "Reports saved to Public Drive > Company Information > MCH > Weekly Download - Actual to Budget Excel File",
+      "Superintendent reviews budget as they process their accounts payable",
+      "Budget used to define cost of home and determine sales price",
+      "Each line item/account defines dollars to be spent and sets limit on WOs, invoices, and POs",
+      "Overages to $1,000 approved by Mark; over $1,000 approved by Jim",
+      "Budget also used to check account number for coding expenses properly"
+    ],
+    participants: ["superintendent", "acct_asst"]
+  },
+  {
+    id: "budget_revision",
+    name: "Budget Revision Update Process",
+    owner: "doc",
+    date: "August 23, 2005",
+    category: "Financial",
+    description: "Process for handling budget revisions when bids/quotes differ from budgeted amounts. Includes superintendent review, DOC approval chain, overage logging, and president sign-off at tactical meetings.",
+    steps: [
+      "Superintendent reviews bid/quote against budget",
+      "Is amount greater than budget?",
+      "If no: Superintendent enters amount as work order in database",
+      "If yes: Superintendent forwards bid/quote to DOC for review with explanation",
+      "Is bid/quote approved for entry to work order?",
+      "If no: Superintendent requests better pricing and receives additional bids",
+      "If yes: DOC modifies database budget",
+      "DOC logs overage into budget revision log",
+      "DOC prints out budget revision log each week for tactical meeting",
+      "President reviews and approves budget revision log",
+      "DOC forwards budget revision log to CFO",
+      "CFO updates QuickBooks with revised numbers",
+      "Superintendent enters work order once DOC modifies budget",
+      "DOC/Super cannot enter work order without approval",
+      "If budget change not approved: Request goes to President for approval"
+    ],
+    participants: ["superintendent", "doc", "cfo", "president"]
+  },
+  {
+    id: "budget_spec",
+    name: "Budget & Home Specification Process",
+    owner: "doc",
+    date: "January 4, 2005",
+    category: "Financial",
+    description: "Process for budget creation and home specification preparation after preconstruction start, including Dir of Purchasing budget preparation, president approval cycle, specification routing, and sales price establishment.",
+    steps: [
+      "Follows Precon Start Process",
+      "Director of Purchasing prepares budget",
+      "Dir of Purchasing delivers budget to president for approval",
+      "President reviews budget",
+      "Is budget approved by president?",
+      "If no: President returns budget marked up with changes to Dir of Purchasing",
+      "Dir of Purchasing revises budget according to president's changes",
+      "If yes: President signs off on budget and establishes sales price",
+      "Dir of Sales notifies DOP that budget is approved via email",
+      "Dir of Sales enters sales price into database",
+      "Dir of Sales routes budget to Acct Asst",
+      "Acct Asst initials off on budget tracking form and forwards budget to CA",
+      "Acct Asst logs budget into QuickBooks",
+      "CA files budget into job file",
+      "President routes approved budget to Dir of Sales",
+      "Dir of Purchasing prepares specifications for the home based on approved budget",
+      "Dir of Purchasing saves specifications to public drive under job address",
+      "Dir of Purchasing routes specifications to Dir of Sales",
+      "Dir of Sales reviews specs",
+      "Dir of Sales prepares marketing specifications",
+      "Permitting process begins simultaneously"
+    ],
+    participants: ["president", "dop", "dir_sales", "acct_asst", "construction_asst"]
+  },
+  {
+    id: "start_packet",
+    name: "Start Packet Process",
+    owner: "dop",
+    date: "May 18, 2022 (Updated April 17, 2007)",
+    category: "Preconstruction",
+    description: "Comprehensive process for assembling the start packet including plan ordering, copying, numbering, soils reports, structural engineering, truss bidding, financing initiation, HOA approvals, permitting, landscape drawings, and utility setup.",
+    steps: [
+      "DOP enters house information into database when receiving start request from DOS-DOS",
+      "DOP gives copy to designer",
+      "DOP orders plan from architect",
+      "DOP makes job folder after job is entered into database",
+      "DOP orders soils report (4-week process for custom only)",
+      "DOP receives soils report",
+      "DOP sends copy of soils report and plan to engineer (3-4 week process)",
+      "DOP gives complete plan to DOC to redline",
+      "DOC and DOS redline plan",
+      "Check set is returned from DOC to DOP with DOC & DOS initials verified",
+      "DOP receives plan with changes from architect with redline copy, DOC verifies changes (custom only)",
+      "DOP sends plan back to architect for changes (custom only)",
+      "DOP numbers plans 1-25",
+      "DOP sends out to copying company for copies",
+      "DOP sends plan to designer",
+      "DOP receives exterior selections in 10 days from start memo and plan receipt",
+      "DOP receives structural engineered plans",
+      "DOP makes two copies of plan and gives to CFO to initiate financing and DOC to verify",
+      "DOP requests CAD file from architect and engineer",
+      "DOP informs sales and marketing coordinator that CAD file is available",
+      "DOP sends plan to truss companies for bidding",
+      "Financing is started (accounting receives plans and performs), check set given to purchasing manager",
+      "Purchasing receives bid from truss companies, selects one, signs contract, sends PO",
+      "Truss company does truss plan",
+      "DOP calls permit company to pick up plan and truss plan, sends to city",
+      "Permit is received from city",
+      "DOP makes copy of permitted set, keeps under lock and key",
+      "CA puts original set or permitted set with start packet for project",
+      "Project number is entered into database",
+      "As soon as engineered plans received, need to go outside take off service per purchasing",
+      "DOP sends out plan to subcontractors for bids",
+      "DOP orders landscape drawing",
+      "DOP sends landscape drawing to DOS for approval",
+      "DOP sends exterior selections to HOA for approval",
+      "DOP sends plan to HOA for architectural approval (can be simultaneous with permitting)",
+      "Handle HOA approval/disapproval cycle",
+      "Purchasing receives bids back and plan back from subcontractors",
+      "DOP verifies budget in database",
+      "DOP receives SPEC Writer (including interior selections) from purchasing",
+      "DOC assigns job to super",
+      "Purchase orders entered into database by purchasing",
+      "Work orders entered into database by purchasing",
+      "Start packet given to super, reviewed and initialed",
+      "Start packet reviewed by DOC and initialed when approved",
+      "DOP orders ESI IDs from Reliant Energy",
+      "DOP orders water meter from Severn Trent",
+      "DOP receives memo from accounting that financing is approved"
+    ],
+    participants: ["dop", "doc", "purchasing_mgr", "construction_asst", "superintendent"]
+  },
+  {
+    id: "new_work_order",
+    name: "New Work Order Process",
+    owner: "purchasing_mgr",
+    date: "October 18, 2006",
+    category: "Operations",
+    description: "Process for creating new work orders from redlined plans through bidding, bid evaluation, and work order creation for the start package.",
+    steps: [
+      "Red-lined plans are received by CA",
+      "CA requests current bid list from PM",
+      "CA receives bid list and sends plans to subcontractors for bidding",
+      "Construction Assistant advises Purchasing Manager of address, date, and subcontractor that plans were sent to",
+      "If bid is not received within 1 week, Purchasing Manager calls subcontractors for bids",
+      "Purchasing Manager determines most competitive bid and creates work order",
+      "Purchasing Manager returns work order to CA for start package"
+    ],
+    participants: ["construction_asst", "purchasing_mgr", "project_mgr"]
+  },
+  {
+    id: "work_order_ap",
+    name: "Work Order Accounts Payable Process",
+    owner: "purchasing_mgr",
+    date: "October 19, 2006",
+    category: "Financial",
+    description: "Process for work order payment from bid collection through purchasing entry, subcontractor completion, superintendent verification, PM/DOC approval, and final payment routing to accounting.",
+    steps: [
+      "Purchasing collects bid",
+      "Purchasing enters work order in database",
+      "Subcontractor or CA clicks 'complete' if job is 100% complete",
+      "Superintendent clicks 'pay' if job is 100% complete",
+      "PM or DOC approves work order",
+      "Is work order approved?",
+      "If yes: Work order goes to Accounting Assistant inbox for payment",
+      "If no: PM types note and disapproves",
+      "Subcontractor logs into database to fix issue",
+      "Superintendent verifies completion and approves"
+    ],
+    participants: ["purchasing_mgr", "superintendent", "project_mgr", "doc", "acct_asst"]
+  },
+  {
+    id: "bonus_request",
+    name: "Bonus Request Submittal Process",
+    owner: "doc",
+    date: "August 23, 2005",
+    category: "HR / Admin",
+    description: "Process for superintendent bonus requests upon home completion. Covers walk-through completion, occupancy/substantial completion paperwork, DOC review of job performance, bonus calculation, and president approval with 60-day submission requirement.",
+    steps: [
+      "Superintendent completes final walk through with homebuyer",
+      "Superintendent makes copy of Occ and Sub paperwork, gives original to DOC",
+      "Is Occupancy and Substantial Completion 100% signed off and dated?",
+      "If no: Superintendent works on completing items on list until 100% signed off",
+      "If yes: Superintendent submits completed Occ and Sub paperwork to DOC",
+      "DOC reviews Occ and Sub paperwork to verify all necessary signatures are complete",
+      "DOC reviews job status for completion time frame and budget for total extras",
+      "DOC calculates appropriate bonus based on above information",
+      "DOC fills out Bonus Request Form with necessary info",
+      "DOC meets with Superintendent to review bonus and sign off",
+      "DOC submits bonus request to President for final approval",
+      "Was paperwork submitted within 60 days of closing?",
+      "If no: DOC notifies Superintendent of disapproval due to time frame submitted",
+      "If yes: President reviews bonus request",
+      "President reviews with DOC and makes necessary changes",
+      "Is Bonus Request approved?",
+      "If no: DOC files Occ and Sub in Job File",
+      "If yes: President forwards approved Bonus Request to CFO for processing",
+      "DOC files Occ and Sub in Job File",
+      "CFO processes bonus payment toward next scheduled pay period",
+      "Superintendent receives bonus on pay check"
+    ],
+    participants: ["superintendent", "doc", "president", "cfo"]
+  },
+  {
+    id: "homebuyer_expectations",
+    name: "Setting the Expectation with the Homebuyer - Step by Step",
+    owner: "dir_sales",
+    date: "",
+    category: "Sales",
+    description: "Customer-facing step-by-step guide outlining the entire homebuying journey from floorplan selection through closing, move-in, and warranty. Covers contract signing, design consultation, selections, pre-construction conference, construction stages, walk-throughs, closing, and post-closing warranty.",
+    steps: [
+      "Step 1: Review floorplan choices, design options, and upgrade possibilities with Sales Executive",
+      "Step 2: Sign Residential Contract and pay 10% non-refundable deposit plus 100% of changes upfront",
+      "Receive homeowner manual including HOA information and deed restrictions",
+      "Step 3: Submit loan paperwork to applicable company with pre-approved letter for financing",
+      "Step 4: Selection Coordinator calls within 24-48 hours to set up design consultation (if applicable)",
+      "Bring pictures, samples, or anything applicable to interior or exterior scheme",
+      "If purchasing a completed home, skip to Step 9",
+      "Step 5: Depending on build time/purchase type, make selections and decide on options available",
+      "All selections must be complete prior to starting construction if building from ground up",
+      "Step 6: Pre-construction or construction conference with Sales Executive, Superintendent, and Selection Coordinator",
+      "Address all questions and concerns, review options",
+      "Step 7: Construction stages include: Pre-construction/Design/Planning, Foundation, Framing, Roof, Preparing for Sheetrock, Sheetrock, Wood Trim and Doors/Tile, Countertops and Paint, Wood Flooring and Carpet, Builder Acceptance, Homeowner Acceptance",
+      "Step 8: Sales Executive schedules walk-throughs: mechanical rough-in, audio/visual, cabinets and trim, closing walk-through, and new home orientation",
+      "Step 9: Sales Executive confirms closing date",
+      "Step 10: Loan documents drawn up from lender and issued to title company",
+      "Step 11: Move-in letter sent with detailed instructions, date/time for access",
+      "Step 12: Title Company prepares final closing statement, notifies of funds to bring, appointment set for loan signing",
+      "Step 13: Set up utilities and phone service within 3 days of closing (builder cuts off services)",
+      "Step 14: After city final inspection, home is ready",
+      "Step 15: Sales Executive schedules Homeowner Acceptance meeting - items identified as needing attention during walkthrough are repaired and ready to check",
+      "Step 16: Sales Executive schedules New Home Orientation",
+      "Step 17: Final funds brought to closing, loan documents signed",
+      "Step 18: Receive warranty manuals at closing; keys and garage door openers released upon funding",
+      "Step 19: Loan is funded",
+      "Step 20: Funds received and Deeds are recorded",
+      "Step 21: Receive title to new home",
+      "Step 22: For warranty items, log onto warranty request system - Customer Care Dept contacts within 24 hours"
+    ],
+    participants: ["sales_exec", "selection_coordinator", "superintendent", "customer_care"]
+  },
+  {
+    id: "in_house_contract",
+    name: "In-House Contract Process Checklist",
+    owner: "admin_asst",
+    date: "",
+    category: "Sales",
+    description: "Comprehensive administrative checklist for processing a new home contract in-house. Covers contract binder receipt, check processing, database updates, MLS updates, title company coordination, closing process, HUD signing, and post-closing tasks including welcome packet delivery.",
+    steps: [
+      "Contract binder and monies received in-house from sales executive - ensure close date on last page",
+      "Update Check Log (Public/Company Information/MCH/Properties/Check Log) - ensure correct month",
+      "Make copies of checks: one for Michael, one for Pat, one for Sales packet, one for Job Folder",
+      "Deposit check plus copy of check & broker agreement given to Controller (Michael)",
+      "Jim signs off & initials Contract Binder",
+      "Copies of all signed documents distributed to Project Manager, Designer, Superintendent, Construction, CFO, and Sales",
+      "Email Home Sale Memo to all employees (Public/Company Information/MCH/Properties/Current Projects/Home Sale Memo)",
+      "Contact Title Company - prepare packet with original contract, broker agreement, and escrow check",
+      "Enter client information into McVaugh database (New Client → Jobs → Green House Icon → Main, Lot, Customer & Financial tabs)",
+      "Update MLS with Pending Continue to Show - enter ending date at about 90 days from date entering",
+      "Update Database with Pending Sale - included in note on entering client info",
+      "Update Sales & Closing Report and Closing List (Public/Company Information/MCH/Properties/Sales & Closing Status Report)",
+      "Update Property Map as Reserved (Public/Company Information/MCH/Properties/Brochures - Royal Oaks Villas and Hunters Creek Villas maps)",
+      "Update Available Home Listings (Public/Company Information/MCH/Properties/Brochures/Available Home Lists)",
+      "Review Completion Date Report with Marc",
+      "Contact Client for Lender information",
+      "Relay Lender information to Title Company",
+      "Obtain closing date from Project Manager / Director of Construction",
+      "Order Account Reconciliation from Controller",
+      "Order Final Survey from Title Company",
+      "Ensure Controller faxes signed Account Reconciliation to Title Company",
+      "Contact Title Company to verify closing date",
+      "Request Keys, Openers, and Manuals from Construction to create Welcome Packet",
+      "Schedule Jim to sign HUD - ensure correct company",
+      "Copy signed HUD and distribute to CFO & Controller, return originals to Title Company",
+      "Receive final HUD from Title Company, copy to Controller",
+      "Update MLS - Sold and details",
+      "Update McVaugh database - Sold",
+      "Update Sales & Closing Report",
+      "Update Property Map as Sold - make copies for sales exec at property",
+      "Remove from Availability Listings - make copies for sales exec at property",
+      "Personally deliver Welcome Packet and appropriate Welcome Gift to homeowners"
+    ],
+    participants: ["admin_asst", "president", "controller", "cfo", "sales_exec", "doc", "project_mgr"]
+  },
+  {
+    id: "interior_designer_hoa_rocc",
+    name: "Interior Designer HOA / ROCC Selection Process",
+    owner: "doc",
+    date: "January 3, 2005",
+    category: "Design",
+    description: "Process for getting interior/exterior selections approved by the HOA and ROCC (Residential Owners Community Committee). Covers plan retrieval, designer packet assembly, Phase 1 selection, ROCC application submission through Debby Duffy, approval/disapproval handling, and notification distribution.",
+    steps: [
+      "CA retrieves plan #4 for interior designer",
+      "CA notifies DOP for designer start packet",
+      "DOP delivers designer start packet to CA",
+      "CA puts together designer packet (design notification form, plan, budget, specs) and delivers to Designer",
+      "Interior Designer receives notification packet",
+      "Interior Designer initials off Notification Form upon receipt and returns to CA",
+      "CA makes note of notification date on Designer Tracking form",
+      "CA files notification form in job file",
+      "Interior Designer selects Phase 1 selections",
+      "Interior Designer continues to do all other selections",
+      "Interior Designer puts together packet of required selections for HOA/ROCC approval",
+      "Interior Designer delivers packet to CA for submittal",
+      "CA fills out ROCC application",
+      "CA logs in submit date into HOA/ROCC log",
+      "CA submits application and selections to Debby Duffy with ROCC",
+      "CA makes copy and puts original in HOA binder",
+      "CA follows up on submittal with ROCC after one week",
+      "CA receives ROCC letter",
+      "Selections Approved or Disapproved?",
+      "If approved: CA delivers approval copy to Designer and Superintendent immediately upon receipt",
+      "If disapproved: CA delivers disapproval letter copy to designer",
+      "Interior Designer makes modifications and returns selections to CA",
+      "CA resubmits revised selections to HOA/ROCC",
+      "CA makes copy and puts original in HOA binder",
+      "Interior Designer receives approved architectural review letter from CA",
+      "ROCC/HOA Review Process continues as needed"
+    ],
+    participants: ["construction_asst", "interior_designer", "dop", "doc", "superintendent"]
+  },
+  {
+    id: "president_plan_selection",
+    name: "President Plan Selection Process",
+    owner: "doc",
+    date: "January 27, 2005",
+    category: "Preconstruction",
+    description: "Process for president-driven plan selection for spec homes. Follows the precon start process and covers architect recommendation, preliminary plan review, president approval cycle with potential architect meetings, and handoff to the precon start process for spec homes.",
+    steps: [
+      "Follows Precon Start Process - Spec Home",
+      "Architect selects recommended plans for specific lot",
+      "Architect notifies President or Admin Assistant of preliminary plans ready for pick up",
+      "Admin Assistant coordinates pickup of preliminary plans from the architect",
+      "President reviews proposed plans",
+      "Are plans approved?",
+      "If no: President sets appointment with architect",
+      "President meets with architect to discuss plan design for specific lot",
+      "Architect designs/selects plan",
+      "Architect notifies Admin Asst of preliminary plan ready for pickup",
+      "Admin Asst coordinates pickup of prelim plan",
+      "Are there changes or modifications made to the preliminary drawing?",
+      "If no: Admin Asst returns prelim plan to architect and orders 3 sets of checkset plans",
+      "If yes: Are preliminary plans approved?",
+      "If no: President meets with designers and sales to review prelim plan",
+      "If yes: President returns approved plan to Admin Assistant",
+      "Admin Assistant orders 3 sets of checkset plans",
+      "Proceeds to Precon Start Process - Spec Home"
+    ],
+    participants: ["president", "admin_asst", "doc"]
+  },
+  {
+    id: "interior_designer_selection",
+    name: "Interior Designer Selection Process",
+    owner: "doc",
+    date: "March 14, 2005",
+    category: "Design",
+    description: "Detailed process for interior designer selections including Phase 1 HOA/ROCC submittals, designer packet assembly, ROCC application with Debby Duffy, approval/disapproval cycles, and coordination between CA, DOP, and Interior Designer.",
+    steps: [
+      "CA retrieves plan #4 for interior designer",
+      "CA notifies DOP for designer start packet",
+      "DOP delivers designer start packet to CA",
+      "CA puts together designer packet (design notification form, plan, budget, specifications) and delivers to Designer",
+      "Interior Designer receives notification packet",
+      "Interior Designer initials off Notification Form of receipt of packet and returns to CA",
+      "CA makes note of notification date on Designer Tracking form",
+      "CA files notification form in job file",
+      "Interior Designer selects Phase 1 selections",
+      "Interior Designer continues to do all other selections",
+      "Interior Designer puts together packet consisting of required selections for HOA/ROCC approval",
+      "Interior Designer delivers packet to CA for submittal",
+      "CA fills out ROCC application",
+      "CA logs in submit date into HOA/ROCC log",
+      "CA submits application and selections to Debby Duffy with ROCC",
+      "CA makes copy and puts original in HOA binder",
+      "CA follows up on submittal with ROCC after one week",
+      "CA receives ROCC letter",
+      "Selections Approved or Disapproved?",
+      "If approved: CA delivers approval copy to Designer and Superintendent immediately upon receipt",
+      "If disapproved: CA delivers disapproval letter copy to designer",
+      "Interior designer makes modifications and returns selections to CA",
+      "CA resubmits revised selections to HOA/ROCC",
+      "CA makes copy and puts original in HOA binder",
+      "Interior Designer receives approved architectural review letter from CA",
+      "ROCC/HOA Review Process"
+    ],
+    participants: ["construction_asst", "interior_designer", "dop", "superintendent"]
+  },
+  {
+    id: "permitting",
+    name: "Permitting Process",
+    owner: "doc",
+    date: "December 30, 2004",
+    category: "Preconstruction",
+    description: "Detailed permitting process from precon start through permit acquisition, impact fees, rescheck analysis, permit tracking, start packet assembly, and construction start. Covers CA coordination with permitting company, database logging, and DOC start memo distribution.",
+    steps: [
+      "Follows Precon Start Process",
+      "CA removes plans 1 and 2 and sets aside for permitting",
+      "CA fills out check request for impact fee (if any) and water/meter fee",
+      "CA retrieves DOC signature for check request and delivers to Accounting Asst",
+      "Accounting Asst has check cut and signed within 24 hours and returns to CA",
+      "CA contacts permitting company and requests pick up of plans",
+      "CA fills out rescheck paperwork and faxes to company",
+      "CA forwards CAD file to rescheck company for analysis",
+      "CA receives rescheck analysis within 48 hours",
+      "CA logs notification date in precon start log",
+      "Permitting company picks up plans",
+      "CA logs in estimated return date into precon start log",
+      "CA requests estimated return date from permitting company",
+      "CA reviews precon start log daily",
+      "CA verifies with permit company those permits due within 1 week",
+      "CA logs comments into precon start log",
+      "Permitting company delivers new permits",
+      "CA logs delivery date into precon start log",
+      "CA logs project number into database",
+      "CA makes a copy of permit card and places in job file",
+      "CA attaches plan binder to permit set and places in permit rack",
+      "CA delivers original permit card to DOP",
+      "CA logs follow-up date in precon start log",
+      "DOP puts together construction start packet: start memo, specs, permit card, truss plan, PO list, WO list, and acct budget",
+      "DOP delivers start packet to DOC",
+      "DOC fills out start date and super on start memo",
+      "DOC makes a copy of start memo and distributes with start packet to super and designer",
+      "DOC places original start memo in job file outbox",
+      "DOC updates construction status with start date",
+      "Superintendent verifies HOA/ROCC approval with CA prior to start of home",
+      "Has home been approved by HOA/ROCC?",
+      "If no: Super notifies PM or DOC of delay due to non-approval; proceeds with T-pole, lot stake, and lot prep only",
+      "If yes: Super retrieves plan #5 to be used as master set",
+      "Super reviews HOA/ROCC approval and makes necessary changes to plan",
+      "Are all selections complete?",
+      "If no: Super waits for all selections prior to starting home; notifies PM or DOC of delay",
+      "If yes: Super contacts designer and buyer to schedule redline meeting",
+      "Super retrieves master #3 plan from redline rack for meeting",
+      "Super conducts redline meeting and reviews specifics with buyer, has plans signed",
+      "Super transfers redlined items to their plan #5",
+      "Super returns #3 plan to CA",
+      "CA places redlined #3 plan in redline plan rack"
+    ],
+    participants: ["construction_asst", "doc", "dop", "acct_asst", "superintendent"]
+  },
+  {
+    id: "framed_mirror_purchase",
+    name: "Framed Mirror Purchase Process - Division 1 and 2 Homes",
+    owner: "doc",
+    date: "April 2, 2004 (Updated 4/07/04)",
+    category: "Operations",
+    description: "Specialized process for purchasing and installing framed mirrors in Division 1 and 2 homes. Covers superintendent measurements, interior designer selection from Verno casita, mirror inventory management, Brandon's delivery, and trim carpenter installation scheduling.",
+    steps: [
+      "Superintendent gives measurements for framed mirrors to Interior Designer when house starts",
+      "Mirrors will be selected from casita at time of redline by Interior Designer",
+      "Interior Designer will mark address on cardboard edges of mirrors in casita",
+      "Interior Designer will give Superintendent a list of sizes and frame names per home",
+      "Interior Designers to pick out several different sizes and styles at Verno",
+      "In stock mirrors to be delivered by Brandon's",
+      "Brandon's to place mirrors in casita at office for future use",
+      "Superintendent schedules trim carpenter to install when ready",
+      "Trim carpenter installs mirrors",
+      "Interior Designers are responsible for keeping inventory of mirrors",
+      "When mirror inventory is low, Interior Designers will go to Verno to pick out more or order same mirror types (will be faxed to Brandon's)"
+    ],
+    participants: ["superintendent", "interior_designer"]
+  },
+  {
+    id: "lowes_bill_process",
+    name: "Lowes / Home Depot Bill Process",
+    owner: "acct_asst",
+    date: "",
+    category: "Financial",
+    description: "Monthly process for matching Lowes/Home Depot bills to purchase orders in the database, entering into QuickBooks, and processing payment. Involves coordination between Accounting (Brittany) and Purchasing (Ernesto) for PO matching and database updates.",
+    steps: [
+      "Receive Lowes/Home Depot bill in mail",
+      "Purchasing (Ernesto) emails POs for Lowes bill to accounting",
+      "Accounting saves emailed POs to Accounting-payables-purchase orders-emailed POs folder",
+      "Match each invoice from Lowes Bill to POs in the database",
+      "If no PO exists, print receipt and go to Ernesto to enter it into the database",
+      "Print Lowes PO and staple to corresponding invoice",
+      "Add transaction number in invoice number box and the invoice date to the PO in database, click update",
+      "Manual entry into QuickBooks and mark accounting received in database (working on import)",
+      "Move PO saved in emailed POs folder to done folder after entering",
+      "Pay entire Lowes bill online - pay company with largest amount due first",
+      "Only allowed to make one payment per day - make largest payment first",
+      "Each subsequent day make payment for one company's bills until all are paid",
+      "Mark Purchase Orders Paid in database"
+    ],
+    participants: ["acct_asst", "purchasing_mgr"]
+  },
+  {
+    id: "accounting_weekly",
+    name: "Accounting Weekly Tasks",
+    owner: "acct_asst",
+    date: "",
+    category: "Financial",
+    description: "Weekly recurring accounting tasks including check processing, draw requests, utility payments, deposit handling, database imports, and Friday check run submission to Jim and Kenneth.",
+    steps: [
+      "FRIDAY: Submit list of suggested checks to print and auto pays/payments to Jim and Kenneth",
+      "Request draws via Built.com & Excel/email to bank (411 Electra & 4019 Del Bello via Built)",
+      "59NKW & 11419 St Germain need supplemental form signed for draws",
+      "Enter Straight Invoices (invoices not in Database) directly into QuickBooks",
+      "Database QB WO/PO Import (manual import if needed)",
+      "Book/enter/pay all utility bills and autopays for the month",
+      "Utilities include: Gainsborough Waste, Yellowstone, Kankels (59NKW), Houston Seal Patrol, Insurance autopays",
+      "Check bank accounts for any wires/unbooked autopays and book missing in QB",
+      "Scan copies of checks from mail and save to M-Accting-AR-Incoming Checks",
+      "Check Incoming Checks folder in M-Accting-AR-Incoming Checks",
+      "Make 2 copies of check, give one to Teresa, keep other for backup",
+      "Create deposit slip and deposit to bank",
+      "Book deposit in QB",
+      "Staple deposit receipt to copy of check and put in deposits folder",
+      "Move check copies from Incoming Checks to Checks Received folder (month/yr)",
+      "Book received draws in QB and mark in DB",
+      "Verify Purchase Orders found/should be in Database",
+      "Send shutoff notices to TA and OA past due on water"
+    ],
+    participants: ["acct_asst", "cfo"]
+  },
+  {
+    id: "accounting_monthly",
+    name: "Accounting Monthly Tasks",
+    owner: "cfo",
+    date: "",
+    category: "Financial",
+    description: "Monthly recurring accounting tasks including AMEX processing, Builders Risk reporting, bank reconciliations, HOA water billing, cash reports, sales tax reporting, and Banyan Tree reconciliation.",
+    steps: [
+      "Process AMEX Bill - save receipts in organized statement date folders",
+      "Update Builders Risk Excel - create copy of worksheet from previous month, update name and dates",
+      "Update Builders Risk Excel Value Column with current job value from MCH P/L by Job report",
+      "Value = total COGS + 990 PUD + total expenses (if BCH reimburses for soft costs)",
+      "Add any new houses that have foundation and remove any houses that have finished from Builders Risk",
+      "Email Builders Risk sheet to Carol Hocks at BCH",
+      "Bill TA/OA Water Bills (TA/OA only)",
+      "Issue late fees and re-send past due notices (RROPOA, OA, TA)",
+      "Update Cash Report",
+      "Submit Cash Report",
+      "Bank Reconciliations",
+      "Report MVID Sales and Use Tax (18th of every month)",
+      "Transfer designated reserve money from budget to reserve bank account @ Prosperity",
+      "Same bank account @ Prosperity - make transfer in QB from checking to savings in TA",
+      "Banyan Tree Payments from BBj - reconciliation update after every payment",
+      "Process general payables",
+      "Prepare Invoices for Title Companies when sale in TA or OA"
+    ],
+    participants: ["cfo", "acct_asst"]
+  },
+  {
+    id: "accounting_quarterly_yearly",
+    name: "Accounting Quarterly & Yearly Tasks",
+    owner: "cfo",
+    date: "",
+    category: "Financial",
+    description: "Quarterly and yearly accounting tasks including financial reporting, intercompany balancing, payroll reports, GL audits, HOA assessments, tax preparation, 1099s, insurance management, and 401K administration.",
+    steps: [
+      "QUARTERLY: Prepare Financial Reports",
+      "QUARTERLY: % of Completion reports",
+      "QUARTERLY: Balance Intercompanies",
+      "QUARTERLY: Clear/Reduce Intercomps",
+      "QUARTERLY: Payroll Reports - Texas Mutual & Texas Workforce Commission",
+      "QUARTERLY: GL Audits",
+      "YEARLY: HOA - Bill Annual Assessments (TA, OA, POA, Mitigation)",
+      "YEARLY: Update HOA Budgets",
+      "YEARLY: CBUSA Vendor Reporting",
+      "YEARLY: Property Taxes - Update Spreadsheet",
+      "YEARLY: Transfer Previous Year QB Files to CPA to file Taxes via BKC website",
+      "YEARLY: Prepare 1099s - Brittany checks EIN and 1099 button in QB, Kenneth finalizes and sends",
+      "YEARLY: Medical/Dental/Vision Insurance management",
+      "YEARLY: Manage 401K",
+      "AS NEEDED: Set up new wires in Bank (Kenneth)",
+      "AS NEEDED: Request Intercompany Bank Transfers (Brittany and Kenneth)",
+      "AS NEEDED: Job/Project Reconciliations",
+      "AS NEEDED: Loan Tracking / Debt Schedule Update",
+      "AS NEEDED: Review Settlement Statements",
+      "AS NEEDED: Misc. Insurance Items",
+      "AS NEEDED: Update Subs W9, GL exp date, & EIN in QB / Add new vendors in QB",
+      "AS NEEDED: Add new resident info into QB for TA/OA/POA",
+      "AS NEEDED: Contact HOA Attorney (Kenneth with info from Brittany)",
+      "AS NEEDED: Send new companies to CPA",
+      "AS NEEDED: Items not importing for MCH QB send to IT to add to DB/QB import"
+    ],
+    participants: ["cfo", "acct_asst"]
+  }
+];
+
+const DEPARTMENTS = [
+  { id: "Executive", color: "#DC2626", icon: "👔" },
+  { id: "Construction", color: "#059669", icon: "🏗️" },
+  { id: "Operations", color: "#DB2777", icon: "⚙️" },
+  { id: "Finance", color: "#2563EB", icon: "💰" },
+  { id: "Sales", color: "#7C3AED", icon: "📊" },
+  { id: "Administration", color: "#EA580C", icon: "📋" },
+  { id: "Design", color: "#C026D3", icon: "🎨" }
+];
+
+const CATEGORIES = ["All", "Preconstruction", "Construction", "Change Management", "Financial", "Operations", "Sales", "Design", "HR / Admin"];
+
+// Current team: 6 employees absorbing all 16+ original roles
+const CURRENT_TEAM = [
+  {
+    id: "maria",
+    name: "Maria Abney",
+    title: "Senior Project Manager",
+    department: "Construction",
+    color: "#059669",
+    email: "mabney@mcvaugh.com",
+    absorbs: ["doc", "superintendent", "project_mgr", "construction_asst"],
+        responsibilities: [
+      "Assigns and manages all construction projects as sole construction team member",
+      "Acts as superintendent on all active job sites",
+      "Reviews blueprints, specs, upgrade sheets, and scheduling",
+      "Conducts pre-construction check list and Q&A sessions with clients",
+      "Manages all subcontractor relationships and work orders",
+      "Reviews bid/quotes against budget, forwards to Jim if over budget",
+      "Clicks 'pay' and verifies completion on all work orders",
+      "Approves or disapproves work orders",
+      "Notes rework items requiring back charges",
+      "Contacts trades that caused repairs, negotiates pricing",
+      "Clicks complete on backcharges once requirements met",
+      "Approves/denies change order requests with delay days noted",
+      "Clicks back charge approval in database",
+      "Modifies database budget when bid/quote approved",
+      "Prepares budget and specs",
+      "Sends budget to Jim for approval",
+      "Redlines additional items on plans if necessary",
+      "Marks second check set with redline items for reference",
+      "Files redline plan rack with labeled tab",
+      "Returns redlined plans to architect for changes",
+      "Completes final walk through with homebuyer",
+      "Updates construction status with start date",
+      "Verifies HOA approval prior to start of home",
+      "Conducts redline meeting with buyer, reviews specifics, has plans signed",
+      "Reviews budget weekly as processing accounts payable",
+      "Notifies Sales/Jim when change order is 100% complete",
+      "(Purchasing) Enters house information into database upon start request",
+      "(Purchasing) Orders plan from architect",
+      "(Purchasing) Orders soils report (4-week process for custom)",
+      "(Purchasing) Sends soils report and plan to engineer (3-4 week process)",
+      "(Purchasing) Requests CAD file from architect and engineer",
+      "(Purchasing) Sends plan to truss companies for bidding",
+      "(Purchasing) Follows up with architect/engineer on status of plans",
+      "(Purchasing) Verifies budget in database",
+      "(Purchasing) Creates the spec writer (including interior selections)",
+      "(Purchasing) Orders ESI IDs from Reliant Energy",
+      "(Purchasing) Puts together construction start packet (start memo, specs, permit card, truss plan, PO list, WO list, acct budget)",
+      "(Purchasing) Determines price/value to customer for change orders",
+      "(Purchasing) Receives bids from truss companies, selects one, signs contract",
+      "(Purchasing) Determines most competitive bid and creates work orders",
+      "Inspect jobsites regularly; identify deficiencies, safety hazards, incomplete work, and schedule risks",
+      "Cross-check plans and specifications against actual site conditions; resolve trade conflicts and sequencing issues",
+      "Coordinate jobsite security and orderly site conditions",
+      "Document subcontractor performance and recommend corrective action or replacement when necessary",
+      "Complete pre-turnover inspections, manage punch lists, ensure homes meet company standards before delivery",
+      "Develop, maintain, and update schedules and milestones for assigned homes (trade work, inspections, material deliveries)",
+      "Identify delays promptly, document scheduling variances, implement approved recovery measures while controlling carrying costs",
+      "Coordinate construction starts and upcoming project requirements with Sales, Design, Purchasing, and Accounting",
+      "Participate in weekly construction and pipeline meetings; keep project status current in company systems",
+      "Assist with takeoffs, estimates, home-specific specifications, scopes of work, and construction budget preparation",
+      "Verify materials received against ordered quantities, specifications, and budgets; monitor waste and resolve discrepancies",
+      "Maintain vendor pricing, W-9s, required insurance and license documents, purchasing data, and performance files",
+      "Pursue available discounts, rebates, and purchasing-program benefits; coordinate invoice discrepancies with Accounting",
+      "Coordinate option, upgrade, and change-order pricing with Sales and Design, targeting 24-hour response",
+      "Monitor committed and actual costs against approved project budgets and the established 2% variance target",
+      "Flag anticipated overruns or scope changes promptly; obtain required approval before extra work or cost commitments",
+      "Support projected gross profit through purchasing discipline, scheduling efficiency, and control of avoidable rework",
+      "Confirm required permits, insurance, licenses, and approvals are in place before applicable work starts",
+      "Ensure homeowner-requested changes are priced, documented, approved, and incorporated into plans/budgets before execution",
+      "Communicate project progress, risks, cost variances, and proposed solutions to management and relevant departments",
+      "Document deficiencies, incidents, subcontractor problems, and corrective actions",
+      "Work allocation: approximately 50% Field / 50% Office"
+    ,
+      "Leander Architectural Plan review (how-to doc in maria leaving folder)",
+      "[N/A] Reviews invoices on Friday morning, initials and notes backcharges",
+      "[N/A] Reviews database inbox daily for approved change orders",
+      "[N/A] Logs change orders into change order budget log",
+      "[N/A] Prints log copies weekly for tactical meeting",
+      "[N/A] Receives plan, attaches check set tracking form for president approval",
+      "[N/A] Reviews plan against 2nd redline",
+      "[N/A] Logs overage into budget revision log",
+      "[N/A] Prints budget revision log each week for tactical meeting",
+      "[N/A] Forwards budget revision log to Kenneth",
+      "[N/A] Logs return date into permit/HOA log",
+      "[N/A] Coordinates plan pick up",
+      "[N/A] Reviews precon start log daily",
+      "[N/A] Submits Occ and Sub paperwork to Jim",
+      "[N/A] Calculates appropriate bonus based on job performance",
+      "[N/A] Fills out Bonus Request Form",
+      "[N/A] Fills out start date and super on start memo",
+      "[N/A] Distributes start packet and start memo",
+      "[N/A] Gives measurements for framed mirrors to Pam when house starts",
+      "[N/A] Schedules trim carpenter to install mirrors when ready",
+      "[N/A] Prepares proforma and forwards to Kenneth"
+    ]
+  },
+  {
+    id: "jim",
+    name: "Jim McVaugh",
+    title: "CEO",
+    department: "Executive",
+    color: "#DC2626",
+    email: "jim@mcvaugh.com",
+    absorbs: ["president"],
+    responsibilities: [
+      "Signs purchase contracts (30 days to close)",
+      "Decides on house plans and approves them",
+      "Decides bank for funding, communicates to Kenneth",
+      "Reviews and approves budgets, establishes sales price",
+      "Enters change order budgets into QuickBooks",
+      "Reviews change order log and forwards to Kenneth",
+      "Reviews and approves budget revision log at tactical meetings",
+      "Signs off on plans and forwards to Pam within 2 days",
+      "Approves over $1,000 budget overages",
+      "Reviews bonus requests and makes necessary changes with Maria",
+      "Approves or denies bonus requests for final processing",
+      "Reviews proposed plans from architect for spec homes",
+      "Meets with architect to discuss plan design for specific lots",
+      "Meets with Pam and Pam on sales to review preliminary plans",
+      "Returns approved plan to Teresa",
+      "Signs off and initials contract binder",
+      "Signs HUD documents for closings",
+      "Forwards approved bonus requests to Kenneth for processing"
+    ]
+  },
+  {
+    id: "teresa",
+    name: "Teresa Teran",
+    title: "Executive Assistant / HR",
+    department: "Administration",
+    color: "#EA580C",
+    email: "tteran@mcvaugh.com",
+    absorbs: ["admin_asst"],
+    responsibilities: [
+      "Handles all HR functions",
+      "Coordinates pickup of preliminary plans from architect",
+      "Orders checkset plans from architect",
+      "Returns plans to architect for modifications",
+      "Receives contract binder and monies from Pam/James",
+      "Updates check log on public drive",
+      "Makes copies of checks for appropriate parties",
+      "Deposits check plus copy of check and broker agreement to Kenneth",
+      "Emails Home Sale Memo to all employees",
+      "Contacts Title Company (Dawn Phillips Texas American Title)",
+      "Enters client information into McVaugh database",
+      "Updates MLS with Pending/Continue to Show",
+      "Updates database with Pending Sale",
+      "Updates Sales & Closing Report and Closing List",
+      "Updates Property Map as Reserved",
+      "Updates Available Home Listings",
+      "Reviews Completion Date Report",
+      "Contacts client for lender information",
+      "Relays lender information to Title Company",
+      "Obtains closing date from Maria",
+      "Orders Account Reconciliation from Kenneth",
+      "Orders Final Survey from Title Company",
+      "Ensures Kenneth sends signed Account Reconciliation to Title Company",
+      "Contacts Title Company to verify closing date",
+      "Requests Keys, Openers, and Manuals from Maria for Welcome Packet",
+      "Schedules Jim to sign HUD",
+      "Copies signed HUD and distributes to Kenneth",
+      "Receives final HUD from Title Company, copies to Kenneth",
+      "Updates MLS as Sold, updates database as Sold",
+      "Updates Sales & Closing Report, Property Map as Sold",
+      "Removes from Availability Listings",
+      "Delivers Welcome Packet and Welcome Gift to homeowners",
+      "Distributes copies of contract to Kenneth, Maria, Pam"
+    ]
+  },
+  {
+    id: "james",
+    name: "James McVaugh",
+    title: "Sales / Marketing Coordinator",
+    department: "Sales",
+    color: "#7C3AED",
+    email: "james@mcvaugh.com",
+    absorbs: ["sales_exec", "selection_coordinator"],
+    responsibilities: [
+      "Manages all marketing materials and campaigns",
+      "Distributes copies of contract, specs, and upgrades to Maria, Teresa, and Kenneth",
+      "Submits change order requests (customer or internal)",
+      "Follows up on customer approval of change orders",
+      "Reviews floorplan choices, design options, and upgrade possibilities with buyer",
+      "Schedules series of walk-throughs during construction",
+      "Confirms closing date with buyer",
+      "Schedules New Home Orientation",
+      "Schedules Homeowner Acceptance meeting",
+      "Calls buyer within 24-48 hours to set up consultation with Pam",
+      "Guides buyer through initial sales process",
+      "Assists with MLS listings and property marketing",
+      "Coordinates with Pam on buyer selections and design consultations"
+    ,
+      "(Purchasing) Sends PO to selected truss company after contract signed",
+      "(Purchasing) Collects bids from subcontractors",
+      "(Purchasing) Enters work orders and purchase orders into database",
+      "(Purchasing) Calls subcontractors for bids if not received within 1 week",
+      "(Purchasing) Requests and manages bid lists from subcontractors",
+      "(Purchasing) Advises team of address, date, and subcontractor details"
+    ,
+      "Enters work orders in database when within budget",
+      "Fills out database backcharges completely",
+      "Must notify subcontractors of backcharges",
+      "(Sales) Makes copies of contract package and distributes to team",
+      "(Sales) Reviews status report and distributes contract package",
+      "Handles all permitting coordination (impact fees, rescheck, permit tracking)",
+      "Manages permit card filing and permit rack"
+    ]
+  },
+  {
+    id: "pam",
+    name: "Pamela McVaugh",
+    title: "Sales Broker / Manager",
+    department: "Sales / Design",
+    color: "#C026D3",
+    email: "pam@mcvaugh.com",
+    absorbs: ["dir_sales", "interior_designer", "customer_care"],
+    responsibilities: [
+      "Reviews change order requests from sales perspective",
+      "Communicates upcoming projects to update database",
+      "Reviews specs from purchasing/construction",
+      "Enters sales price into database",
+      "Prepares marketing specifications",
+      "Routes budget to Brittany",
+      "Reviews landscape drawings before HOA submission",
+      "Calls client to set up design selection orientation within 1 week",
+      "Manages all interior design HOA/ROCC selection process",
+      "Redlines plan and returns to Maria within 2 days",
+      "Selects Phase 1 selections for HOA/ROCC submittal",
+      "Continues all other selections while Phase 1 is submitted",
+      "Puts together packet of required selections for HOA/ROCC approval",
+      "Delivers selection packet for HOA submittal",
+      "Makes modifications and returns selections if disapproved",
+      "Receives design notification packet with plan, budget, and specs",
+      "Initials off notification form upon receipt",
+      "Marks address on cardboard edges of mirrors in casita",
+      "Gives Maria list of sizes and frame names per home",
+      "Picks out several different sizes and styles of framed mirrors at Verno",
+      "Responsible for keeping inventory of mirrors",
+      "When mirror inventory is low, goes to Verno to pick out more",
+      "Handles post-closing warranty items and customer care",
+      "Contacts homeowner within 24 hours when warranty request is submitted",
+      "Files notification form in job file"
+    ]
+  },
+  {
+    id: "brittany",
+    name: "Brittany McVaugh",
+    title: "Accounting Assistant",
+    department: "IT / Finance",
+    color: "#0891B2",
+    email: "brittany@mcvaugh.com",
+    absorbs: ["acct_asst", "controller"],
+    responsibilities: [
+      "Manages all IT infrastructure and tech development",
+      "Develops and maintains company technology systems",
+      "Issues start memo (controller function)",
+      "Provides Account Reconciliation for closing process",
+      "Sends signed Account Reconciliation to Title Company",
+      "Receives back charge electronically for processing",
+      "Prints back charge from inbox",
+      "Enters back charge in QuickBooks for future credit",
+      "Staples back charge to back of check to be distributed",
+      "Files back charge in appropriate file per company",
+      "Keeps back charge in folder for review if credit not applied",
+      "Makes copy of back charge if credit not yet applied",
+      "Initials off on budget tracking form and forwards budget to Maria",
+      "Logs budget into QuickBooks",
+      "Processes Actual to Budget reports weekly into Excel",
+      "Has check cut and signed within 24 hours, returns to Maria",
+      "DAILY: Save AMEX receipts to Mail-Accounting-AP-AMEX Receipts folder, named as company and date",
+      "DAILY: Save invoices to mail-accounting-accounts payable-vendor/sub, save as inv# and date",
+      "DAILY: Forward invoices to purchasing (Ernesto) if not already included in email",
+      "DAILY: Check Incoming Checks folder in M-Accting-AR-Incoming Checks",
+      "WEEKLY: Submit suggested checks to print and list of auto pays/payments to Jim and Kenneth (Friday)",
+      "WEEKLY: Request draws via Built.com & Excel/email to bank (411 Electra & 4019 Del Bello via Built)",
+      "WEEKLY: Enter Straight Invoices (invoices not in Database) directly into QuickBooks",
+      "WEEKLY: Database QB WO/PO Import (manual import if needed)",
+      "WEEKLY: Book/enter/pay all utility bills and autopays (Gainsborough Waste, Yellowstone, Kankels/59NKW, Houston Seal Patrol, Insurance)",
+      "WEEKLY: Check bank accounts for wires/unbooked autopays and book missing in QB",
+      "WEEKLY: Scan copies of checks from mail and save to M-Accting-AR-Incoming Checks",
+      "WEEKLY: Make 2 copies of check, give one to Teresa, create deposit slip, deposit to bank",
+      "WEEKLY: Book deposits in QB",
+      "WEEKLY: Staple deposit receipt to copy of check and put in deposits folder",
+      "WEEKLY: Move check copies from Incoming Checks to Checks Received folder with appropriate month/yr",
+      "WEEKLY: Book received draws in QB and mark in DB",
+      "WEEKLY: Verify Purchase Orders found/should be in Database",
+      "WEEKLY: Send shutoff notices to TA and OA past due on water",
+      "MONTHLY: Lowes/Home Depot Bill - database match-up with POs",
+      "MONTHLY: Process AMEX Bill",
+      "MONTHLY: Bill TA/OA Water Bills & issue late fees/re-send past due (RROPOA, OA, TA)",
+      "MONTHLY: Update Builders Risk Excel - create copy of worksheet, update name and dates",
+      "MONTHLY: Update Builders Risk Excel Value Column with current job value from MCH P/L by Job (total COGS + 990 PUD + total expenses)",
+      "MONTHLY: Add new houses with foundation and remove finished houses from Builders Risk",
+      "MONTHLY: Email Builders Risk sheet to Carol Hocks at BCH",
+      "MONTHLY: Banyan Tree Payments from BBj - reconciliation update after every payment",
+      "MONTHLY: Process payables",
+      "MONTHLY: Prepare Invoices for Title Comps when sale in TA or OA",
+      "MONTHLY (18th): Report MVID Sales and Use Tax",
+      "MONTHLY: Transfer designated reserve money from budget to reserve bank account @ Prosperity (TA savings)",
+      "AS NEEDED: Deposit checks from mail to bank",
+      "AS NEEDED: Update Subs W9, GL exp date, & EIN in QB / Add new vendors in QB",
+      "AS NEEDED: Add new resident info into QB for TA/OA/POA",
+      "AS NEEDED: Contact HOA Attorney (with info from Kenneth)",
+      "AS NEEDED: Send new companies to CPA",
+      "AS NEEDED: Items not importing (highlighted white) for MCH QB send to Sonny (IT) to add to DB/QB import",
+      "AS NEEDED: Before stamping envelopes with checks, ask Ernesto which should pick up and which should mail",
+      "AS NEEDED: Misc. Insurance Items",
+      "YEARLY: Check EIN is up to date and 1099 button checked in QB for all vendors (prep for 1099s)",
+      "YEARLY: Prepare and send 1099s (Kenneth finalizes/sends)",
+      "LOWES PROCESS: Receive Lowes bill in mail",
+      "LOWES PROCESS: Match each invoice from Lowes Bill to POs in database",
+      "LOWES PROCESS: If no PO, print receipt and go to Ernesto to enter in database",
+      "LOWES PROCESS: Save Ernesto's emailed POs to Accounting-payables-purchase orders-emailed POs folder",
+      "LOWES PROCESS: Print Lowes PO and staple to invoice",
+      "LOWES PROCESS: Add transaction number and invoice date to PO in database, click update",
+      "LOWES PROCESS: Manual entry into QuickBooks and mark accounting received in database",
+      "LOWES PROCESS: Move PO from emailed POs to done folder after entering",
+      "LOWES PROCESS: Pay Lowes bill online - largest amount company first, one payment per day",
+      "LOWES PROCESS: Mark Purchase Orders Paid in database"
+    ]
+  },
+  {
+    id: "purchasing",
+    name: "Ernesto Vazquez",
+    title: "Purchasing",
+    department: "Operations",
+    color: "#0891B2",
+    email: "evazquez@mcvaugh.com",
+    absorbs: ["dop", "purchasing_mgr"],
+        responsibilities: [
+      "Monitor slot schedule to stay ahead of construction",
+      "Obtain plans from construction for bidding and purchasing",
+      "Obtain selections on each house for purchasing and ordering",
+      "Obtain detailed Scopes of Work for each labor trade",
+      "Obtain estimates from outside estimator",
+      "Supplement outside take-off for options, modifications, selections and upgrades",
+      "Obtain competitors labor prices for benchmarking",
+      "Establish cadre of 2-3 competitive subcontractors for every trade that perform to quality standards in a timely manner",
+      "Use CB/USA vendor committee and/or grievance committee to strengthen quality and pricing",
+      "Develop competitive vendors for non-CB/USA categories",
+      "Maintain W-9 on every vendor",
+      "Maintain contractors liability insurance and keep up to date on all required forms",
+      "Ensure all required subcontractor forms and licenses are obtained completely and filed; distribute copies to Construction and Accounting",
+      "Generate SpecWriter specifications",
+      "Process option price requests for modifications, upgrades and change orders from Sales in coordination with Construction",
+      "Maintain house file and vendor/subcontractor files in purchasing",
+      "Maintain Purchasing database items",
+      "Observe material utilization and waste on jobsites",
+      "Process vendor invoices",
+      "Create and maintain feedback system from Construction on vendors and subcontractors",
+      "Establish lead times for any purchase orders or work orders not published at start of home",
+      "Establish system to ask for and monitor vendor rebate and/or Co-Op advertising",
+      "Attend CB/USA meetings",
+      "Develop new product or construction processes for presentation to management committee",
+      "Enhance Purchase Order system working towards goal of paperless process including invoices",
+      "Establish and maintain Purchasing Manual",
+      "Provide Pre-Contract Option Pricing when requested by Sales within 24 hours",
+      "Provide Change Order Pricing when requested by Sales or Buyer within 24 hours"
+    ]
+  },
+  {
+    id: "kenneth",
+    name: "Kenneth Chapman",
+    title: "Senior Accounting Manager",
+    department: "Finance",
+    color: "#2563EB",
+    email: "kchapman@mcvaugh.com",
+    absorbs: ["cfo"],
+    responsibilities: [
+      "Manages all accounting and financial operations",
+      "Prepares financing and database setup for new projects",
+      "Updates QuickBooks with revised budget numbers",
+      "Receives change order log from Maria",
+      "Receives budget revision log from Maria",
+      "Receives proforma from Maria",
+      "Processes bonus payments toward next scheduled pay period",
+      "Updates budgets weekly",
+      "Downloads Actual to Budget reports to Excel on public drive",
+      "Manages accounts payable and receivable",
+      "Oversees all financial reporting",
+      "Receives deposit checks and broker agreements from Teresa",
+      "WEEKLY: Reviews and approves suggested checks to print (with Jim) on Friday",
+      "MONTHLY: Update Cash Report",
+      "MONTHLY: Submit Cash Report",
+      "MONTHLY: Bank Reconciliations",
+      "QUARTERLY: Financial Reports",
+      "QUARTERLY: % of Completion reports (reassigned from Kenneth G)",
+      "QUARTERLY: Balance Intercompanies (reassigned from Kenneth G)",
+      "QUARTERLY: Clear/Reduce Intercomps",
+      "QUARTERLY: Payroll Reports - Texas Mutual & Texas Workforce Commission (reassigned from Kenneth G)",
+      "QUARTERLY: GL Audits (reassigned from Kenneth G)",
+      "YEARLY: HOA - Bill Annual Assessments (TA, OA, POA, Mitigation)",
+      "YEARLY: Update HOA Budgets",
+      "YEARLY: CBUSA Vendor Reporting",
+      "YEARLY: Property Taxes - Update Spreadsheet",
+      "YEARLY: Transfer Previous Year QB Files to CPA to file Taxes via BKC website",
+      "YEARLY: Finalize and send 1099s (Brittany preps, Kenneth sends)",
+      "YEARLY: Medical/Dental/Vision Insurance management",
+      "YEARLY: Manage 401K",
+      "AS NEEDED: Set up new wires in Bank",
+      "AS NEEDED: Request Intercompany Bank Transfers (with Brittany)",
+      "AS NEEDED: Job/Project Reconciliations",
+      "AS NEEDED: Loan Tracking / Debt Schedule Update (reassigned from Kenneth G)",
+      "AS NEEDED: Review Settlement Statements (reassigned from Kenneth G)",
+      "AS NEEDED: Misc. Insurance Items"
+    ,
+      "Reviews invoices weekly and verifies backcharges were entered"
+    ]
+  }
+];
+
+const CURRENT_DEPARTMENTS = [
+  { id: "Executive", color: "#DC2626", icon: "👔" },
+  { id: "Construction", color: "#059669", icon: "🏗️" },
+  { id: "Operations", color: "#0891B2", icon: "⚙️" },
+  { id: "Administration", color: "#EA580C", icon: "📋" },
+  { id: "Sales", color: "#7C3AED", icon: "📊" },
+  { id: "Sales / Design", color: "#C026D3", icon: "🎨" },
+  { id: "IT / Finance", color: "#0891B2", icon: "💻" },
+  { id: "Finance", color: "#2563EB", icon: "💰" }
+    ];
+
+// ─── Main App ────────────────────────────────────────
+function MCHOpsHub() {
+  const [roles, setRoles] = useState(() => {
+    return INITIAL_ROLES;
+  });
+  const [processes] = useState(INITIAL_PROCESSES);
+  const [view, setView] = useState("dashboard");
+  const [selectedRole, setSelectedRole] = useState(null);
+  const [selectedProcess, setSelectedProcess] = useState(null);
+  const [editingRole, setEditingRole] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [showOrgChart, setShowOrgChart] = useState(false);
+  const [orgMode, setOrgMode] = useState("current");
+  const [showROCC, setShowROCC] = useState(false);
+  const [showNA, setShowNA] = useState(false); // "current" or "full"
+  const [currentTeam, setCurrentTeam] = useState(CURRENT_TEAM);
+  const [selectedCurrentMember, setSelectedCurrentMember] = useState(null);
+  const [editingCurrentMember, setEditingCurrentMember] = useState(null);
+
+  const filteredProcesses = processes.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = categoryFilter === "All" || p.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  const filteredRoles = roles.filter(r =>
+    r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.department.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const updateRoleName = (roleId, newName) => {
+    setRoles(prev => prev.map(r => r.id === roleId ? { ...r, name: newName } : r));
+    setEditingRole(null);
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)",
+      color: "#E2E8F0",
+      fontFamily: "'DM Sans', 'Segoe UI', system-ui, sans-serif",
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+      {/* Header */}
+      <header style={{
+        background: "rgba(15, 23, 42, 0.8)",
+        backdropFilter: "blur(20px)",
+        borderBottom: "1px solid rgba(148, 163, 184, 0.1)",
+        padding: "16px 24px",
+        position: "sticky",
+        top: 0,
+        zIndex: 100,
+      }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 40, height: 40,
+              background: "linear-gradient(135deg, #F59E0B, #D97706)",
+              borderRadius: 10,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "'Space Mono', monospace",
+              fontWeight: 700, fontSize: 16, color: "#0F172A"
+            }}>
+              MCH
+            </div>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#F8FAFC", letterSpacing: "-0.02em" }}>
+                McVaugh Custom Homes
+              </h1>
+              <p style={{ margin: 0, fontSize: 11, color: "#94A3B8", fontFamily: "'Space Mono', monospace", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                Operations Hub
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            {/* Org Mode Toggle */}
+            <div style={{
+              display: "flex", gap: 2, background: "rgba(15, 23, 42, 0.8)", borderRadius: 8, padding: 3,
+              border: "1px solid rgba(148, 163, 184, 0.1)",
+            }}>
+              <button
+                onClick={() => { setOrgMode("current"); setSelectedRole(null); setSelectedProcess(null); setSelectedCurrentMember(null); setView("dashboard"); }}
+                style={{
+                  padding: "6px 12px", border: "none", borderRadius: 6, cursor: "pointer",
+                  fontSize: 11, fontFamily: "'Space Mono', monospace", fontWeight: 600,
+                  background: orgMode === "current" ? "rgba(16, 185, 129, 0.25)" : "transparent",
+                  color: orgMode === "current" ? "#10B981" : "#64748B",
+                  transition: "all 0.2s",
+                }}
+              >
+                CURRENT (8)
+              </button>
+              <button
+                onClick={() => { setOrgMode("full"); setSelectedRole(null); setSelectedProcess(null); setSelectedCurrentMember(null); setView("dashboard"); }}
+                style={{
+                  padding: "6px 12px", border: "none", borderRadius: 6, cursor: "pointer",
+                  fontSize: 11, fontFamily: "'Space Mono', monospace", fontWeight: 600,
+                  background: orgMode === "full" ? "rgba(245, 158, 11, 0.25)" : "transparent",
+                  color: orgMode === "full" ? "#F59E0B" : "#64748B",
+                  transition: "all 0.2s",
+                }}
+              >
+                FULL ORG (16)
+              </button>
+            </div>
+
+            {/* ROCC Toggle */}
+            <button
+              onClick={() => setShowROCC(!showROCC)}
+              style={{
+                padding: "6px 12px", borderRadius: 6, cursor: "pointer",
+                fontSize: 10, fontFamily: "'Space Mono', monospace", fontWeight: 600,
+                background: showROCC ? "rgba(168, 85, 247, 0.25)" : "rgba(30, 41, 59, 0.6)",
+                color: showROCC ? "#A855F7" : "#475569",
+                border: showROCC ? "1px solid rgba(168, 85, 247, 0.3)" : "1px solid rgba(148, 163, 184, 0.1)",
+                transition: "all 0.2s",
+              }}
+              title="Toggle Royal Oaks Country Club items on/off"
+            >
+              {showROCC ? "ROCC ●" : "ROCC ○"}
+            </button>
+
+            {/* N/A Toggle */}
+            <button
+              onClick={() => setShowNA(!showNA)}
+              style={{
+                padding: "6px 12px", borderRadius: 6, cursor: "pointer",
+                fontSize: 10, fontFamily: "'Space Mono', monospace", fontWeight: 600,
+                background: showNA ? "rgba(239, 68, 68, 0.25)" : "rgba(30, 41, 59, 0.6)",
+                color: showNA ? "#EF4444" : "#475569",
+                border: showNA ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(148, 163, 184, 0.1)",
+                transition: "all 0.2s",
+              }}
+              title="Toggle N/A (no longer applicable) items on/off to see original gaps"
+            >
+              {showNA ? "N/A ●" : "N/A ○"}
+            </button>
+
+            <nav style={{ display: "flex", gap: 4, background: "rgba(30, 41, 59, 0.8)", borderRadius: 10, padding: 4 }}>
+            {[
+              { id: "dashboard", label: "Dashboard", icon: "◉" },
+              { id: "roles", label: "Team", icon: "◎" },
+              { id: "processes", label: "SOPs", icon: "◈" },
+              { id: "matrix", label: "Matrix", icon: "◇" }
+    ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => { setView(tab.id); setSelectedRole(null); setSelectedProcess(null); }}
+                style={{
+                  padding: "8px 16px",
+                  border: "none",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: view === tab.id ? 600 : 400,
+                  fontFamily: "inherit",
+                  background: view === tab.id ? "rgba(245, 158, 11, 0.2)" : "transparent",
+                  color: view === tab.id ? "#F59E0B" : "#94A3B8",
+                  transition: "all 0.2s",
+                }}
+              >
+                <span style={{ marginRight: 6 }}>{tab.icon}</span>{tab.label}
+              </button>
+            ))}
+          </nav>
+          </div>
+        </div>
+      </header>
+
+      <main style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 24px 80px" }}>
+        {/* Mode Banner */}
+        <div style={{
+          marginBottom: 20, padding: "10px 16px", borderRadius: 10,
+          background: orgMode === "current" ? "rgba(16, 185, 129, 0.08)" : "rgba(245, 158, 11, 0.08)",
+          border: `1px solid ${orgMode === "current" ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)"}`,
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: "50%",
+              background: orgMode === "current" ? "#10B981" : "#F59E0B",
+            }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: orgMode === "current" ? "#10B981" : "#F59E0B" }}>
+              {orgMode === "current" ? "Current Team View" : "Full Organization View"}
+            </span>
+            <span style={{ fontSize: 12, color: "#64748B" }}>
+              {orgMode === "current"
+                ? "— 8 employees covering all responsibilities"
+                : "— 16 positions at full staffing"}
+            </span>
+          </div>
+        </div>
+
+        {/* Search */}
+        {(view === "roles" || view === "processes") && (
+          <div style={{ marginBottom: 24, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <input
+              type="text"
+              placeholder={view === "roles" ? "Search team members..." : "Search procedures..."}
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              style={{
+                flex: 1, minWidth: 200, padding: "10px 16px",
+                background: "rgba(30, 41, 59, 0.8)",
+                border: "1px solid rgba(148, 163, 184, 0.15)",
+                borderRadius: 10, color: "#E2E8F0", fontSize: 14,
+                fontFamily: "inherit", outline: "none",
+              }}
+            />
+            {view === "processes" && (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {CATEGORIES.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(cat)}
+                    style={{
+                      padding: "8px 14px", border: "none", borderRadius: 8,
+                      cursor: "pointer", fontSize: 12, fontFamily: "inherit",
+                      fontWeight: categoryFilter === cat ? 600 : 400,
+                      background: categoryFilter === cat ? "rgba(245, 158, 11, 0.2)" : "rgba(30, 41, 59, 0.5)",
+                      color: categoryFilter === cat ? "#F59E0B" : "#94A3B8",
+                    }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ CURRENT ORG MODE ═══ */}
+        {orgMode === "current" && view === "dashboard" && (
+          <CurrentDashboard
+            team={currentTeam}
+            processes={processes}
+            roles={roles}
+            onSelectMember={m => { setSelectedCurrentMember(m); setView("roles"); }}
+            onSelectProcess={p => { setSelectedProcess(p); setView("processes"); }}
+          />
+        )}
+        {orgMode === "current" && view === "roles" && !selectedCurrentMember && (
+          <div>
+            {/* Org Chart Visual */}
+            <CurrentOrgChart team={currentTeam} onSelectMember={setSelectedCurrentMember} showROCC={showROCC} />
+          </div>
+        )}
+        {orgMode === "current" && view === "roles" && selectedCurrentMember && (
+          <CurrentMemberDetail
+            member={selectedCurrentMember}
+            team={currentTeam}
+            roles={roles}
+            processes={processes}
+            onBack={() => setSelectedCurrentMember(null)}
+            onSelectProcess={p => { setSelectedProcess(p); setView("processes"); }}
+            showROCC={showROCC}
+            showNA={showNA}
+          />
+        )}
+        {orgMode === "current" && view === "processes" && !selectedProcess && (
+          <ProcessGrid
+            processes={filteredProcesses}
+            roles={roles}
+            onSelect={setSelectedProcess}
+            currentTeam={currentTeam}
+            orgMode={orgMode}
+          />
+        )}
+        {orgMode === "current" && view === "processes" && selectedProcess && (
+          <ProcessDetail
+            process={selectedProcess}
+            roles={roles}
+            onBack={() => setSelectedProcess(null)}
+            onSelectRole={r => { setSelectedRole(r); setView("roles"); }}
+            currentTeam={currentTeam}
+            orgMode={orgMode}
+          />
+        )}
+        {orgMode === "current" && view === "matrix" && (
+          <CurrentMatrixView team={currentTeam} processes={processes} roles={roles} onSelectMember={m => { setSelectedCurrentMember(m); setView("roles"); }} onSelectProcess={p => { setSelectedProcess(p); setView("processes"); }} />
+        )}
+
+        {/* ═══ FULL ORG MODE ═══ */}
+        {orgMode === "full" && view === "dashboard" && (
+          <DashboardView
+            roles={roles}
+            processes={processes}
+            onSelectRole={r => { setSelectedRole(r); setView("roles"); }}
+            onSelectProcess={p => { setSelectedProcess(p); setView("processes"); }}
+          />
+        )}
+
+        {orgMode === "full" && view === "roles" && !selectedRole && (
+          <RolesGrid
+            roles={filteredRoles}
+            processes={processes}
+            onSelect={setSelectedRole}
+            editingRole={editingRole}
+            setEditingRole={setEditingRole}
+            updateRoleName={updateRoleName}
+          />
+        )}
+        {orgMode === "full" && view === "roles" && selectedRole && (
+          <RoleDetail
+            role={selectedRole}
+            roles={roles}
+            processes={processes}
+            onBack={() => setSelectedRole(null)}
+            onSelectProcess={p => { setSelectedProcess(p); setView("processes"); }}
+            editingRole={editingRole}
+            setEditingRole={setEditingRole}
+            updateRoleName={updateRoleName}
+          />
+        )}
+
+        {orgMode === "full" && view === "processes" && !selectedProcess && (
+          <ProcessGrid
+            processes={filteredProcesses}
+            roles={roles}
+            onSelect={setSelectedProcess}
+          />
+        )}
+        {orgMode === "full" && view === "processes" && selectedProcess && (
+          <ProcessDetail
+            process={selectedProcess}
+            roles={roles}
+            onBack={() => setSelectedProcess(null)}
+            onSelectRole={r => { setSelectedRole(r); setView("roles"); }}
+          />
+        )}
+
+        {orgMode === "full" && view === "matrix" && (
+          <MatrixView roles={roles} processes={processes} onSelectRole={r => { setSelectedRole(r); setView("roles"); }} onSelectProcess={p => { setSelectedProcess(p); setView("processes"); }} />
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ─── Dashboard ───────────────────────────────────────
+function DashboardView({ roles, processes, onSelectRole, onSelectProcess }) {
+  const deptCounts = {};
+  roles.forEach(r => { deptCounts[r.department] = (deptCounts[r.department] || 0) + 1; });
+
+  return (
+    <div>
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 32 }}>
+        {[
+          { label: "Team Roles", value: roles.length, accent: "#F59E0B" },
+          { label: "SOPs Documented", value: processes.length, accent: "#3B82F6" },
+          { label: "Departments", value: DEPARTMENTS.length, accent: "#10B981" },
+          { label: "Total Process Steps", value: processes.reduce((a, p) => a + p.steps.length, 0), accent: "#8B5CF6" }
+    ].map((stat, i) => (
+          <div key={i} style={{
+            background: "rgba(30, 41, 59, 0.6)",
+            border: "1px solid rgba(148, 163, 184, 0.08)",
+            borderRadius: 14, padding: "20px 24px",
+            borderLeft: `3px solid ${stat.accent}`,
+          }}>
+            <div style={{ fontSize: 32, fontWeight: 700, color: stat.accent, fontFamily: "'Space Mono', monospace" }}>
+              {stat.value}
+            </div>
+            <div style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Org Chart */}
+      <div style={{
+        background: "rgba(30, 41, 59, 0.6)",
+        border: "1px solid rgba(148, 163, 184, 0.08)",
+        borderRadius: 14, padding: 24, marginBottom: 32,
+      }}>
+        <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, color: "#F8FAFC" }}>
+          Organization by Department
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+          {DEPARTMENTS.map(dept => {
+            const deptRoles = roles.filter(r => r.department === dept.id);
+            if (deptRoles.length === 0) return null;
+            return (
+              <div key={dept.id} style={{
+                background: "rgba(15, 23, 42, 0.5)",
+                borderRadius: 12, padding: 16,
+                border: `1px solid ${dept.color}22`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 20 }}>{dept.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: dept.color }}>{dept.id}</span>
+                </div>
+                {deptRoles.map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => onSelectRole(r)}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "8px 10px", marginBottom: 4,
+                      background: "rgba(30, 41, 59, 0.5)",
+                      border: "1px solid rgba(148, 163, 184, 0.06)",
+                      borderRadius: 8, cursor: "pointer",
+                      color: "#CBD5E1", fontSize: 12, fontFamily: "inherit",
+                      transition: "all 0.15s",
+                    }}
+                    onMouseEnter={e => { e.target.style.background = `${r.color}15`; e.target.style.borderColor = `${r.color}33`; }}
+                    onMouseLeave={e => { e.target.style.background = "rgba(30, 41, 59, 0.5)"; e.target.style.borderColor = "rgba(148, 163, 184, 0.06)"; }}
+                  >
+                    <div style={{ fontWeight: 500, fontSize: 12 }}>{r.title.length > 30 ? r.title.split("(")[0].trim() : r.title}</div>
+                    {r.name && <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{r.name}</div>}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Quick Process Access */}
+      <div style={{
+        background: "rgba(30, 41, 59, 0.6)",
+        border: "1px solid rgba(148, 163, 184, 0.08)",
+        borderRadius: 14, padding: 24,
+      }}>
+        <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, color: "#F8FAFC" }}>
+          Standard Operating Procedures
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+          {processes.map(p => {
+            const catColor = {
+              Preconstruction: "#F59E0B",
+              Construction: "#10B981",
+              "Change Management": "#8B5CF6",
+              Financial: "#3B82F6",
+              Operations: "#EC4899",
+              Sales: "#F472B6",
+              Design: "#A855F7",
+              "HR / Admin": "#FB923C",
+            }[p.category] || "#94A3B8";
+            return (
+              <button
+                key={p.id}
+                onClick={() => onSelectProcess(p)}
+                style={{
+                  textAlign: "left", padding: 16,
+                  background: "rgba(15, 23, 42, 0.5)",
+                  border: "1px solid rgba(148, 163, 184, 0.06)",
+                  borderRadius: 12, cursor: "pointer",
+                  color: "#CBD5E1", fontFamily: "inherit",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = `${catColor}44`; e.currentTarget.style.background = `${catColor}08`; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(148, 163, 184, 0.06)"; e.currentTarget.style.background = "rgba(15, 23, 42, 0.5)"; }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <span style={{
+                    fontSize: 10, fontFamily: "'Space Mono', monospace",
+                    padding: "3px 8px", borderRadius: 6,
+                    background: `${catColor}18`, color: catColor,
+                    textTransform: "uppercase", letterSpacing: "0.05em",
+                  }}>
+                    {p.category}
+                  </span>
+                  <span style={{ fontSize: 11, color: "#64748B" }}>{p.steps.length} steps</span>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#E2E8F0", marginBottom: 6 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.4 }}>
+                  Owner: {roles.find(r => r.id === p.owner)?.title || p.owner}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Roles Grid ──────────────────────────────────────
+function RolesGrid({ roles, processes, onSelect, editingRole, setEditingRole, updateRoleName }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+      {roles.map(role => {
+        const roleProcesses = processes.filter(p => p.participants.includes(role.id));
+        return (
+          <div
+            key={role.id}
+            style={{
+              background: "rgba(30, 41, 59, 0.6)",
+              border: "1px solid rgba(148, 163, 184, 0.08)",
+              borderRadius: 14, padding: 20,
+              borderTop: `3px solid ${role.color}`,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+            onClick={() => onSelect(role)}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = `${role.color}44`; e.currentTarget.style.transform = "translateY(-2px)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(148, 163, 184, 0.08)"; e.currentTarget.style.transform = "none"; }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#F8FAFC", marginBottom: 4 }}>{role.title}</div>
+                {editingRole === role.id ? (
+                  <input
+                    autoFocus
+                    defaultValue={role.name}
+                    onClick={e => e.stopPropagation()}
+                    onBlur={e => updateRoleName(role.id, e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") updateRoleName(role.id, e.target.value); }}
+                    style={{
+                      background: "rgba(15, 23, 42, 0.8)", border: `1px solid ${role.color}`,
+                      borderRadius: 6, padding: "4px 8px", color: "#E2E8F0",
+                      fontSize: 13, fontFamily: "inherit", outline: "none", width: "100%",
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{ fontSize: 13, color: role.name ? "#94A3B8" : "#475569", fontStyle: role.name ? "normal" : "italic", cursor: "text" }}
+                    onClick={e => { e.stopPropagation(); setEditingRole(role.id); }}
+                  >
+                    {role.name || "Click to assign name"}
+                  </div>
+                )}
+              </div>
+              <span style={{
+                fontSize: 10, fontFamily: "'Space Mono', monospace",
+                padding: "3px 8px", borderRadius: 6,
+                background: `${role.color}18`, color: role.color,
+              }}>
+                {role.department}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: "#64748B", marginBottom: 8 }}>
+              {role.responsibilities.length} responsibilities · {roleProcesses.length} processes
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {roleProcesses.slice(0, 3).map(p => (
+                <span key={p.id} style={{
+                  fontSize: 10, padding: "2px 8px", borderRadius: 5,
+                  background: "rgba(148, 163, 184, 0.08)", color: "#94A3B8",
+                }}>
+                  {p.name.length > 25 ? p.name.slice(0, 25) + "…" : p.name}
+                </span>
+              ))}
+              {roleProcesses.length > 3 && (
+                <span style={{ fontSize: 10, padding: "2px 8px", color: "#64748B" }}>
+                  +{roleProcesses.length - 3} more
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Role Detail ─────────────────────────────────────
+function RoleDetail({ role, roles, processes, onBack, onSelectProcess, editingRole, setEditingRole, updateRoleName }) {
+  const roleProcesses = processes.filter(p => p.participants.includes(role.id));
+  const collaborators = new Set();
+  roleProcesses.forEach(p => p.participants.forEach(pid => { if (pid !== role.id) collaborators.add(pid); }));
+
+  return (
+    <div>
+      <button onClick={onBack} style={{
+        background: "none", border: "none", color: "#F59E0B", cursor: "pointer",
+        fontSize: 13, fontFamily: "inherit", marginBottom: 16, padding: 0,
+      }}>
+        ← Back to Team
+      </button>
+
+      <div style={{
+        background: "rgba(30, 41, 59, 0.6)",
+        border: "1px solid rgba(148, 163, 184, 0.08)",
+        borderRadius: 14, padding: 28, marginBottom: 24,
+        borderTop: `4px solid ${role.color}`,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+          <div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 24, fontWeight: 700, color: "#F8FAFC" }}>{role.title}</h2>
+            {editingRole === role.id ? (
+              <input
+                autoFocus
+                defaultValue={role.name}
+                onBlur={e => updateRoleName(role.id, e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") updateRoleName(role.id, e.target.value); }}
+                style={{
+                  background: "rgba(15, 23, 42, 0.8)", border: `1px solid ${role.color}`,
+                  borderRadius: 8, padding: "6px 12px", color: "#E2E8F0",
+                  fontSize: 15, fontFamily: "inherit", outline: "none", width: 250,
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  fontSize: 15, color: role.name ? "#94A3B8" : "#475569",
+                  fontStyle: role.name ? "normal" : "italic", cursor: "pointer",
+                  padding: "4px 0",
+                }}
+                onClick={() => setEditingRole(role.id)}
+              >
+                {role.name || "Click to assign employee name"} ✎
+              </div>
+            )}
+          </div>
+          <span style={{
+            fontSize: 12, fontFamily: "'Space Mono', monospace",
+            padding: "6px 14px", borderRadius: 8,
+            background: `${role.color}18`, color: role.color,
+          }}>
+            {role.department}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        {/* Responsibilities */}
+        <div style={{
+          background: "rgba(30, 41, 59, 0.6)",
+          border: "1px solid rgba(148, 163, 184, 0.08)",
+          borderRadius: 14, padding: 24,
+          gridColumn: window.innerWidth < 800 ? "1 / -1" : undefined,
+        }}>
+          <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>
+            Responsibilities ({role.responsibilities.length})
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {role.responsibilities.map((resp, i) => (
+              <div key={i} style={{
+                display: "flex", gap: 10, alignItems: "flex-start",
+                padding: "8px 12px",
+                background: "rgba(15, 23, 42, 0.4)",
+                borderRadius: 8,
+                borderLeft: `2px solid ${role.color}33`,
+              }}>
+                <span style={{ fontSize: 11, color: `${role.color}88`, fontFamily: "'Space Mono', monospace", flexShrink: 0, marginTop: 1 }}>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span style={{ fontSize: 13, color: "#CBD5E1", lineHeight: 1.5 }}>{resp}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Processes + Collaborators */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24, gridColumn: window.innerWidth < 800 ? "1 / -1" : undefined }}>
+          <div style={{
+            background: "rgba(30, 41, 59, 0.6)",
+            border: "1px solid rgba(148, 163, 184, 0.08)",
+            borderRadius: 14, padding: 24,
+          }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>
+              Involved in Processes ({roleProcesses.length})
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {roleProcesses.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => onSelectProcess(p)}
+                  style={{
+                    textAlign: "left", padding: "10px 14px",
+                    background: "rgba(15, 23, 42, 0.4)",
+                    border: "1px solid rgba(148, 163, 184, 0.06)",
+                    borderRadius: 8, cursor: "pointer",
+                    color: "#CBD5E1", fontFamily: "inherit",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#F59E0B33"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(148, 163, 184, 0.06)"; }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: "#64748B", marginTop: 3 }}>{p.category} · {p.steps.length} steps</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{
+            background: "rgba(30, 41, 59, 0.6)",
+            border: "1px solid rgba(148, 163, 184, 0.08)",
+            borderRadius: 14, padding: 24,
+          }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>
+              Works With ({collaborators.size})
+            </h3>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[...collaborators].map(cid => {
+                const collab = roles.find(r => r.id === cid);
+                if (!collab) return null;
+                return (
+                  <span key={cid} style={{
+                    fontSize: 12, padding: "5px 12px", borderRadius: 8,
+                    background: `${collab.color}12`,
+                    color: collab.color,
+                    border: `1px solid ${collab.color}22`,
+                  }}>
+                    {collab.title.split("(")[0].split("-")[0].trim()}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Process Grid ────────────────────────────────────
+function ProcessGrid({ processes, roles, onSelect }) {
+  const catColors = {
+    Preconstruction: "#F59E0B",
+    Construction: "#10B981",
+    "Change Management": "#8B5CF6",
+    Financial: "#3B82F6",
+    Operations: "#EC4899",
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: 16 }}>
+      {processes.map(p => {
+        const color = catColors[p.category] || "#94A3B8";
+        const owner = roles.find(r => r.id === p.owner);
+        return (
+          <div
+            key={p.id}
+            onClick={() => onSelect(p)}
+            style={{
+              background: "rgba(30, 41, 59, 0.6)",
+              border: "1px solid rgba(148, 163, 184, 0.08)",
+              borderRadius: 14, padding: 20,
+              borderLeft: `3px solid ${color}`,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.borderColor = `${color}33`; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = "rgba(148, 163, 184, 0.08)"; }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{
+                fontSize: 10, fontFamily: "'Space Mono', monospace",
+                padding: "3px 8px", borderRadius: 6,
+                background: `${color}18`, color,
+                textTransform: "uppercase", letterSpacing: "0.05em",
+              }}>
+                {p.category}
+              </span>
+              <span style={{ fontSize: 11, color: "#64748B", fontFamily: "'Space Mono', monospace" }}>{p.steps.length} steps</span>
+            </div>
+            <h3 style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 600, color: "#F8FAFC" }}>{p.name}</h3>
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#94A3B8", lineHeight: 1.5 }}>
+              {p.description.length > 120 ? p.description.slice(0, 120) + "…" : p.description}
+            </p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 11, color: "#64748B" }}>
+                Owner: <span style={{ color: owner?.color || "#94A3B8" }}>{owner ? owner.title.split("(")[0].trim() : "—"}</span>
+              </div>
+              <div style={{ display: "flex", gap: -6 }}>
+                {p.participants.slice(0, 5).map(pid => {
+                  const r = roles.find(x => x.id === pid);
+                  return r ? (
+                    <div key={pid} style={{
+                      width: 24, height: 24, borderRadius: "50%",
+                      background: r.color, border: "2px solid #1E293B",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 9, fontWeight: 700, color: "#fff",
+                      marginLeft: -4,
+                    }}>
+                      {(r.title || "").split(" ").map(w => w[0]).join("").slice(0, 2)}
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Process Detail ──────────────────────────────────
+function ProcessDetail({ process, roles, onBack, onSelectRole, showROCC, showNA }) {
+  const [viewMode, setViewMode] = useState("flowchart");
+  const displaySteps = (showROCC ? process.steps : process.steps.filter(s => !s.startsWith("[ROCC]"))).filter(s => showNA || !s.startsWith("[N/A]"));
+  const catColors = {
+    Preconstruction: "#F59E0B", Construction: "#10B981",
+    "Change Management": "#8B5CF6", Financial: "#3B82F6",
+    Operations: "#EC4899", Sales: "#F472B6",
+    Design: "#A855F7", "HR / Admin": "#FB923C",
+  };
+  const color = catColors[process.category] || "#94A3B8";
+  const owner = roles.find(r => r.id === process.owner);
+
+  const detectRole = (step) => {
+    const s = step.toLowerCase();
+    const roleKeywords = [
+      { id: "president", keywords: ["president", "jim signs", "jim "] },
+      { id: "doc", keywords: ["doc ", "doc.", "director of construction", "doc reviews", "doc logs", "doc enters", "doc assigns", "doc orders", "doc receives", "doc fills", "doc meets", "doc submits", "doc notifies", "doc forwards", "doc prints", "doc prepares", "doc modifies", "doc clicks", "doc and/or", "doc places", "doc makes", "doc updates", "doc calculates"] },
+      { id: "dop", keywords: ["dop ", "dop.", "director of purchasing", "director of operations", "dop enters", "dop orders", "dop receives", "dop sends", "dop makes", "dop logs", "dop gives", "dop requests", "dop numbers", "dop informs", "dop calls", "dop verifies", "dop delivers", "dop follows", "dop saves", "dop puts", "dop resends", "dop contacts", "dop coordinates"] },
+      { id: "cfo", keywords: ["cfo ", "cfo.", "cfo prepares", "cfo updates", "cfo processes"] },
+      { id: "superintendent", keywords: ["superintendent", "super ", "super.", "super contacts", "super copies", "super conducts", "super retrieves", "super transfers", "super returns", "super reviews", "super notifies", "super waits", "super proceeds", "super schedules", "super negotiates", "super fills", "super clicks", "super initials", "super gives"] },
+      { id: "dir_sales", keywords: ["dir of sales", "director of sales", "dir. of sales", "dos "] },
+      { id: "sales_exec", keywords: ["sales exec", "sales executive", "your sales executive"] },
+      { id: "purchasing_mgr", keywords: ["purchasing manager", "purchasing determines", "purchasing collects", "purchasing enters", "purchasing receives"] },
+      { id: "project_mgr", keywords: ["project manager", "pm ", "pm.", "pm or doc", "pm types"] },
+      { id: "acct_asst", keywords: ["acct asst", "acct.", "accounting asst", "accounting assistant", "accounting updates"] },
+      { id: "construction_asst", keywords: ["ca ", "ca.", "construction asst", "construction assistant"] },
+      { id: "admin_asst", keywords: ["admin asst", "admin assistant"] },
+      { id: "controller", keywords: ["controller"] },
+      { id: "interior_designer", keywords: ["interior designer", "designer calls", "designer makes", "designer delivers", "designer receives", "designer selects", "designer continues", "designer puts", "designer will", "designer initials"] },
+      { id: "selection_coordinator", keywords: ["selection coordinator"] },
+      { id: "customer_care", keywords: ["customer care"] }
+    ];
+    for (const rk of roleKeywords) {
+      for (const kw of rk.keywords) {
+        if (s.includes(kw)) return roles.find(r => r.id === rk.id);
+      }
+    }
+    return null;
+  };
+
+  return (
+    <div>
+      <button onClick={onBack} style={{
+        background: "none", border: "none", color: "#F59E0B", cursor: "pointer",
+        fontSize: 13, fontFamily: "inherit", marginBottom: 16, padding: 0,
+      }}>
+        ← Back to SOPs
+      </button>
+
+      <div style={{
+        background: "rgba(30, 41, 59, 0.6)",
+        border: "1px solid rgba(148, 163, 184, 0.08)",
+        borderRadius: 14, padding: 28, marginBottom: 24,
+        borderTop: `4px solid ${color}`,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <span style={{
+              fontSize: 11, fontFamily: "'Space Mono', monospace",
+              padding: "4px 10px", borderRadius: 6,
+              background: `${color}18`, color,
+              textTransform: "uppercase", letterSpacing: "0.05em",
+            }}>
+              {process.category}
+            </span>
+            <h2 style={{ margin: "12px 0 8px", fontSize: 24, fontWeight: 700, color: "#F8FAFC" }}>{process.name}</h2>
+            <p style={{ margin: "0 0 16px", fontSize: 14, color: "#94A3B8", lineHeight: 1.6 }}>{process.description}</p>
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13, color: "#64748B" }}>
+              <span>Owner: <span style={{ color: owner?.color }}>{owner?.title || "—"}</span></span>
+              {process.date && <span>Date: {process.date}</span>}
+              <span>{displaySteps.length} steps</span>
+            </div>
+          </div>
+          <div style={{
+            display: "flex", gap: 2, background: "rgba(15, 23, 42, 0.6)", borderRadius: 8, padding: 3,
+            border: "1px solid rgba(148, 163, 184, 0.1)",
+          }}>
+            <button onClick={() => setViewMode("flowchart")} style={{
+              padding: "6px 14px", border: "none", borderRadius: 6, cursor: "pointer",
+              fontSize: 12, fontFamily: "inherit", fontWeight: 600,
+              background: viewMode === "flowchart" ? `${color}25` : "transparent",
+              color: viewMode === "flowchart" ? color : "#64748B",
+            }}>
+              ◈ Flowchart
+            </button>
+            <button onClick={() => setViewMode("list")} style={{
+              padding: "6px 14px", border: "none", borderRadius: 6, cursor: "pointer",
+              fontSize: 12, fontFamily: "inherit", fontWeight: 600,
+              background: viewMode === "list" ? `${color}25` : "transparent",
+              color: viewMode === "list" ? color : "#64748B",
+            }}>
+              ☰ List
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: viewMode === "flowchart" ? "1fr 260px" : "2fr 1fr", gap: 24 }}>
+        {viewMode === "list" && (
+          <div style={{
+            background: "rgba(30, 41, 59, 0.6)",
+            border: "1px solid rgba(148, 163, 184, 0.08)",
+            borderRadius: 14, padding: 24,
+          }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>Process Steps</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {displaySteps.map((step, i) => {
+                const isDecision = step.toLowerCase().startsWith("if ") || step.includes("?");
+                return (
+                  <div key={i} style={{
+                    display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 14px",
+                    background: isDecision ? "rgba(245, 158, 11, 0.05)" : "rgba(15, 23, 42, 0.4)",
+                    borderRadius: 8, borderLeft: `2px solid ${isDecision ? "#F59E0B" : color}33`,
+                  }}>
+                    <span style={{ fontSize: 11, color: isDecision ? "#F59E0B" : `${color}88`, fontFamily: "'Space Mono', monospace", flexShrink: 0, marginTop: 1, minWidth: 20 }}>
+                      {isDecision ? "◆" : String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span style={{ fontSize: 13, color: isDecision ? "#FCD34D" : "#CBD5E1", lineHeight: 1.5 }}>{step}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {viewMode === "flowchart" && (
+          <div style={{
+            background: "rgba(30, 41, 59, 0.6)",
+            border: "1px solid rgba(148, 163, 184, 0.08)",
+            borderRadius: 14, padding: 32, overflowX: "auto",
+          }}>
+            <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>Process Flowchart</h3>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, minWidth: 360 }}>
+              {displaySteps.map((step, i) => {
+                const isDecision = step.includes("?") && !step.toLowerCase().startsWith("if ");
+                const isBranch = step.toLowerCase().startsWith("if ");
+                const isSubprocess = (step.includes("Process") || step.includes("process")) && (step.includes("begins") || step.includes("continues") || step.includes("Follows") || step.includes("Proceeds"));
+                const detectedRole = detectRole(step);
+                const roleColor = detectedRole?.color || "#64748B";
+                const roleName = detectedRole ? detectedRole.title.split("(")[0].split("-")[0].trim() : "";
+
+                const connector = i > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ width: 2, height: 14, background: isBranch ? "#F59E0B44" : "rgba(148, 163, 184, 0.2)" }} />
+                    <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: `5px solid ${isBranch ? "#F59E0B66" : "rgba(148, 163, 184, 0.3)"}` }} />
+                  </div>
+                ) : null;
+
+                if (isDecision) {
+                  return (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      {connector}
+                      <div style={{
+                        width: 200, height: 100,
+                        background: "rgba(245, 158, 11, 0.12)",
+                        border: "2px solid #F59E0B55",
+                        clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        padding: "24px 30px", textAlign: "center",
+                      }}>
+                        <span style={{ fontSize: 10, color: "#FCD34D", lineHeight: 1.3, fontWeight: 600 }}>
+                          {step.length > 50 ? step.slice(0, 50) + "…" : step}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: 80, marginTop: 2 }}>
+                        <span style={{ fontSize: 9, color: "#10B981", fontFamily: "'Space Mono', monospace", fontWeight: 700 }}>YES</span>
+                        <span style={{ fontSize: 9, color: "#EF4444", fontFamily: "'Space Mono', monospace", fontWeight: 700 }}>NO</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (isBranch) {
+                  const isYes = step.toLowerCase().startsWith("if yes");
+                  const isNo = step.toLowerCase().startsWith("if no");
+                  const branchColor = isYes ? "#10B981" : isNo ? "#EF4444" : "#F59E0B";
+                  return (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      {connector}
+                      <div style={{
+                        maxWidth: 360, padding: "8px 14px",
+                        background: `${branchColor}0A`,
+                        border: `1.5px solid ${branchColor}33`,
+                        borderRadius: 8,
+                        borderLeft: `4px solid ${branchColor}`,
+                        textAlign: "center",
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+                          <span style={{
+                            fontSize: 9, fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                            padding: "2px 5px", borderRadius: 3,
+                            background: `${branchColor}22`, color: branchColor,
+                          }}>
+                            {isYes ? "YES" : isNo ? "NO" : "IF"}
+                          </span>
+                          <span style={{ fontSize: 11, color: "#CBD5E1", lineHeight: 1.4 }}>
+                            {step.replace(/^if (yes|no):?\s*/i, "")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (isSubprocess) {
+                  return (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      {connector}
+                      <div style={{
+                        maxWidth: 320, padding: "8px 14px",
+                        background: "rgba(139, 92, 246, 0.08)",
+                        border: "2px dashed #8B5CF644",
+                        borderRadius: 8, textAlign: "center",
+                      }}>
+                        <span style={{ fontSize: 11, color: "#A78BFA", lineHeight: 1.4 }}>{step}</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    {connector}
+                    <div style={{
+                      maxWidth: 370, width: "100%", padding: "10px 14px",
+                      background: `${roleColor}10`,
+                      border: `1.5px solid ${roleColor}33`,
+                      borderRadius: 8, textAlign: "center", position: "relative",
+                    }}>
+                      {roleName && (
+                        <div style={{
+                          position: "absolute", top: -8, left: 10,
+                          fontSize: 8, fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                          padding: "1px 5px", borderRadius: 3,
+                          background: roleColor, color: "#fff",
+                          textTransform: "uppercase", letterSpacing: "0.04em",
+                        }}>
+                          {roleName.length > 22 ? roleName.slice(0, 22) + "…" : roleName}
+                        </div>
+                      )}
+                      <span style={{ fontSize: 11, color: "#E2E8F0", lineHeight: 1.5, display: "block", marginTop: roleName ? 4 : 0 }}>
+                        {step}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{ width: 2, height: 14, background: "rgba(148, 163, 184, 0.2)" }} />
+                <div style={{
+                  width: 40, height: 40, borderRadius: "50%",
+                  background: "rgba(16, 185, 129, 0.12)", border: "2px solid #10B98144",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, color: "#10B981", fontWeight: 700, fontFamily: "'Space Mono', monospace",
+                }}>
+                  END
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{
+          background: "rgba(30, 41, 59, 0.6)",
+          border: "1px solid rgba(148, 163, 184, 0.08)",
+          borderRadius: 14, padding: 24, alignSelf: "start",
+        }}>
+          {viewMode === "flowchart" && (
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 600, color: "#F8FAFC" }}>Color Legend</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {process.participants.map(pid => {
+                  const r = roles.find(x => x.id === pid);
+                  if (!r) return null;
+                  return (
+                    <div key={pid} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 12, height: 12, borderRadius: 3, background: r.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: "#CBD5E1" }}>{r.title.split("(")[0].trim()}</span>
+                    </div>
+                  );
+                })}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                  <div style={{ width: 12, height: 12, background: "#F59E0B", flexShrink: 0, clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)" }} />
+                  <span style={{ fontSize: 11, color: "#FCD34D" }}>Decision Point</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: 3, border: "1.5px dashed #8B5CF6", flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: "#A78BFA" }}>Sub-process</span>
+                </div>
+              </div>
+              <div style={{ height: 1, background: "rgba(148, 163, 184, 0.1)", margin: "12px 0" }} />
+            </div>
+          )}
+
+          <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>
+            Participants ({process.participants.length})
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {process.participants.map(pid => {
+              const r = roles.find(x => x.id === pid);
+              if (!r) return null;
+              const isOwner = pid === process.owner;
+              return (
+                <button
+                  key={pid}
+                  onClick={() => onSelectRole && onSelectRole(r)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "10px 12px",
+                    background: isOwner ? `${r.color}10` : "rgba(15, 23, 42, 0.4)",
+                    border: `1px solid ${isOwner ? r.color + "33" : "rgba(148, 163, 184, 0.06)"}`,
+                    borderRadius: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${r.color}44`; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = isOwner ? `${r.color}33` : "rgba(148, 163, 184, 0.06)"; }}
+                >
+                  <div style={{
+                    width: 28, height: 28, borderRadius: "50%",
+                    background: r.color,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0,
+                  }}>
+                    {(r.title || "").split(" ").map(w => w[0]).join("").slice(0, 2)}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: "#E2E8F0" }}>
+                      {r.title.split("(")[0].trim()}
+                      {isOwner && <span style={{ fontSize: 10, color: "#F59E0B", marginLeft: 6 }}>OWNER</span>}
+                    </div>
+                    {r.name && <div style={{ fontSize: 11, color: "#64748B" }}>{r.name}</div>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Matrix View ─────────────────────────────────────
+function MatrixView({ roles, processes, onSelectRole, onSelectProcess }) {
+  return (
+    <div style={{
+      background: "rgba(30, 41, 59, 0.6)",
+      border: "1px solid rgba(148, 163, 184, 0.08)",
+      borderRadius: 14, padding: 24,
+      overflowX: "auto",
+    }}>
+      <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, color: "#F8FAFC" }}>
+        Role × Process Responsibility Matrix
+      </h2>
+      <p style={{ fontSize: 13, color: "#94A3B8", marginBottom: 20 }}>
+        Click any cell to navigate. Gold cells indicate the process owner. Green cells show participation.
+      </p>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900 }}>
+        <thead>
+          <tr>
+            <th style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: "#94A3B8", fontWeight: 600, borderBottom: "1px solid rgba(148, 163, 184, 0.1)", position: "sticky", left: 0, background: "rgba(30, 41, 59, 0.95)", zIndex: 2, minWidth: 160 }}>
+              Role
+            </th>
+            {processes.map(p => (
+              <th key={p.id} style={{
+                padding: "8px 6px", textAlign: "center", fontSize: 10,
+                color: "#94A3B8", fontWeight: 500,
+                borderBottom: "1px solid rgba(148, 163, 184, 0.1)",
+                cursor: "pointer", maxWidth: 80,
+                writingMode: "vertical-lr", height: 140,
+              }}
+              onClick={() => onSelectProcess(p)}
+              >
+                {p.name.length > 30 ? p.name.slice(0, 30) + "…" : p.name}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {roles.map(role => (
+            <tr key={role.id}>
+              <td
+                onClick={() => onSelectRole(role)}
+                style={{
+                  padding: "8px 12px", fontSize: 12, fontWeight: 500,
+                  color: role.color, cursor: "pointer",
+                  borderBottom: "1px solid rgba(148, 163, 184, 0.05)",
+                  position: "sticky", left: 0, background: "rgba(30, 41, 59, 0.95)", zIndex: 1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {role.title.split("(")[0].split("-")[0].trim()}
+              </td>
+              {processes.map(p => {
+                const isParticipant = p.participants.includes(role.id);
+                const isOwner = p.owner === role.id;
+                return (
+                  <td key={p.id} style={{
+                    padding: 4, textAlign: "center",
+                    borderBottom: "1px solid rgba(148, 163, 184, 0.05)",
+                  }}>
+                    {isParticipant && (
+                      <div style={{
+                        width: 20, height: 20, borderRadius: 5,
+                        margin: "0 auto",
+                        background: isOwner ? "rgba(245, 158, 11, 0.3)" : "rgba(16, 185, 129, 0.2)",
+                        border: `1px solid ${isOwner ? "#F59E0B" : "#10B981"}44`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, color: isOwner ? "#F59E0B" : "#10B981",
+                      }}>
+                        {isOwner ? "★" : "●"}
+                      </div>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Current Dashboard ───────────────────────────────
+function CurrentDashboard({ team, processes, roles, onSelectMember, onSelectProcess }) {
+  const totalResponsibilities = team.reduce((a, m) => a + m.responsibilities.length, 0);
+  const totalAbsorbed = team.reduce((a, m) => a + m.absorbs.length, 0);
+
+  return (
+    <div>
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 32 }}>
+        {[
+          { label: "Current Employees", value: team.length, accent: "#10B981" },
+          { label: "Original Roles Covered", value: totalAbsorbed, accent: "#3B82F6" },
+          { label: "Total Responsibilities", value: totalResponsibilities, accent: "#F59E0B" },
+          { label: "SOPs Active", value: processes.length, accent: "#8B5CF6" },
+          { label: "Avg Roles per Person", value: (totalAbsorbed / team.length).toFixed(1), accent: "#EC4899" }
+    ].map((stat, i) => (
+          <div key={i} style={{
+            background: "rgba(30, 41, 59, 0.6)",
+            border: "1px solid rgba(148, 163, 184, 0.08)",
+            borderRadius: 14, padding: "20px 24px",
+            borderLeft: `3px solid ${stat.accent}`,
+          }}>
+            <div style={{ fontSize: 32, fontWeight: 700, color: stat.accent, fontFamily: "'Space Mono', monospace" }}>
+              {stat.value}
+            </div>
+            <div style={{ fontSize: 13, color: "#94A3B8", marginTop: 4 }}>{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Workload Overview */}
+      <div style={{
+        background: "rgba(30, 41, 59, 0.6)",
+        border: "1px solid rgba(148, 163, 184, 0.08)",
+        borderRadius: 14, padding: 24, marginBottom: 32,
+      }}>
+        <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600, color: "#F8FAFC" }}>
+          Current Team — Workload Distribution
+        </h2>
+        <p style={{ margin: "0 0 20px", fontSize: 13, color: "#94A3B8" }}>
+          Each bar shows how many responsibilities and original roles each team member is covering.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {team.sort((a, b) => b.responsibilities.length - a.responsibilities.length).map(member => {
+            const maxResp = Math.max(...team.map(m => m.responsibilities.length));
+            const pct = (member.responsibilities.length / maxResp) * 100;
+            return (
+              <button
+                key={member.id}
+                onClick={() => onSelectMember(member)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 16, padding: "12px 16px",
+                  background: "rgba(15, 23, 42, 0.4)",
+                  border: "1px solid rgba(148, 163, 184, 0.06)",
+                  borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = `${member.color}33`; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(148, 163, 184, 0.06)"; }}
+              >
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10,
+                  background: `${member.color}20`, border: `2px solid ${member.color}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 14, fontWeight: 700, color: member.color, flexShrink: 0,
+                }}>
+                  {(member.name || member.title).split(" ").map(w => w[0]).join("").slice(0, 2)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <div>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "#F8FAFC" }}>{member.name}</span>
+                      <span style={{ fontSize: 12, color: "#64748B", marginLeft: 8 }}>{member.title}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#94A3B8", flexShrink: 0 }}>
+                      {member.responsibilities.length} tasks · {member.absorbs.length} roles
+                    </div>
+                  </div>
+                  <div style={{ height: 6, background: "rgba(148, 163, 184, 0.08)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", borderRadius: 3,
+                      background: `linear-gradient(90deg, ${member.color}, ${member.color}88)`,
+                      width: `${pct}%`,
+                      transition: "width 0.5s ease",
+                    }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+                    {member.absorbs.map(rid => {
+                      const r = roles.find(x => x.id === rid);
+                      return r ? (
+                        <span key={rid} style={{
+                          fontSize: 10, padding: "2px 6px", borderRadius: 4,
+                          background: "rgba(148, 163, 184, 0.08)", color: "#94A3B8",
+                        }}>
+                          {r.title.split("(")[0].split("-")[0].trim()}
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Quick Process Access (same as full) */}
+      <div style={{
+        background: "rgba(30, 41, 59, 0.6)",
+        border: "1px solid rgba(148, 163, 184, 0.08)",
+        borderRadius: 14, padding: 24,
+      }}>
+        <h2 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 600, color: "#F8FAFC" }}>
+          Standard Operating Procedures
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+          {processes.map(p => {
+            const catColor = {
+              Preconstruction: "#F59E0B", Construction: "#10B981",
+              "Change Management": "#8B5CF6", Financial: "#3B82F6",
+              Operations: "#EC4899", Sales: "#F472B6",
+              Design: "#A855F7", "HR / Admin": "#FB923C",
+            }[p.category] || "#94A3B8";
+            return (
+              <button
+                key={p.id}
+                onClick={() => onSelectProcess(p)}
+                style={{
+                  textAlign: "left", padding: 16,
+                  background: "rgba(15, 23, 42, 0.5)",
+                  border: "1px solid rgba(148, 163, 184, 0.06)",
+                  borderRadius: 12, cursor: "pointer",
+                  color: "#CBD5E1", fontFamily: "inherit",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = `${catColor}44`; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(148, 163, 184, 0.06)"; }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{
+                    fontSize: 10, fontFamily: "'Space Mono', monospace",
+                    padding: "3px 8px", borderRadius: 6,
+                    background: `${catColor}18`, color: catColor,
+                    textTransform: "uppercase",
+                  }}>
+                    {p.category}
+                  </span>
+                  <span style={{ fontSize: 11, color: "#64748B" }}>{p.steps.length} steps</span>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#E2E8F0", marginBottom: 4 }}>{p.name}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Current Team Grid ───────────────────────────────
+function CurrentTeamGrid({ team, roles, processes, onSelect }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: 16 }}>
+      {team.map(member => (
+        <div
+          key={member.id}
+          onClick={() => onSelect(member)}
+          style={{
+            background: "rgba(30, 41, 59, 0.6)",
+            border: "1px solid rgba(148, 163, 184, 0.08)",
+            borderRadius: 14, padding: 20,
+            borderTop: `3px solid ${member.color}`,
+            cursor: "pointer", transition: "all 0.2s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.borderColor = `${member.color}44`; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = "rgba(148, 163, 184, 0.08)"; }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 10,
+                background: `${member.color}20`, border: `2px solid ${member.color}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 16, fontWeight: 700, color: member.color,
+              }}>
+                {(member.name || member.title).split(" ").map(w => w[0]).join("").slice(0, 2)}
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>{member.name}</div>
+                <div style={{ fontSize: 13, color: "#94A3B8" }}>{member.title}</div>
+              </div>
+            </div>
+            <span style={{
+              fontSize: 10, fontFamily: "'Space Mono', monospace",
+              padding: "3px 8px", borderRadius: 6,
+              background: `${member.color}18`, color: member.color,
+            }}>
+              {member.department}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: "#64748B", marginBottom: 8 }}>
+            {member.responsibilities.length} responsibilities · Absorbs {member.absorbs.length} original roles
+          </div>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {member.absorbs.map(rid => {
+              const r = roles.find(x => x.id === rid);
+              return r ? (
+                <span key={rid} style={{
+                  fontSize: 10, padding: "2px 8px", borderRadius: 5,
+                  background: `${r.color}12`, color: r.color,
+                  border: `1px solid ${r.color}22`,
+                }}>
+                  {r.title.split("(")[0].split("-")[0].trim()}
+                </span>
+              ) : null;
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Current Member Detail ───────────────────────────
+function CurrentMemberDetail({ member, team, roles, processes, onBack, onSelectProcess, showROCC, showNA }) {
+  const [activeFilter, setActiveFilter] = useState(null);
+  const memberProcesses = processes.filter(p =>
+    p.participants.some(pid => member.absorbs.includes(pid))
+  );
+  const absorbedRoles = (member.absorbs || []).map(rid => roles.find(r => r.id === rid)).filter(Boolean);
+
+  const mapRespToProcesses = (resp) => {
+    const r = resp.toLowerCase();
+    const matched = [];
+    memberProcesses.forEach(p => {
+      const cm =
+        (r.includes("back charge") || r.includes("backcharge")) && p.id === "back_charge" ||
+        (r.includes("change order") && !r.includes("budget")) && p.id === "change_order_request" ||
+        (r.includes("change order") && r.includes("budget")) && p.id === "change_order_budget" ||
+        (r.includes("budget") && r.includes("revision")) && p.id === "budget_revision" ||
+        (r.includes("budget") && r.includes("weekly")) && p.id === "budget_review" ||
+        (r.includes("budget") && (r.includes("spec") || r.includes("sales price"))) && p.id === "budget_spec" ||
+        (r.includes("work order") || r.includes("work orders") || r.includes("purchase order")) && (p.id === "work_order_ap" || p.id === "new_work_order") ||
+        (r.includes("bonus") || r.includes("occ and sub") || r.includes("walk through") || r.includes("occupancy")) && p.id === "bonus_request" ||
+        (r.includes("permit") || r.includes("rescheck") || r.includes("impact fee")) && p.id === "permitting" ||
+        (r.includes("start memo") || r.includes("start packet") || r.includes("start date")) && (p.id === "permitting" || p.id === "start_packet") ||
+        (r.includes("redline") || r.includes("blueprints")) && (p.id === "preconstruction_redline" || p.id === "preconstruction_planning") ||
+        (r.includes("pre-construction") || r.includes("preconstruction") || r.includes("precon")) && (p.id === "preconstruction_planning" || p.id === "preconstruction_spec") ||
+        (r.includes("hoa") || r.includes("rocc")) && (p.id === "interior_designer_hoa_rocc" || p.id === "interior_designer_selection" || p.id === "start_packet") ||
+        (r.includes("bid") || r.includes("subcontractor")) && (p.id === "new_work_order" || p.id === "start_packet" || p.id === "work_order_ap") ||
+        (r.includes("mirror") || r.includes("verno") || r.includes("brandon")) && p.id === "framed_mirror_purchase" ||
+        (r.includes("quickbooks") || r.includes("quick books")) && (p.id === "budget_review" || p.id === "back_charge" || p.id === "change_order_budget") ||
+        (r.includes("plan") && r.includes("architect")) && (p.id === "start_packet" || p.id === "preconstruction_planning" || p.id === "president_plan_selection") ||
+        (r.includes("contract") && (r.includes("binder") || r.includes("copies") || r.includes("distribute"))) && (p.id === "in_house_contract" || p.id === "preconstruction_redline") ||
+        (r.includes("title company") || r.includes("closing") || r.includes("hud") || r.includes("mls")) && p.id === "in_house_contract" ||
+        (r.includes("welcome packet") || r.includes("welcome gift")) && p.id === "in_house_contract" ||
+        (r.includes("marketing spec")) && p.id === "budget_spec" ||
+        (r.includes("proforma")) && p.id === "preconstruction_planning" ||
+        (r.includes("selection") && (r.includes("designer") || r.includes("phase"))) && (p.id === "interior_designer_selection" || p.id === "interior_designer_hoa_rocc") ||
+        (r.includes("soil") || r.includes("survey") || r.includes("truss")) && p.id === "start_packet" ||
+        (r.includes("esi") || r.includes("reliant") || r.includes("water meter") || r.includes("severn trent")) && p.id === "start_packet" ||
+        (r.includes("landscape")) && p.id === "start_packet" ||
+        (r.includes("financing") || r.includes("database setup")) && p.id === "preconstruction_planning" ||
+        (r.includes("assigns") && r.includes("project")) && p.id === "preconstruction_planning" ||
+        (r.includes("status report")) && p.id === "preconstruction_redline" ||
+        (r.includes("invoice") && r.includes("friday")) && p.id === "back_charge" ||
+        (r.includes("tactical meeting")) && (p.id === "budget_revision" || p.id === "change_order_budget") ||
+        (r.includes("lowes") || r.includes("home depot")) && p.id === "lowes_bill_process" ||
+        (r.includes("amex") || r.includes("receipts") && r.includes("folder")) && (p.id === "accounting_weekly" || p.id === "accounting_monthly") ||
+        (r.includes("draw") && r.includes("built")) && p.id === "accounting_weekly" ||
+        (r.includes("straight invoice")) && p.id === "accounting_weekly" ||
+        (r.includes("wo/po import") || r.includes("database qb")) && p.id === "accounting_weekly" ||
+        (r.includes("utility bill") || r.includes("autopay") || r.includes("gainsborough") || r.includes("yellowstone") || r.includes("kankels") || r.includes("houston seal")) && p.id === "accounting_weekly" ||
+        (r.includes("incoming check") || r.includes("deposit slip") || r.includes("deposit receipt") || r.includes("book deposit")) && p.id === "accounting_weekly" ||
+        (r.includes("shutoff notice") || r.includes("past due on water")) && p.id === "accounting_weekly" ||
+        (r.includes("checks to print") || r.includes("suggested checks") || r.includes("friday")) && r.includes("submit") && p.id === "accounting_weekly" ||
+        (r.includes("builders risk")) && p.id === "accounting_monthly" ||
+        (r.includes("water bill") || r.includes("late fee") || r.includes("past due") && r.includes("oa")) && p.id === "accounting_monthly" ||
+        (r.includes("cash report")) && p.id === "accounting_monthly" ||
+        (r.includes("bank reconcil")) && p.id === "accounting_monthly" ||
+        (r.includes("mvid") || r.includes("sales and use tax")) && p.id === "accounting_monthly" ||
+        (r.includes("reserve money") || r.includes("prosperity")) && p.id === "accounting_monthly" ||
+        (r.includes("banyan tree") || r.includes("bbj")) && p.id === "accounting_monthly" ||
+        (r.includes("title comp") && r.includes("invoice")) && p.id === "accounting_monthly" ||
+        (r.includes("% of completion") || r.includes("completion report")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("intercompan")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("payroll report") || r.includes("texas mutual") || r.includes("workforce commission")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("gl audit")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("annual assessment") || r.includes("hoa budget")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("cbusa")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("property tax") && r.includes("spreadsheet")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("cpa") && r.includes("tax")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("1099")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("medical") || r.includes("dental") || r.includes("vision") || r.includes("insurance management")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("401k") || r.includes("401 k")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("new wire") && r.includes("bank")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("intercompany bank transfer")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("loan tracking") || r.includes("debt schedule")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("settlement statement")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("w9") || r.includes("new vendor")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("new resident") && r.includes("qb")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("hoa attorney")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("new companies") && r.includes("cpa")) && p.id === "accounting_quarterly_yearly" ||
+        (r.includes("not importing") || r.includes("sonny")) && p.id === "accounting_quarterly_yearly";
+      if (cm && !matched.find(m => m.id === p.id)) matched.push(p);
+    });
+    return matched;
+  };
+
+  const catColors = {
+    Preconstruction: "#F59E0B", Construction: "#10B981", "Change Management": "#8B5CF6",
+    Financial: "#3B82F6", Operations: "#EC4899", Sales: "#F472B6",
+    Design: "#A855F7", "HR / Admin": "#FB923C",
+  };
+
+  const roccFiltered = showROCC 
+    ? member.responsibilities 
+    : member.responsibilities.filter(resp => !resp.startsWith("[ROCC]"));
+  const naFiltered = showNA
+    ? roccFiltered
+    : roccFiltered.filter(resp => !resp.startsWith("[N/A]"));
+  const filteredResps = activeFilter
+    ? naFiltered.filter(resp => mapRespToProcesses(resp).some(p => p.id === activeFilter))
+    : naFiltered;
+
+  return (
+    <div>
+      <button onClick={onBack} style={{
+        background: "none", border: "none", color: "#10B981", cursor: "pointer",
+        fontSize: 13, fontFamily: "inherit", marginBottom: 16, padding: 0,
+      }}>
+        ← Back to Team
+      </button>
+
+      <div style={{
+        background: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(148, 163, 184, 0.08)",
+        borderRadius: 14, padding: 28, marginBottom: 24, borderTop: `4px solid ${member.color}`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 12,
+            background: `${member.color}20`, border: `2px solid ${member.color}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20, fontWeight: 700, color: member.color,
+          }}>
+            {(member.name || member.title).split(" ").map(w => w[0]).join("").slice(0, 2)}
+          </div>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: "0 0 4px", fontSize: 24, fontWeight: 700, color: "#F8FAFC" }}>{member.name || member.title}</h2>
+            <div style={{ fontSize: 15, color: "#94A3B8" }}>{member.title}</div>
+          </div>
+          <span style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", padding: "6px 14px", borderRadius: 8, background: `${member.color}18`, color: member.color }}>
+            {member.department}
+          </span>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 12, color: "#64748B", marginBottom: 8 }}>Covering these original roles:</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {absorbedRoles.map(r => (
+              <span key={r.id} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, background: `${r.color}12`, color: r.color, border: `1px solid ${r.color}22` }}>{r.title}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        background: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(148, 163, 184, 0.08)",
+        borderRadius: 14, padding: "14px 20px", marginBottom: 16,
+      }}>
+        <div style={{ fontSize: 12, color: "#64748B", marginBottom: 8 }}>Filter responsibilities by process:</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button onClick={() => setActiveFilter(null)} style={{
+            padding: "5px 12px", border: "none", borderRadius: 6, cursor: "pointer",
+            fontSize: 11, fontFamily: "inherit", fontWeight: 600,
+            background: !activeFilter ? `${member.color}25` : "rgba(30, 41, 59, 0.8)",
+            color: !activeFilter ? member.color : "#64748B",
+          }}>All ({member.responsibilities.length})</button>
+          {memberProcesses.map(p => {
+            const count = member.responsibilities.filter(resp => mapRespToProcesses(resp).some(mp => mp.id === p.id)).length;
+            if (count === 0) return null;
+            const pColor = catColors[p.category] || "#94A3B8";
+            return (
+              <button key={p.id} onClick={() => setActiveFilter(activeFilter === p.id ? null : p.id)} style={{
+                padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 500,
+                background: activeFilter === p.id ? `${pColor}25` : "rgba(30, 41, 59, 0.8)",
+                color: activeFilter === p.id ? pColor : "#94A3B8",
+                border: activeFilter === p.id ? `1px solid ${pColor}44` : "1px solid transparent",
+              }}>{p.name.length > 28 ? p.name.slice(0, 28) + "…" : p.name} ({count})</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div style={{ background: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(148, 163, 184, 0.08)", borderRadius: 14, padding: 24 }}>
+          <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>
+            Responsibilities {activeFilter ? `(${filteredResps.length} filtered)` : `(${member.responsibilities.length})`}
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {filteredResps.map((resp, i) => {
+              const linkedProcesses = mapRespToProcesses(resp);
+              return (
+                <div key={i} style={{ padding: "10px 14px", background: "rgba(15, 23, 42, 0.4)", borderRadius: 10, borderLeft: `3px solid ${member.color}33` }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <span style={{ fontSize: 11, color: `${member.color}88`, fontFamily: "'Space Mono', monospace", flexShrink: 0, marginTop: 1 }}>
+                      {String(member.responsibilities.indexOf(resp) + 1).padStart(2, "0")}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: 13, color: "#CBD5E1", lineHeight: 1.5 }}>{resp}</span>
+                      {linkedProcesses.length > 0 && (
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+                          {linkedProcesses.map(lp => {
+                            const lpColor = catColors[lp.category] || "#94A3B8";
+                            return (
+                              <button key={lp.id} onClick={() => onSelectProcess(lp)} style={{
+                                fontSize: 9, padding: "2px 8px", borderRadius: 4,
+                                background: `${lpColor}15`, color: lpColor,
+                                border: `1px solid ${lpColor}33`, cursor: "pointer", fontFamily: "inherit",
+                                fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em",
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = `${lpColor}30`; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = `${lpColor}15`; }}
+                              >{lp.name.length > 30 ? lp.name.slice(0, 30) + "…" : lp.name}</button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <div style={{ background: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(148, 163, 184, 0.08)", borderRadius: 14, padding: 24 }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>
+              Involved in Processes ({memberProcesses.length})
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {memberProcesses.map(p => {
+                const pColor = catColors[p.category] || "#94A3B8";
+                const respCount = member.responsibilities.filter(resp => mapRespToProcesses(resp).some(mp => mp.id === p.id)).length;
+                return (
+                  <button key={p.id} onClick={() => onSelectProcess(p)} style={{
+                    textAlign: "left", padding: "12px 14px",
+                    background: activeFilter === p.id ? `${pColor}0A` : "rgba(15, 23, 42, 0.4)",
+                    border: `1px solid ${activeFilter === p.id ? pColor + "33" : "rgba(148, 163, 184, 0.06)"}`,
+                    borderRadius: 8, cursor: "pointer", color: "#CBD5E1", fontFamily: "inherit",
+                    borderLeft: `3px solid ${pColor}`,
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+                        <div style={{ fontSize: 11, color: "#64748B", marginTop: 3 }}>{p.category} · {p.steps.length} steps</div>
+                      </div>
+                      {respCount > 0 && (
+                        <span onClick={e => { e.stopPropagation(); setActiveFilter(activeFilter === p.id ? null : p.id); }} style={{
+                          fontSize: 10, padding: "2px 8px", borderRadius: 5,
+                          background: `${pColor}20`, color: pColor,
+                          fontFamily: "'Space Mono', monospace", fontWeight: 700, cursor: "pointer", flexShrink: 0,
+                        }}>{respCount} tasks</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ background: "rgba(30, 41, 59, 0.6)", border: "1px solid rgba(148, 163, 184, 0.08)", borderRadius: 14, padding: 24 }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#F8FAFC" }}>Works With</h3>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {team.filter(m => m.id !== member.id).map(m => (
+                <span key={m.id} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, background: `${m.color}12`, color: m.color, border: `1px solid ${m.color}22` }}>
+                  {m.name || m.title}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Current Matrix View ─────────────────────────────
+function CurrentMatrixView({ team, processes, roles, onSelectMember, onSelectProcess }) {
+  return (
+    <div style={{
+      background: "rgba(30, 41, 59, 0.6)",
+      border: "1px solid rgba(148, 163, 184, 0.08)",
+      borderRadius: 14, padding: 24,
+      overflowX: "auto",
+    }}>
+      <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600, color: "#F8FAFC" }}>
+        Current Team × Process Matrix
+      </h2>
+      <p style={{ fontSize: 13, color: "#94A3B8", marginBottom: 20 }}>
+        Shows which current employee covers each process based on their absorbed roles. Green = involved, Gold = covers the process owner role.
+      </p>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 800 }}>
+        <thead>
+          <tr>
+            <th style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: "#94A3B8", fontWeight: 600, borderBottom: "1px solid rgba(148, 163, 184, 0.1)", position: "sticky", left: 0, background: "rgba(30, 41, 59, 0.95)", zIndex: 2, minWidth: 160 }}>
+              Team Member
+            </th>
+            {processes.map(p => (
+              <th key={p.id} style={{
+                padding: "8px 6px", textAlign: "center", fontSize: 10,
+                color: "#94A3B8", fontWeight: 500,
+                borderBottom: "1px solid rgba(148, 163, 184, 0.1)",
+                cursor: "pointer", maxWidth: 80,
+                writingMode: "vertical-lr", height: 140,
+              }}
+              onClick={() => onSelectProcess(p)}
+              >
+                {p.name.length > 30 ? p.name.slice(0, 30) + "…" : p.name}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {team.map(member => (
+            <tr key={member.id}>
+              <td
+                onClick={() => onSelectMember(member)}
+                style={{
+                  padding: "8px 12px", fontSize: 12, fontWeight: 500,
+                  color: member.color, cursor: "pointer",
+                  borderBottom: "1px solid rgba(148, 163, 184, 0.05)",
+                  position: "sticky", left: 0, background: "rgba(30, 41, 59, 0.95)", zIndex: 1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {member.name}
+              </td>
+              {processes.map(p => {
+                const isParticipant = p.participants.some(pid => member.absorbs.includes(pid));
+                const isOwner = member.absorbs.includes(p.owner);
+                return (
+                  <td key={p.id} style={{
+                    padding: 4, textAlign: "center",
+                    borderBottom: "1px solid rgba(148, 163, 184, 0.05)",
+                  }}>
+                    {isParticipant && (
+                      <div style={{
+                        width: 20, height: 20, borderRadius: 5,
+                        margin: "0 auto",
+                        background: isOwner ? "rgba(245, 158, 11, 0.3)" : "rgba(16, 185, 129, 0.2)",
+                        border: `1px solid ${isOwner ? "#F59E0B" : "#10B981"}44`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, color: isOwner ? "#F59E0B" : "#10B981",
+                      }}>
+                        {isOwner ? "★" : "●"}
+                      </div>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Current Org Chart (Visual Hierarchy) ────────────
+function CurrentOrgChart({ team, onSelectMember }) {
+  if (!team || team.length === 0) return <div style={{ color: "#94A3B8", padding: 40, textAlign: "center" }}>No team data loaded</div>;
+
+  const Card = ({ member, subtitle, vacant }) => {
+    if (!member) return null;
+    return (
+      <button
+        onClick={() => onSelectMember(member)}
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center",
+          padding: "14px 18px",
+          background: vacant ? "rgba(30, 41, 59, 0.4)" : (member.color || "#64748B") + "0C",
+          border: "2px " + (vacant ? "dashed" : "solid") + " " + (vacant ? "#47556944" : (member.color || "#64748B") + "44"),
+          borderRadius: 14,
+          cursor: "pointer", fontFamily: "inherit",
+          transition: "all 0.2s",
+          minWidth: 160, maxWidth: 200,
+          position: "relative",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}
+      >
+        {vacant && (
+          <div style={{
+            position: "absolute", top: -9, right: -8,
+            fontSize: 9, fontFamily: "'Space Mono', monospace", fontWeight: 700,
+            padding: "2px 7px", borderRadius: 6,
+            background: "#F59E0B", color: "#0F172A",
+          }}>
+            HIRING
+          </div>
+        )}
+        <div style={{
+          width: 44, height: 44, borderRadius: 12, marginBottom: 8,
+          background: vacant ? "rgba(71, 85, 105, 0.3)" : (member.color || "#64748B") + "20",
+          border: "2px solid " + (vacant ? "#47556966" : (member.color || "#64748B")),
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 16, fontWeight: 700, color: vacant ? "#64748B" : (member.color || "#64748B"),
+        }}>
+          {member.name ? member.name.split(" ").map(function(w) { return w[0]; }).join("") : "?"}
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: vacant ? "#94A3B8" : "#F8FAFC", textAlign: "center" }}>
+          {member.name || "Open Position"}
+        </div>
+        <div style={{ fontSize: 11, color: vacant ? "#64748B" : (member.color || "#64748B"), marginTop: 2, textAlign: "center", fontWeight: 600 }}>
+          {member.title || ""}
+        </div>
+        {subtitle && <div style={{ fontSize: 10, color: "#64748B", marginTop: 4, textAlign: "center", lineHeight: 1.3 }}>{subtitle}</div>}
+        <div style={{
+          marginTop: 8, fontSize: 10, color: "#94A3B8",
+          fontFamily: "'Space Mono', monospace",
+        }}>
+          {(member.responsibilities || []).length} tasks · {(member.absorbs || []).length} roles
+        </div>
+      </button>
+    );
+  };
+
+  const VertLine = ({ height }) => (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div style={{ width: 2, height: height || 28, background: "rgba(148, 163, 184, 0.2)" }} />
+      <div style={{ width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: "5px solid rgba(148, 163, 184, 0.3)" }} />
+    </div>
+  );
+
+  var jim = team.find(function(m) { return m.id === "jim"; });
+  var directReports = [
+    { member: team.find(function(m) { return m.id === "maria"; }), subtitle: "DOC · Super · PM · CA", vacant: false },
+    { member: team.find(function(m) { return m.id === "purchasing"; }), subtitle: "DOP · Purchasing Mgr", vacant: false },
+    { member: team.find(function(m) { return m.id === "teresa"; }), subtitle: "HR · Admin", vacant: false },
+    { member: team.find(function(m) { return m.id === "kenneth"; }), subtitle: "CFO · Finance", vacant: false },
+    { member: team.find(function(m) { return m.id === "brittany"; }), subtitle: "Controller · Acct Asst", vacant: false },
+    { member: team.find(function(m) { return m.id === "pam"; }), subtitle: "Sales Broker · Designer · Cust Care", vacant: false },
+    { member: team.find(function(m) { return m.id === "james"; }), subtitle: "Sales Exec · Selection Coord", vacant: false }
+    ].filter(function(item) { return item.member; });
+
+  return (
+    <div style={{
+      background: "rgba(30, 41, 59, 0.6)",
+      border: "1px solid rgba(148, 163, 184, 0.08)",
+      borderRadius: 14, padding: 32, marginBottom: 24,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#F8FAFC" }}>
+            Organization Chart
+          </h2>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#94A3B8" }}>
+            Current team structure — click any position to view responsibilities and processes
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#64748B" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: "#10B981" }} /> Filled
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 3, border: "1.5px dashed #475569" }} /> Vacant
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, overflowX: "auto", paddingBottom: 16 }}>
+        {jim && <Card member={jim} subtitle="Executive Leadership" />}
+        <VertLine />
+
+        <div style={{ position: "relative", width: "85%", maxWidth: 960 }}>
+          <div style={{ height: 2, background: "rgba(148, 163, 184, 0.2)", margin: "0 auto", width: "100%" }} />
+        </div>
+
+        <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap", marginTop: 0 }}>
+          {directReports.map(function(item, idx) {
+            return (
+              <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <VertLine height={20} />
+                <Card member={item.member} subtitle={item.subtitle} vacant={item.vacant} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{
+        marginTop: 32, padding: "16px 20px",
+        background: "rgba(15, 23, 42, 0.5)",
+        borderRadius: 10, border: "1px solid rgba(148, 163, 184, 0.06)",
+        display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 16,
+      }}>
+        {team.map(function(m) {
+          return (
+            <div key={m.id} style={{ textAlign: "center", minWidth: 80 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: m.color || "#64748B", fontFamily: "'Space Mono', monospace" }}>
+                {(m.responsibilities || []).length}
+              </div>
+              <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>
+                {m.name || m.title}
+              </div>
+              <div style={{
+                marginTop: 4, height: 4, borderRadius: 2,
+                background: (m.color || "#64748B") + "22", overflow: "hidden",
+              }}>
+                <div style={{
+                  height: "100%", borderRadius: 2,
+                  background: m.color || "#64748B",
+                  width: ((m.responsibilities || []).length / Math.max.apply(null, team.map(function(t) { return (t.responsibilities || []).length; })) * 100) + "%",
+                }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(MCHOpsHub));
+  </script>
+</body>
+</html>

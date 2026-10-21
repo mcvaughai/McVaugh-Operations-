@@ -24,6 +24,7 @@ Optional environment variables:
 | `MOW_DATA_DIR` | Where the sqlite file and credentials live (default `./data`) — point it at a backed-up drive |
 | `MOW_N8N_SECRET` | Shared secret n8n must send in `X-MOW-Secret`; webhook refuses everything until set |
 | `MOW_IMPORT_DIR` | Default folder for Option 3 bulk import (e.g. your Obsidian vault) |
+| `MOW_OPSHUB_PATH` | Path of the old `mch-ops-hub.html`; when set, the file is rewritten from the world's data after every change |
 | `MOW_MCHDB_URL` | Page used for the read-only reachability check (default `http://db.mcvaugh.com/buildconnect/NewStuff/wotracking.html`) |
 
 Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node server\server.js`
@@ -34,7 +35,8 @@ Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node
 * **Start here, Brittany** — current step, last completed, one recommended next action, waiting on whom, decisions needed, mini Next/Working/Waiting/Done board, last checkpoint. *Save checkpoint* writes a new dated checkpoint; history is kept.
 * **Review** — the Stage 2 queue (people show their org-chart title, absorbed legacy roles and the responsibility list from the old ops hub): unverified people, then PROPOSED tasks, one at a time, with duplicate suggestions and merge/reject/verify. Decisions are stamped and survive re-imports.
 * **Handover** — succession view for a departing person (Maria): what only she does, documented vs in her head, who else can do it today, what to capture before she leaves, sorted no-backup first; her procedures with step-by-step reviews and flow charts; each active job's status; a generated next-meeting agenda.
-* **Board / Registry** — everything editable without the 3D view.
+* **Procedures** — old SOPs vs the procedures confirmed in meetings, paired by *supersedes*; filter New / Old / Both.
+* **Board / Registry** — everything editable without the 3D view; Registry includes Vendors by trade (from the SOW Excel).
 * **Integrations** — each shown as disconnected / connected / failing; three import options (Obsidian `.md` from the browser, CSV from the browser, and **Option 3: bulk-import a folder on this computer** with a dry-run preview and skip-unchanged re-import); backup export/restore; handbook export for ChatGPT Pages.
 * **AI config** — per-agent purpose, needs-AI?, provider/model, why, cost, approval, eval examples, fallback.
 * **History** — all activity events with their source tag (MANUAL / N8N / IMPORT / DEMO), checkpoint history, audit (admin).

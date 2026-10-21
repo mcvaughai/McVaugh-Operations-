@@ -130,12 +130,13 @@ function stateFor(role) {
   const demo = db.prepare("SELECT value FROM meta WHERE key = 'demo_mode'").get()?.value === 'on';
   const documents = db.prepare('SELECT * FROM documents ORDER BY kind, title').all().map(d => (d.sensitive && !sens) ? { id: d.id, title: '(restricted: financial)', kind: d.kind, sensitive: 1, restricted: true, task_id: d.task_id } : { ...d, content: d.content ? d.content.slice(0, 20000) : null });
   const handover_items = db.prepare('SELECT * FROM handover_items ORDER BY id').all();
+  const vendors = db.prepare('SELECT * FROM vendors ORDER BY trade').all().map(v => sens ? v : { ...v, contacts: '[]', rate: v.rate ? '(restricted)' : null, restricted: true });
   const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
   const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
   const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db), hubs: imports.hubMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
-    departments, people, agents, tasks, archived_count, homes, documents, handover_items, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
-    server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET, n8n_url: N8N_URL } };
+    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
+    server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET, n8n_url: N8N_URL, opshub_path: can.integrationConfig(role) ? (OPSHUB_PATH || null) : undefined } };
 }
 
 // ---------- demo mode (clearly labeled; source = 'demo') ----------
@@ -247,6 +248,21 @@ function agendaMarkdown(h) {
   return L.join('\n');
 }
 
+// ---------- keep the old ops hub file in step with the world (MOW_OPSHUB_PATH) ----------
+const OPSHUB_PATH = process.env.MOW_OPSHUB_PATH || '';
+let opshubTimer = null;
+function scheduleOpsHubWrite(reason) {
+  if (!OPSHUB_PATH) return;
+  clearTimeout(opshubTimer);
+  opshubTimer = setTimeout(() => {
+    try {
+      const html = imports.regenerateOpsHub(db, fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.template.html'), 'utf8'));
+      fs.writeFileSync(OPSHUB_PATH, html);
+      setIntegration('dashboard', 'connected', `Ops hub file rewritten ${dbm.nowIso()} (${reason}) → ${OPSHUB_PATH}`);
+    } catch (e) { setIntegration('dashboard', 'failing', `Could not rewrite ${OPSHUB_PATH}: ${e.message}`); }
+  }, 3000);
+}
+
 // ---------- router ----------
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -315,6 +331,10 @@ async function api(req, res, url, p, role) {
     const h = handoverView(pid, role);
     if (p === '/api/handover/agenda') return send(res, 200, agendaMarkdown(h), { 'Content-Type': MIME['.md'] });
     return send(res, 200, h);
+  }
+  if (p === '/api/export/opshub' && m === 'GET') { // the old dashboard, regenerated from the world
+    const html = imports.regenerateOpsHub(db, fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.template.html'), 'utf8'));
+    dbm.audit(db, role, 'export_opshub'); return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': 'attachment; filename="mch-ops-hub.html"' });
   }
   if (p === '/api/export/pages' && m === 'GET') return send(res, 200, imports.pagesMarkdown(stateFor(role)), { 'Content-Type': MIME['.md'] });
 
@@ -394,11 +414,11 @@ async function api(req, res, url, p, role) {
     if (b.hubs) db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('hub_departments', ?)").run(JSON.stringify(b.hubs));
     dbm.audit(db, role, 'update_aliases'); return send(res, 200, { headings: imports.headingMap(db), aliases: imports.aliasMap(db) });
   }
-  if (p === '/api/review/merge' && m === 'POST') { const b = await readJson(req); const t = imports.mergeTasks(db, b.source_id, b.target_id, role); dbm.audit(db, role, 'merge', 'tasks', b.target_id, b.source_id); return send(res, 200, t); }
+  if (p === '/api/review/merge' && m === 'POST') { const b = await readJson(req); const t = imports.mergeTasks(db, b.source_id, b.target_id, role); dbm.audit(db, role, 'merge', 'tasks', b.target_id, b.source_id); scheduleOpsHubWrite('merge'); return send(res, 200, t); }
   if (p === '/api/review/duplicates' && m === 'POST') { const b = await readJson(req); const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(b.id); if (!task) return send(res, 404, { error: 'not found' }); return send(res, 200, imports.duplicateCandidates(db.prepare('SELECT * FROM tasks').all(), task)); }
   if (p === '/api/export/pages/mark' && m === 'POST') { dbm.addEvent(db, { entity_type: 'integration', entity_id: 'pages', kind: 'import', status: 'info', label: 'Manual: handbook export pasted into ChatGPT Pages', source: 'manual', actor: role, external_id: 'pages-' + crypto.randomUUID() }); setIntegration('pages', 'disconnected', 'Manual export workflow; last export ' + dbm.nowIso(), { last_import_at: dbm.nowIso() }); return send(res, 200, { ok: true }); }
   // generic table upsert / delete: /api/<table>[/<id>]
-  const mt = p.match(/^\/api\/(departments|people|agents|tasks|homes|decisions|integrations|ai_configs|documents|handover_items)(?:\/([^/]+))?$/);
+  const mt = p.match(/^\/api\/(departments|people|agents|tasks|homes|decisions|integrations|ai_configs|documents|handover_items|vendors)(?:\/([^/]+))?$/);
   if (mt) {
     const [, table, id] = mt;
     if (m === 'DELETE' && id) {
@@ -415,6 +435,7 @@ async function api(req, res, url, p, role) {
     if (table === 'tasks' && (body.proposed === 0 || body.proposed === '0' || body.archived)) { body.reviewed_at = dbm.nowIso(); body.reviewed_by = role; }
     const row = dbm.upsert(db, table, body);
     dbm.audit(db, role, before ? 'update' : 'create', table, row.id, JSON.stringify(body).slice(0, 500));
+    if (['tasks', 'people'].includes(table)) scheduleOpsHubWrite(`${table} ${row.id} changed`);
     // setup milestone changes are recorded as events so history shows who/when
     const milestoneKeys = ['setup_stage', 'review_status', 'documented', 'automated', 'verified', 'board', 'active', 'pilot', 'proposed', 'archived'];
     const changed = milestoneKeys.filter(k => body[k] !== undefined && (!before || String(before[k]) !== String(body[k])));
@@ -426,7 +447,7 @@ async function api(req, res, url, p, role) {
 }
 
 server.listen(PORT, () => {
-  loadCredentials(); startFolderWatch();
+  loadCredentials(); startFolderWatch(); if (OPSHUB_PATH) { console.log(`Ops hub file kept in step: ${OPSHUB_PATH}`); scheduleOpsHubWrite('startup'); }
   console.log(`McVaugh Operations World → http://localhost:${PORT}  (db: ${dbm.DB_PATH}${seeded ? ', seeded from handoff' : ''})`);
   console.log(`Role passphrases: ${CRED_PATH}`);
 });

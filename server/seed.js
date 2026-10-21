@@ -316,6 +316,53 @@ const UPDATES = [
     }
     for (const [hid, l] of Object.entries(S.HANDOVER_LINKS)) if (db.prepare('SELECT 1 FROM handover_items WHERE id = ?').get(hid)) upsert(db, 'handover_items', { id: hid, task_ids: l.tasks, doc_ids: l.docs, why: S.HANDOVER_WHY[hid] || null });
   } },
+  { key: 'meeting-3-2026-10-20', apply(db) {
+    const M = require('../seed/meeting-2026-10-20.js'); const ts = nowIso();
+    const text = fs.readFileSync(path.join(__dirname, '..', M.MEETING.file), 'utf8');
+    upsert(db, 'documents', { id: M.MEETING.id, title: M.MEETING.title, path: M.MEETING.file, kind: 'meeting', kind_reason: 'meeting transcript', sensitive: 0, summary: M.MEETING.summary, content: text, size: text.length, source: M.MEETING.source, imported_at: ts, meeting_date: M.MEETING.date, attendees: JSON.stringify(M.MEETING.attendees), cite_key: M.MEETING.cite, underlying_status: 'extracted' });
+    addEvent(db, { entity_type: 'document', entity_id: M.MEETING.id, kind: 'import', status: 'info', label: `Meeting transcript stored: ${M.MEETING.date} ${M.MEETING.title}`, source: 'import', actor: 'brittany', external_id: 'meeting-' + M.MEETING.id });
+    for (const [taskId, rows] of Object.entries(M.STEP_REVIEW_APPEND)) {
+      const t = db.prepare('SELECT step_review, verification_result FROM tasks WHERE id = ?').get(taskId); if (!t) continue;
+      const existing = JSON.parse(t.step_review || '[]');
+      // a later meeting's finding on the same step replaces the earlier verdict for that step
+      const span = n => { const m = String(n).match(/^(\d+)\s*[–-]\s*(\d+)$/); if (m) { const a = []; for (let i = +m[1]; i <= +m[2]; i++) a.push(String(i)); return a; } return [String(n)]; };
+      const covered = new Set(rows.filter(n => n.n !== 'new').flatMap(n => span(n.n)));
+      const merged = existing.filter(r => r.n === 'new' || !span(r.n).some(x => covered.has(x))).concat(rows);
+      upsert(db, 'tasks', { id: taskId, step_review: JSON.stringify(merged), verification_result: (t.verification_result || '') + ` Updated from the 2026-10-20 call: ${rows.map(r => `${r.n} ${r.verdict.replace('_', ' ')}`).join('; ')}.` });
+      addEvent(db, { entity_type: 'task', entity_id: taskId, kind: 'setup', status: 'info', label: 'Step review updated from the 2026-10-20 call', source: 'import', actor: 'brittany', external_id: 'stepreview3-' + taskId });
+    }
+    for (const n of M.NEW_TASKS) { const ex = db.prepare('SELECT id FROM tasks WHERE id = ?').get(n.id); upsert(db, 'tasks', { ...n, ...(ex ? { proposed: undefined, board: undefined } : {}) }); }
+    for (const h of M.HOME_UPDATES) {
+      let home = db.prepare('SELECT * FROM homes WHERE lower(address) = lower(?)').get(h.match); if (!home) continue;
+      upsert(db, 'homes', { id: home.id, stage: h.stage || undefined, active: h.active || undefined, kind: h.kind || undefined, notes: [home.notes, h.notes_add + ' ' + h.cite].filter(Boolean).join('\n'), status_cite: [home.status_cite, h.cite + ' (Maria call 2026-10-20)'].filter(Boolean).join('; ') });
+      addEvent(db, { entity_type: 'home', entity_id: home.id, kind: 'note', status: 'info', label: `From Maria call 2026-10-20: ${h.notes_add.slice(0, 80)}`, source: 'import', actor: 'brittany', external_id: 'home3-' + home.id });
+    }
+    for (const u of M.HANDOVER_UPDATES) { const ex = db.prepare('SELECT note FROM handover_items WHERE id = ?').get(u.id); if (!ex) continue; upsert(db, 'handover_items', { ...u, note: [ex.note, u.note].filter(Boolean).join('\n') }); }
+    for (const h of M.NEW_HANDOVER) upsert(db, 'handover_items', { ...h, person_id: 'maria', status: 'open' });
+    for (const [newId, olds] of Object.entries(M.SUPERSEDES)) if (db.prepare('SELECT 1 FROM tasks WHERE id = ?').get(newId)) upsert(db, 'tasks', { id: newId, supersedes: olds });
+    upsert(db, 'people', { id: 'maria', notes: 'LEAVING — last day before Nov 9 ("November 3rd I\'m still here; worry about November 9th") [M3 5:37]. Succession pass in progress; see the Handover tab.' });
+    db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`).run(ts, 'map',
+      'Succession pass: three meetings reconciled; Procedures tab shows old vs new; Maria leaves before Nov 9.',
+      'Meeting 3 (2026-10-20 call) stored: plan types per address, Landing supervision scopes, change orders outside the database, inspection binder, budget-increase-as-log.',
+      'Friday 10/23 meeting with Maria: take the agenda (Landing supervision, inspection binder, square-footage sheet, 11603 calendar photo). Upload the scopes doc and the inspections/fees doc when they arrive.',
+      'Maria (scopes doc 10/20, calendar photo, square-footage sheet, permit resubmittal recording); Frank\'s company (Landing schedule)',
+      'Who calls Landing inspections after Nov 9; who prices change orders after Maria; whether Kenneth owns insurance tracking.',
+      'Added by the meeting-3 update.', 'system');
+  } },
+  { key: 'sow-vendors-2026-10-21', apply(db) {
+    // SOW_subs_pricing_contractor_info.xlsx supplied by Brittany 2026-10-21 — the vendor/rate list Maria promised [M 18:59] with the contact columns she said she would add [M3 7:43].
+    const { importSow } = require('./imports'); const ts = nowIso();
+    const fp = path.join(__dirname, '..', 'seed', 'files', 'SOW_subs_pricing_contractor_info.xlsx'); const buf = fs.readFileSync(fp);
+    const src = 'SOW_subs_pricing_contractor_info.xlsx (Maria), via Brittany 2026-10-21';
+    const n = importSow(db, buf, src);
+    const { xlsxText } = require('./imports'); const text = xlsxText(buf);
+    upsert(db, 'documents', { id: 'doc-sow-excel', title: 'SOW — subs, pricing, contractor info (Excel)', path: 'SOW_subs_pricing_contractor_info.xlsx', kind: 'reference', kind_reason: 'supplied by Brittany 2026-10-21', sensitive: 1, task_id: 'tr-bids-and-sqft-rates',
+      summary: `Two sheets: Purchasing (trade → subcontractor type, documents to provide, current $/sf, notes/lead times) and Construction (trade → current vendor, contact names, phone/email, who to call for bidding vs scheduling). ${n} trades.`, size: buf.length, source: src, imported_at: ts, file_path: fp, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', content: text.slice(0, 200 * 1024), underlying_status: 'extracted', underlying_path: 'SOW_subs_pricing_contractor_info.xlsx' });
+    for (const hid of ['ho-work-orders', 'ho-bids-vendors']) { const h = db.prepare('SELECT doc_ids, note, documented FROM handover_items WHERE id = ?').get(hid); if (!h) continue; const ids = JSON.parse(h.doc_ids || '[]'); if (!ids.includes('doc-sow-excel')) ids.unshift('doc-sow-excel'); upsert(db, 'handover_items', { id: hid, doc_ids: ids, documented: hid === 'ho-bids-vendors' ? 'yes (SOW Excel 10/21: vendors, contacts, $/sf)' : h.documented, note: [h.note, `10/21: SOW Excel received — ${n} trades with current vendor, contacts and $/sf rates; square footage per plan still missing.`].filter(Boolean).join('\n') }); }
+    const t = db.prepare('SELECT doc_ids FROM tasks WHERE id = ?').get('tr-bids-and-sqft-rates'); if (t) { const ids = JSON.parse(t.doc_ids || '[]'); if (!ids.includes('doc-sow-excel')) upsert(db, 'tasks', { id: 'tr-bids-and-sqft-rates', doc_ids: [...ids, 'doc-sow-excel'], documented: 1, inputs: 'SOW Excel (10/21): per trade — subcontractor type, documents to provide for bidding, current $/sf, lead-time notes; Construction sheet — current vendor and who to call for bidding vs field scheduling. See Registry → Vendors.' }); }
+    upsert(db, 'integrations', { id: 'excel', status: 'connected', last_import_at: ts, last_message: `Snapshot: SOW Excel seeded (${n} trades)` });
+    addEvent(db, { entity_type: 'integration', entity_id: 'excel', kind: 'import', status: 'info', label: `Snapshot import: SOW_subs_pricing_contractor_info.xlsx → ${n} vendors`, source: 'import', actor: 'brittany', external_id: 'update-sow-2026-10-21' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

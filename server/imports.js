@@ -94,6 +94,31 @@ function docxText(buf) {
 function htmlText(buf) {
   return decodeEntities(buf.toString('utf8').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, '').replace(/<\/(p|div|li|tr|h\d|section|article|br)>/gi, '\n').replace(/<[^>]+>/g, '')).replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
 }
+// Minimal .xlsx reader (shared strings + inline values); enough to turn a sheet into rows of text. No formulas evaluated.
+function xlsxSheets(buf) {
+  const wbXml = zipEntry(buf, 'xl/workbook.xml')?.toString('utf8') || '';
+  const relsXml = zipEntry(buf, 'xl/_rels/workbook.xml.rels')?.toString('utf8') || '';
+  const ssXml = zipEntry(buf, 'xl/sharedStrings.xml')?.toString('utf8') || '';
+  const shared = [...ssXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map(m => decodeEntities(m[1].replace(/<[^>]+>/g, '')));
+  const rels = Object.fromEntries([...relsXml.matchAll(/<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g)].map(m => [m[1], m[2].replace(/^\/?xl\//, '').replace(/^\//, '')]));
+  const sheets = [...wbXml.matchAll(/<sheet [^>]*name="([^"]+)"[^>]*r:id="([^"]+)"/g)].map(m => ({ name: decodeEntities(m[1]), target: rels[m[2]] || '' }));
+  return sheets.map(sh => {
+    const xml = zipEntry(buf, sh.target.startsWith('worksheets') ? 'xl/' + sh.target : sh.target)?.toString('utf8') || '';
+    const rows = [];
+    for (const rm of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
+      const cells = {};
+      for (const cm of rm[1].matchAll(/<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const col = cm[1], attrs = cm[2] || '', inner = cm[3] || '';
+        const t = (attrs.match(/t="([^"]+)"/) || [])[1]; let v = (inner.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
+        if (t === 's') v = shared[+v]; else if (t === 'inlineStr') v = decodeEntities(inner.replace(/<[^>]+>/g, '')); else if (v !== undefined) v = decodeEntities(v);
+        if (v !== undefined && v !== '') cells[col] = v;
+      }
+      if (Object.keys(cells).length) rows.push(cells);
+    }
+    return { name: sh.name, rows };
+  });
+}
+function xlsxText(buf) { return xlsxSheets(buf).map(s => `## ${s.name}\n` + s.rows.map(r => Object.keys(r).sort((a, b) => a.length - b.length || a.localeCompare(b)).map(k => r[k]).join(' | ')).join('\n')).join('\n\n'); }
 const MAX_CONTENT = 200 * 1024;
 // Resolve an index card's link relative to the note and extract text when the format allows.
 function followLink(noteFullPath, rel) {
@@ -103,6 +128,7 @@ function followLink(noteFullPath, rel) {
   const ext = path.extname(resolved).toLowerCase();
   try {
     if (ext === '.docx') return { status: 'extracted', text: docxText(fs.readFileSync(resolved)).slice(0, MAX_CONTENT), resolved };
+    if (ext === '.xlsx') return { status: 'extracted', text: xlsxText(fs.readFileSync(resolved)).slice(0, MAX_CONTENT), resolved };
     if (ext === '.html' || ext === '.htm') return { status: 'extracted', text: htmlText(fs.readFileSync(resolved)).slice(0, MAX_CONTENT), resolved };
     if (ext === '.md' || ext === '.txt' || ext === '.csv') return { status: 'extracted', text: fs.readFileSync(resolved, 'utf8').slice(0, MAX_CONTENT), resolved };
     return { status: 'needs_conversion', text: null, resolved }; // .doc, .pdf, .xlsx …: save as .docx/.html/.csv or paste
@@ -468,6 +494,68 @@ function importOpsHub(db, { filename, content }, role) {
 }
 function personNameFromDb(db, id) { return db.prepare('SELECT name FROM people WHERE id = ?').get(id)?.name || id; }
 
+
+// ---------- SOW_subs_pricing_contractor_info.xlsx → vendors (trade, sub, docs to provide, $/sf, contacts) ----------
+function parseSowWorkbook(buf) {
+  const sheets = xlsxSheets(buf); const byTrade = {};
+  const key = t => String(t || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const purch = sheets.find(s => /purchas/i.test(s.name)), cons = sheets.find(s => /construct/i.test(s.name));
+  let cur = null;
+  for (const r of (purch?.rows || []).slice(1)) {
+    if (r.A) { cur = key(r.A); byTrade[cur] = byTrade[cur] || { trade: r.A.trim(), docs: [], contacts: [] }; Object.assign(byTrade[cur], { sub_type: r.B || byTrade[cur].sub_type, rate: r.D || byTrade[cur].rate, notes: [byTrade[cur].notes, r.E].filter(Boolean).join(' ') }); }
+    if (cur && r.C) byTrade[cur].docs.push(String(r.C).trim());
+  }
+  cur = null;
+  for (const r of (cons?.rows || []).slice(1)) {
+    if (r.A) { // a Construction row may name several trades ("LOT SCRAPE, FOUNDATION, FLATWORK"): the vendor and contacts apply to each
+      const parts = key(r.A).split(/\s*[,/]\s*/).filter(Boolean);
+      cur = parts.map(pt => Object.keys(byTrade).find(t => t === pt) || Object.keys(byTrade).find(t => t.startsWith(pt) || pt.startsWith(t)) || pt);
+      cur = [...new Set(cur)];
+      for (const k of cur) { byTrade[k] = byTrade[k] || { trade: k, docs: [], contacts: [] }; byTrade[k].vendor = r.B || byTrade[k].vendor; }
+    }
+    if (cur && (r.C || r.D)) for (const k of cur) { const last = byTrade[k].contacts[byTrade[k].contacts.length - 1]; if (!r.C && last) { last.info = [last.info, r.D].filter(Boolean).join(' / '); if (r.E) last.note = [last.note, r.E].filter(Boolean).join(' '); } else byTrade[k].contacts.push({ name: r.C || '', info: r.D || '', note: r.E || '' }); }
+  }
+  return Object.values(byTrade);
+}
+function importSow(db, buf, source) {
+  const ts = nowIso(); let n = 0;
+  for (const v of parseSowWorkbook(buf)) {
+    upsert(db, 'vendors', { id: 'vendor-' + slug(v.trade), trade: v.trade, vendor: v.vendor || v.sub_type || null, contacts: JSON.stringify(v.contacts), rate: v.rate || null, docs_needed: v.docs.join('\n'), notes: v.notes || null, source, imported_at: ts }); n++;
+  }
+  return n;
+}
+
+// ---------- regenerate the old MCH Operations Hub from the world's current data ----------
+// Keeps the hub's own UI (seed/mch-ops-hub.template.html) and replaces its data constants, so the old dashboard
+// stays in step with the world: SOPs (old + confirmed new, with supersedes), current-team responsibilities, cross-offs.
+function regenerateOpsHub(db, templateHtml) {
+  const base = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8'));
+  const people = db.prepare('SELECT * FROM people').all(), tasks = db.prepare('SELECT * FROM tasks WHERE archived = 0').all();
+  const roleIdByTitle = Object.fromEntries(base.roles.map(r => [r.title, r.id]));
+  const personLegacy = p => JSON.parse(p.legacy_roles || '[]').map(t => roleIdByTitle[t]).filter(Boolean);
+  const ownerRole = id => { const p = people.find(x => x.id === id); return p ? (personLegacy(p)[0] || p.id) : 'doc'; };
+  const steps = t => String(t.steps || '').split(/\n/).map(x => x.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean);
+  const processes = [];
+  for (const bp of base.processes) { // old SOPs keep their original structure; steps/description refreshed from the task if edited
+    const t = tasks.find(x => x.id === 'hub-' + bp.id); const by = tasks.filter(x => JSON.parse(x.supersedes || '[]').includes('hub-' + bp.id));
+    processes.push({ ...bp, status: by.length ? 'superseded' : 'legacy', supersededBy: by.map(x => x.id), reviewed: t?.step_review ? 'reviewed against meetings' : 'not reviewed', ...(t && t.steps && steps(t).length ? { steps: steps(t) } : {}) });
+  }
+  for (const t of tasks.filter(x => x.id.startsWith('tr-'))) {
+    processes.push({ id: t.id, name: t.title, owner: ownerRole(t.owner_id), date: (t.source || '').replace(/\s*\(transcript\)/, ''), category: 'Current (confirmed)', description: t.trigger ? 'Trigger: ' + t.trigger : (t.verification_result || ''), steps: steps(t), participants: [ownerRole(t.owner_id), ...(t.backup_id ? [ownerRole(t.backup_id)] : [])], status: 'current', supersedes: JSON.parse(t.supersedes || '[]').map(id => id.replace(/^hub-/, '')), missing: t.missing_info || '' });
+  }
+  const team = base.team.map(bt => {
+    const p = people.find(x => x.id === bt.id) || people.find(x => (x.full_name || '').toLowerCase() === String(bt.name || '').toLowerCase()); if (!p) return bt;
+    return { ...bt, name: p.full_name || bt.name, title: p.title || bt.title, email: p.email || bt.email, absorbs: personLegacy(p).length ? personLegacy(p) : bt.absorbs,
+      responsibilities: [...JSON.parse(p.responsibilities || '[]'), ...JSON.parse(p.crossed_off || '[]').map(r => '[N/A] ' + r)], review_status: p.review_status, leaving: /LEAVING/.test(p.notes || '') };
+  });
+  for (const p of people) if (!team.find(t => t.id === p.id) && JSON.parse(p.responsibilities || '[]').length) team.push({ id: p.id, name: p.full_name || p.name, title: p.title || '', department: '', color: '#64748B', email: p.email || '', absorbs: personLegacy(p), responsibilities: JSON.parse(p.responsibilities || '[]') });
+  const lit = v => JSON.stringify(v, null, 2);
+  let html = templateHtml;
+  const replaceConst = (name, value) => { const re = new RegExp(`const ${name} = \\[[\\s\\S]*?\\n\\];`); if (!re.test(html)) throw new Error('template missing ' + name); html = html.replace(re, () => `const ${name} = ${lit(value)};`); };
+  replaceConst('INITIAL_PROCESSES', processes); replaceConst('CURRENT_TEAM', team);
+  html = html.replace(/<\/head>/, `<!-- regenerated by McVaugh Operations World on ${nowIso()}; data constants come from the world's database. Edit in the world, not here. -->\n</head>`);
+  return html;
+}
 // ---------- review helpers ----------
 const tokens = s => new Set(String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !['the', 'and', 'for', 'procedure', 'process'].includes(w)));
 function similarity(a, b) { const A = tokens(a), B = tokens(b); if (!A.size || !B.size) return 0; let n = 0; for (const t of A) if (B.has(t)) n++; return n / Math.min(A.size, B.size); }
@@ -509,4 +597,4 @@ function pagesMarkdown(state) {
   return L.filter(x => x !== undefined).join('\n');
 }
 
-module.exports = { parseOpsHub, importOpsHub, parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };
+module.exports = { parseSowWorkbook, importSow, regenerateOpsHub, xlsxSheets, xlsxText, parseOpsHub, importOpsHub, parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };

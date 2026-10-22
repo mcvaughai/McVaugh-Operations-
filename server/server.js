@@ -131,11 +131,13 @@ function stateFor(role) {
   const documents = db.prepare('SELECT * FROM documents ORDER BY kind, title').all().map(d => (d.sensitive && !sens) ? { id: d.id, title: '(restricted: financial)', kind: d.kind, sensitive: 1, restricted: true, task_id: d.task_id } : { ...d, content: d.content ? d.content.slice(0, 20000) : null });
   const handover_items = db.prepare('SELECT * FROM handover_items ORDER BY id').all();
   const vendors = db.prepare('SELECT * FROM vendors ORDER BY trade').all().map(v => sens ? v : { ...v, contacts: '[]', rate: v.rate ? '(restricted)' : null, restricted: true });
+  // The build sequence is open to everyone who can see the world; only the credential pointer is held back.
+  const build_steps = db.prepare('SELECT * FROM build_steps ORDER BY row_no').all().map(b => sens ? b : { ...b, credential_note: b.credential_note ? '(restricted: ask Brittany)' : null });
   const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
   const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
   const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db), hubs: imports.hubMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
-    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
+    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, build_steps, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
     server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET, n8n_url: N8N_URL, opshub_path: can.integrationConfig(role) ? (OPSHUB_PATH || null) : undefined } };
 }
 
@@ -229,8 +231,13 @@ function handoverView(pid, role) {
       review_counts: t.step_review ? JSON.parse(t.step_review).reduce((a, r) => (a[r.verdict] = (a[r.verdict] || 0) + 1, a), {}) : null, sensitive: t.sensitive, restricted: t.sensitive && !can.sensitive(role) }));
   const homes = db.prepare("SELECT * FROM homes WHERE active = 'active' ORDER BY address").all();
   const notMentioned = []; for (const t of db.prepare('SELECT id, title, step_review FROM tasks WHERE step_review IS NOT NULL AND owner_id = ?').all(pid)) for (const r of JSON.parse(t.step_review)) if (r.verdict === 'not_mentioned') notMentioned.push({ task_id: t.id, task: t.title, step: r.n, old: r.old });
+  // Questions the build sequence raises for this person: steps MCH does itself, steps with nobody chosen,
+  // steps that need a login in her name, and parties with no vendor record.
+  const bs = db.prepare("SELECT * FROM build_steps WHERE kind = 'step' ORDER BY seq").all();
+  const build = bs.length ? { total: bs.length, mch: bs.filter(b => b.is_mch), gaps: bs.filter(b => b.gap),
+    logins: bs.filter(b => b.credential_note), no_vendor: bs.filter(b => !b.vendor_id && !b.is_mch && !b.gap) } : null;
   return { person: { ...person, departments: JSON.parse(person.departments || '[]'), responsibilities: JSON.parse(person.responsibilities || '[]'), crossed_off: JSON.parse(person.crossed_off || '[]'), legacy_roles: JSON.parse(person.legacy_roles || '[]'), email: can.sensitive(role) ? person.email : undefined },
-    items, tasks, homes, not_mentioned: notMentioned, generated_at: dbm.nowIso() };
+    items, tasks, homes, build, not_mentioned: notMentioned, generated_at: dbm.nowIso() };
 }
 function agendaMarkdown(h) {
   const L = [`# Handover meeting agenda — ${h.person.full_name || h.person.name}`, `Generated ${h.generated_at.slice(0, 10)} from the Handover view. Ordered by risk: items nobody else can do today come first. Each line cites where the gap was found.`, '',
@@ -244,7 +251,17 @@ function agendaMarkdown(h) {
   for (const i of h.items.filter(i => !i.no_backup && i.status === 'open')) L.push(`- **${i.item}** — you said ${i.backup || 'someone'} could cover this. Have they done it alone? What would you show them first? ${i.cite}`);
   L.push('', '## D. Each active job: where does it stand on the day you leave?');
   for (const hm of h.homes) L.push(`- **${hm.address}** — stage: ${hm.stage || '?'}; next milestone: ${hm.next_milestone || '?'}; open issues: ${hm.issues || 'none recorded'}. Who is the trade contact for the next step?`);
-  L.push('', '## E. Documents you said you would leave', '- Permit step-by-step document; per-lot permit status list (which 7 villa lots are permitted)', '- Schedule document with durations; order-of-construction document; copy of the 11603 calendar', '- Vendor list with $/sq ft rates; square footage per plan per trade', '- Frank scope document (Landing); CBUSA reporting process; insurance spreadsheet path; walkthrough checklist location; warranty procedure location');
+  if (h.build) {
+    L.push('', '## E. The build order you wrote — the questions it does not answer',
+      `Your "How to build a house" gives ${h.build.total} steps in order. Walking it once, these are the gaps:`,
+      `- **How long does each step take?** The sheet gives the order but no durations, so the schedule is still in your head. Can we put a working day count against each step?`);
+    if (h.build.mch.length) L.push(`- **The ${h.build.mch.length} steps McVaugh does itself** (no sub to fall back on) — who does each of these after you leave? ${h.build.mch.slice(0, 6).map(b => b.description).join('; ')}${h.build.mch.length > 6 ? '; …' : ''}`);
+    if (h.build.logins.length) L.push(`- **The ${h.build.logins.length} steps that need a portal login in your name** (${[...new Set(h.build.logins.map(b => (b.notes || '').match(/https?:\/\/([^\s/]+)/)?.[1]).filter(Boolean))].join(', ')}) — the CenterPoint portal has two-factor tied to your email and phone. Who do we re-register these to, and when?`);
+    if (h.build.gaps.length) L.push(`- **${h.build.gaps.length} steps still have no contractor chosen**: ${h.build.gaps.map(b => b.description).join('; ')}. Who are you leaning toward?`);
+    if (h.build.no_vendor.length) L.push(`- **${h.build.no_vendor.length} steps name someone who is not on the vendor list**: ${[...new Set(h.build.no_vendor.map(b => b.responsible))].join(', ')}. Can we get their contact details and pricing onto the SOW?`);
+    L.push(`- **Is this list the Villas only, or does it hold for the Landing and Royal Oaks Run too?** What changes between them?`);
+  }
+  L.push('', '## F. Documents you said you would leave', '- Permit step-by-step document; per-lot permit status list (which 7 villa lots are permitted)', '- Schedule document with durations; copy of the 11603 calendar (the order-of-construction document arrived 10/22)', '- Vendor list with $/sq ft rates; square footage per plan per trade', '- Frank scope document (Landing); CBUSA reporting process; insurance spreadsheet path; walkthrough checklist location; warranty procedure location');
   return L.join('\n');
 }
 

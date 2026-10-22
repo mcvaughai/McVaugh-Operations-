@@ -155,3 +155,44 @@ tr.clickable { cursor: pointer; } tr.clickable:hover td { background: #f9fbff; }
   .detail { width: auto; position: fixed; right: 0; top: 0; bottom: 0; width: min(420px, 100vw); z-index: 40; box-shadow: var(--shadow); }
   .board { grid-template-columns: 1fr 1fr; }
 }
+
+/* ---------- Build sequence (Maria's "How to build a house") ---------- */
+#viewBuild { display: flex; flex-direction: column; min-height: 0; }
+.bstats { display: flex; gap: 10px; flex-wrap: wrap; padding: 10px 12px 0; }
+.bstats > div { flex: 1 1 140px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--gray);
+  border-radius: var(--radius); padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.bstats > div b { font-size: 22px; line-height: 1.1; }
+.bstats > div span { font-size: 11.5px; color: var(--muted); }
+.bstats > div.amber { border-left-color: var(--amber); } .bstats > div.purple { border-left-color: var(--purple); }
+.bstats > div.red { border-left-color: var(--red); }
+.bscroll { overflow: auto; flex: 1; padding: 10px 12px 24px; }
+.bphase { margin: 0 0 18px; }
+.bphase > h3 { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; font-size: 14px;
+  position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 6px 0; }
+.bphase .bdot { width: 12px; height: 12px; border-radius: 50%; background: hsl(var(--ph) 70% 55%); flex: none; }
+.bsteps { list-style: none; margin: 0; padding: 0 0 0 4px; border-left: 2px dashed hsl(var(--ph) 50% 78%); }
+.bstep { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 6px; padding: 8px 10px 8px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-left: 4px solid hsl(var(--ph) 70% 60%);
+  border-radius: var(--radius); position: relative; }
+.bstep.mch { border-left-color: var(--amber); background: #fffdf5; }
+.bseq { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: hsl(var(--ph) 70% 95%); color: hsl(var(--ph) 60% 32%); border: 1px solid hsl(var(--ph) 50% 80%);
+  font-size: 11.5px; font-weight: 700; margin-top: 1px; }
+.bstep.mch .bseq { background: #fdf3d8; color: #8a6400; border-color: #e7d49a; }
+.bbody { min-width: 0; flex: 1; }
+.btitle { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.btitle b { font-size: 13.5px; }
+.bwho { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.bvendor { font-weight: 600; color: var(--ink); }
+a.bvendor { color: var(--brand-dark); text-decoration: none; border-bottom: 1px dotted currentColor; }
+.bnotes { margin: 5px 0 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.bcred { margin: 5px 0 0; font-size: 12px; color: #9b2c2a; background: #fdeeee; border: 1px solid #f3cfcf;
+  border-radius: 8px; padding: 5px 8px; line-height: 1.4; }
+.bhold { display: flex; gap: 10px; align-items: flex-start; margin: 2px 0 8px; padding: 9px 12px;
+  border-radius: var(--radius); font-size: 12.5px; line-height: 1.4; }
+.bhold.hold { background: #fdeeee; border: 1px solid #f3cfcf; color: #9b2c2a; }
+.bhold.notify { background: #fff8e6; border: 1px solid #ecd9a3; color: #7a5a06; }
+.bhold.note { background: #eef3fb; border: 1px solid var(--line); color: var(--muted); }
+.bhold b { text-transform: none; }
+.bhold span { font-size: 15px; line-height: 1.1; }
+@media (max-width: 700px) { .bstats > div { flex-basis: 100%; } }

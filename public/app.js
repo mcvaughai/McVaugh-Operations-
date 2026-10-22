@@ -51,7 +51,7 @@
     $('#demoToggle').checked = S.demo; $('#demoBanner').hidden = !S.demo;
     $('#addBtn').hidden = !S.permissions.write;
     $('#stagePill').textContent = 'Stage: ' + (S.checkpoint?.stage || 'gather');
-    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
+    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
     const fs = $('#focusSelect'); const cur = fs.value;
     fs.innerHTML = '<option value="">Focus department…</option>' + S.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('') + '<option value="neighborhood">Active jobs</option><option value="snapshot">Job list snapshot</option>';
     fs.value = cur;
@@ -223,6 +223,76 @@
     }
     v.innerHTML = `<div class="world-toolbar"><b>Procedures</b><span class="views">${[['new', 'New'], ['old', 'Old'], ['both', 'Both']].map(([k, l]) => `<button class="${procFilter === k ? 'active' : ''}" data-procfilter="${k}">${l}</button>`).join('')}</span><span class="hint">New = confirmed in a meeting transcript (tr-). Old = hub SOP (2004–2022) or handoff placeholder. "Supersedes" links a new procedure to the old one it replaces; edit a task to change it.</span></div><div style="overflow:auto;flex:1">${body}</div>`;
     v.querySelectorAll('[data-procfilter]').forEach(b => b.onclick = () => { procFilter = b.dataset.procfilter; localStorage.setItem('mow_procfilter', procFilter); renderProcedures(); });
+  }
+
+  // ---------- Build view: Maria's "How to build a house" as an ordered, filterable sequence ----------
+  let buildFilter = localStorage.getItem('mow_buildfilter') || 'all';
+  const PHASE_HUE = { 'Site & slab': 28, 'Frame & dry-in': 200, 'Exterior envelope': 265, 'Interior trim & mechanical trim': 150, 'Floors, cabinets & fixtures': 330, 'Landscape, final trims & finals': 95 };
+  function renderBuild() {
+    const v = $('#viewBuild'); if (v.hidden) return;
+    const all = (S.build_steps || []);
+    if (!all.length) { v.innerHTML = `<div class="world-toolbar"><b>Build sequence</b></div><p class="empty">Maria's "How to build a house" has not been imported yet. Attach it on the Integrations page, or point Option 3 at the <code>MARIA LEAVING</code> folder.</p>`; return; }
+    const steps = all.filter(b => b.kind === 'step');
+    const vend = id => S.vendors.find(x => x.id === id);
+    const counts = { mch: steps.filter(b => b.is_mch).length, insp: all.filter(b => b.inspection).length, gap: steps.filter(b => b.gap).length, cred: all.filter(b => b.credential_note).length, nov: steps.filter(b => !b.vendor_id && !b.is_mch).length };
+    const keep = b => b.kind !== 'step' ? buildFilter === 'all'
+      : buildFilter === 'all' ? true
+      : buildFilter === 'mch' ? !!b.is_mch
+      : buildFilter === 'inspections' ? !!b.inspection
+      : /* decide */ !!(b.gap || (!b.vendor_id && !b.is_mch) || b.credential_note);
+    const shown = all.filter(keep);
+
+    const sentence = t => String(t || '').replace(/^\s*([a-z])/, (m, c) => c.toUpperCase());
+    const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+    const badges = b => [
+      b.is_mch ? chip('MCH does this', 'amber') : '',
+      b.inspection === 'city' ? chip('City of Houston inspection', 'purple') : b.inspection === 'third_party' ? chip('Third-party inspection', 'purple') : b.inspection ? chip('Inspection', 'purple') : '',
+      b.credential_note ? chip('Login needed', 'red') : '',
+      b.gap ? chip('No contractor chosen', 'red') : '',
+      (b.kind === 'step' && !b.vendor_id && !b.is_mch && !b.gap) ? chip('Not in the vendor list', 'gray') : '',
+    ].filter(Boolean).join('');
+
+    const stepRow = b => {
+      const vn = vend(b.vendor_id);
+      return `<li class="bstep${b.is_mch ? ' mch' : ''}" style="--ph:${PHASE_HUE[b.phase] ?? 210}">
+        <span class="bseq">${b.seq}</span>
+        <div class="bbody">
+          <div class="btitle"><b>${esc(sentence(b.description))}</b>${badges(b)}</div>
+          <div class="bwho">${vn ? `<a href="#" data-open="vendor:${vn.id}" class="bvendor">${esc(b.responsible)}</a> <small class="src">· ${esc(vn.trade)}</small>`
+            : b.is_mch ? '<span class="bvendor">McVaugh (the builder)</span>'
+            : `<span class="bvendor">${esc(b.responsible || 'nobody named')}</span>`}</div>
+          ${b.notes ? `<p class="bnotes">${esc(b.notes)}</p>` : ''}
+          ${b.credential_note ? `<p class="bcred">🔑 ${esc(b.credential_note)}</p>` : ''}
+        </div></li>`;
+    };
+    const holdRow = b => `<li class="bhold ${b.kind}"><span>${b.kind === 'hold' ? '⛔' : '📣'}</span><div><b>${esc(b.description)}</b>${b.notes ? `<p class="bnotes">${esc(b.notes)}</p>` : ''}</div></li>`;
+
+    let body = '', phase = null;
+    for (const b of shown) {
+      if (b.phase !== phase) {
+        if (phase !== null) body += '</ol></section>';
+        phase = b.phase;
+        const inPhase = shown.filter(x => x.phase === phase);
+        body += `<section class="bphase" style="--ph:${PHASE_HUE[phase] ?? 210}"><h3><span class="bdot"></span>${esc(phase)} <span class="chip gray">${plural(inPhase.filter(x => x.kind === 'step').length, 'step')}</span></h3><ol class="bsteps">`;
+      }
+      body += b.kind === 'step' ? stepRow(b) : holdRow(b);
+    }
+    if (phase !== null) body += '</ol></section>';
+    if (!shown.length) body = '<p class="empty">Nothing matches this filter.</p>';
+
+    const doc = S.documents.find(d => d.id === 'doc-how-to-build-a-house');
+    v.innerHTML = `<div class="world-toolbar"><b>Build sequence</b>
+      <span class="views">${[['all', 'All steps'], ['mch', `MCH does it (${counts.mch})`], ['inspections', `Inspections (${counts.insp})`], ['decide', `Needs a decision (${counts.gap + counts.nov + counts.cred})`]].map(([k, l]) => `<button class="${buildFilter === k ? 'active' : ''}" data-bfilter="${k}">${l}</button>`).join('')}</span>
+      <span class="hint">From Maria's "How to build a house" (10/22), written for the Villas. ${steps.length} steps in order. Logins that were typed into the sheet are not stored here.${doc && !doc.restricted ? ` <a href="/files/${doc.id}" target="_blank">Open the original file</a>` : doc ? ' The original file is restricted: it still has the passwords in it.' : ''}</span></div>
+    <div class="bstats">
+      <div><b>${steps.length}</b><span>steps, lot stake to final</span></div>
+      <div class="amber"><b>${counts.mch}</b><span>MCH's own action — no sub to fall back on</span></div>
+      <div class="purple"><b>${counts.insp}</b><span>inspections to schedule</span></div>
+      <div class="red"><b>${counts.cred}</b><span>steps that need a portal login</span></div>
+      <div class="${counts.gap + counts.nov ? 'red' : ''}"><b>${counts.gap + counts.nov}</b><span>steps with no vendor record</span></div>
+    </div>
+    <div class="bscroll">${body}</div>`;
+    v.querySelectorAll('[data-bfilter]').forEach(b => b.onclick = () => { buildFilter = b.dataset.bfilter; localStorage.setItem('mow_buildfilter', buildFilter); renderBuild(); });
   }
 
   // ---------- Review queue: one person or task at a time ----------
@@ -532,10 +602,11 @@
   // ---------- views & global events ----------
   function showView(v) {
     document.querySelectorAll('.views button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
-    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
+    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', build: '#viewBuild', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
     if (v === 'world') World.overview();
     if (v === 'handover') renderHandover(true);
     if (v === 'procedures') renderProcedures();
+    if (v === 'build') renderBuild();
     localStorage.setItem('mow_view', v);
   }
   document.querySelectorAll('.views button').forEach(b => b.onclick = () => showView(b.dataset.view));

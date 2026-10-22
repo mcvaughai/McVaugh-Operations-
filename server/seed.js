@@ -363,6 +363,99 @@ const UPDATES = [
     upsert(db, 'integrations', { id: 'excel', status: 'connected', last_import_at: ts, last_message: `Snapshot: SOW Excel seeded (${n} trades)` });
     addEvent(db, { entity_type: 'integration', entity_id: 'excel', kind: 'import', status: 'info', label: `Snapshot import: SOW_subs_pricing_contractor_info.xlsx → ${n} vendors`, source: 'import', actor: 'brittany', external_id: 'update-sow-2026-10-21' });
   } },
+  { key: 'wo-entry-skill-2026-10-22', apply(db) {
+    const ts = nowIso();
+    // Pricing basis from the SOW rate column: "$7.50/SF" → per square foot (the WO must carry the trade's square footage); fixed dollar amounts → fixed; blank → per bid / unknown.
+    for (const v of db.prepare('SELECT id, trade, rate, vendor FROM vendors').all()) {
+      const r = String(v.rate || '');
+      const basis = /\/\s*(sf|sq\.?\s*ft|square)/i.test(r) ? 'per_sqft' : /\$\s*[\d,]+/.test(r) ? 'fixed' : 'per_bid';
+      const johnston = /johnston/i.test(v.vendor || '');
+      upsert(db, 'vendors', { id: v.id, pricing_basis: basis,
+        wo_review: johnston ? 'reusable' : 'needs_review',
+        wo_instructions: johnston ? 'Standard pricing — lump sum per approved bid/invoice, not per square foot. The ChatGPT skill "enter work order from approved bid" (Brittany, 2026-10-21) works for this vendor as-is.'
+          : basis === 'per_sqft' ? `Pricing is per square foot (${r.trim()}). The work order must carry the trade's square footage × rate; square footage differs by trade (framer = total covered, sheetrock excludes balconies, trim = AC area) [M 38:30–39:20]. Review before reusing the bid-entry skill.`
+          : basis === 'fixed' ? `Fixed prices listed (${r.trim()}). Check the bid matches the listed unit prices; review before reusing the bid-entry skill.`
+          : 'Pricing comes from the bid. Review the vendor\'s bid format once before reusing the bid-entry skill.' });
+    }
+    upsert(db, 'tasks', { id: 'tr-wo-entry-from-bid', title: 'Enter a work order into the database from a subcontractor\'s approved bid (ChatGPT skill)', department_id: 'purchasing', owner_id: 'brittany', backup_id: 'ernesto', proposed: 0, documented: 1, automated: 1, verified: 0, board: 'working',
+      trigger: 'A subcontractor bid/invoice is approved (within budget — see Budget check) and a work order must be entered in db.mcvaugh.com.',
+      inputs: 'Approved bid or invoice (PDF/email); job address; the vendor\'s pricing basis (Registry → Vendors → WO instructions).',
+      steps: '1. Confirm the bid is within the budget line (Jim approves otherwise).\n2. Run the ChatGPT skill with the bid: it drafts the WO fields (vendor, job, cost code, description, amount, draws).\n3. Check the vendor\'s WO instructions: per-square-foot vendors need square footage × rate on the WO; standard-priced vendors (Johnston Waterproofing) can be entered as drafted.\n4. Enter/accept the WO in the database; the database emails the sub; the sub accepts = price agreed [M 58:18–59:32].',
+      approval_rules: 'Human enters and approves every WO; the skill only drafts. Over-budget needs Jim [J 10/12].',
+      automation_approach: 'ChatGPT skill (Business seat — no API cost) reads the bid and drafts WO fields. Deterministic checks around it: budget line (rules), pricing basis per vendor (rules). Built and used by Brittany for Johnston Waterproofing (2026-10-21). Every other vendor must be reviewed once for special instructions before the skill is trusted for it.',
+      verification_result: 'Verified for one vendor only: Johnston Waterproofing (standard pricing). All other vendors: WO review = needs_review (see Registry → Vendors).', evidence: 'A work order in the database created from a bid with the skill, accepted by the sub.',
+      next_action: 'Review the next vendor\'s bid format (suggest Andrade Concrete: per-sq-ft slab) and mark its WO review.', source: 'Brittany, 2026-10-21 (ChatGPT skill built); Maria meeting 2026-10-16', supersedes: ['hub-new_work_order'], agent_id: 'agent-purchasing' });
+    upsert(db, 'ai_configs', { id: 'ai-wo-entry-from-bid', agent_id: 'agent-purchasing', purpose: 'Read an approved subcontractor bid/invoice and draft the work-order fields for db.mcvaugh.com', needs_ai: 'yes', provider: 'ChatGPT Business (existing seat) — custom skill', model: 'as configured in the ChatGPT skill (not an API call)', why: 'Bids are unstructured documents; extracting vendor/amount/scope needs document understanding. Budget check and pricing basis stay deterministic.', expected_cost: '$0 beyond the existing ChatGPT Business seat', approval: 'Brittany/Ernesto review the draft and enter the WO; nothing is written automatically', eval_examples: 'Johnston Waterproofing bid (2026-10-21) → correct WO. To add: one per-sq-ft vendor (framer), one fixed-price vendor (garage door), one lumber PO with draws.', fallback: 'Type the WO manually from the bid (about one minute per Maria [M 35:12]).', updated_at: ts });
+    upsert(db, 'documents', { id: 'doc-wo-entry-skill', title: 'ChatGPT skill: enter work order from approved bid (definition/prompt)', path: null, kind: 'procedure', kind_reason: 'built by Brittany 2026-10-21; export the skill text and attach', sensitive: 0, task_id: 'tr-wo-entry-from-bid', summary: 'The skill instructions as written in ChatGPT. Attach the exported text so a successor can recreate it.', source: 'Brittany 2026-10-21', imported_at: ts, underlying_status: 'not_attached' });
+    upsert(db, 'documents', { id: 'doc-how-to-build-a-house', title: 'How to build a house (Maria)', path: null, kind: 'procedure', kind_reason: 'referred to by Brittany 2026-10-22; in L:\\COMPANY INFORMATION\\MCH\\WORKFLOW PROCESSES\\MARIA LEAVING', sensitive: 0, task_id: 'tr-schedule-and-trade-coordination', summary: 'Maria\'s document on the order and tasks of building a house — the "basic schedule, at least the tasks that go into building a house" she promised [M3 26:23]. Attach from the Maria leaving folder (Option 3 import or Upload).', source: 'Brittany 2026-10-22', imported_at: ts, underlying_status: 'not_attached' });
+    for (const [tid, did] of [['tr-wo-entry-from-bid', 'doc-wo-entry-skill'], ['tr-schedule-and-trade-coordination', 'doc-how-to-build-a-house']]) { const t = db.prepare('SELECT doc_ids FROM tasks WHERE id = ?').get(tid); if (t) { const ids = JSON.parse(t.doc_ids || '[]'); if (!ids.includes(did)) upsert(db, 'tasks', { id: tid, doc_ids: [...ids, did] }); } }
+    for (const [hid, did] of [['ho-scheduling', 'doc-how-to-build-a-house'], ['ho-trade-calls', 'doc-how-to-build-a-house'], ['ho-work-orders', 'doc-wo-entry-skill']]) { const h = db.prepare('SELECT doc_ids, task_ids FROM handover_items WHERE id = ?').get(hid); if (h) { const ids = JSON.parse(h.doc_ids || '[]'); if (!ids.includes(did)) upsert(db, 'handover_items', { id: hid, doc_ids: [...ids, did], ...(hid === 'ho-work-orders' ? { task_ids: [...new Set([...JSON.parse(h.task_ids || '[]'), 'tr-wo-entry-from-bid'])] } : {}) }); } }
+    upsert(db, 'integrations', { id: 'obsidian', notes: 'Drop .md files on the Import page, or point Option 3 at a folder: .md, .csv, .docx, .xlsx, .pdf, .html are all taken; office files attach to the waiting document cards they match. Snapshot, not a live link.' });
+    db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('import_dir', ?)").run('L:\\COMPANY INFORMATION\\MCH\\WORKFLOW PROCESSES\\MARIA LEAVING');
+    addEvent(db, { entity_type: 'task', entity_id: 'tr-wo-entry-from-bid', kind: 'setup', status: 'info', label: 'Manual: ChatGPT WO-entry skill recorded; verified for Johnston Waterproofing only; other vendors flagged needs_review', source: 'manual', actor: 'brittany', external_id: 'update-wo-skill-2026-10-22' });
+  } },
+  { key: 'build-sequence-2026-10-22', apply(db) {
+    // "How to build a house" — the document Maria promised in the 10/20 meeting [M3 26:23], supplied by Brittany 2026-10-22.
+    // 100+ ordered steps: Description | Responsible Party (currently at villas) | Notes. This is the first written
+    // answer to "what order does a McVaugh house get built in", so it is imported as ordered steps, not as one blob.
+    const { importSow, importBuildSequence, xlsxText, redactCredentials } = require('./imports'); const ts = nowIso();
+    // The same send also carried an updated SOW (two third-party inspection vendors added): re-import it first so
+    // the build steps can match their responsible party to a vendor record.
+    const sowFp = path.join(__dirname, '..', 'seed', 'files', 'SOW_subs_pricing_contractor_info.xlsx');
+    const nSow = importSow(db, fs.readFileSync(sowFp), 'SOW_subs_pricing_contractor_info.xlsx (Maria), via Brittany 2026-10-22 (updated)');
+    for (const v of db.prepare("SELECT id, trade, rate, vendor, wo_review FROM vendors WHERE wo_review IS NULL").all()) {
+      const r = String(v.rate || '');
+      upsert(db, 'vendors', { id: v.id, pricing_basis: /\/\s*(sf|sq\.?\s*ft|square)/i.test(r) ? 'per_sqft' : /\$\s*[\d,]+/.test(r) ? 'fixed' : 'per_bid', wo_review: 'needs_review',
+        wo_instructions: 'Not yet reviewed for work-order entry. Check one approved bid from this vendor before using the ChatGPT skill on it.' });
+    }
+
+    const fp = path.join(__dirname, '..', 'seed', 'files', 'How_to_build_a_house.xlsx'); const buf = fs.readFileSync(fp);
+    const src = 'How to build a house.xlsx (Maria), via Brittany 2026-10-22';
+    const r = importBuildSequence(db, buf, src);
+    const mch = db.prepare("SELECT COUNT(*) c FROM build_steps WHERE kind = 'step' AND is_mch = 1").get().c;
+    const insp = db.prepare("SELECT COUNT(*) c FROM build_steps WHERE inspection IS NOT NULL").get().c;
+    const unmatched = db.prepare("SELECT COUNT(*) c FROM build_steps WHERE kind = 'step' AND vendor_id IS NULL AND is_mch = 0").get().c;
+
+    // The document itself, now attached (it was a waiting placeholder).
+    upsert(db, 'documents', { id: 'doc-how-to-build-a-house', title: 'How to build a house (Maria)', path: 'How_to_build_a_house.xlsx', kind: 'procedure',
+      kind_reason: 'the build-order document Maria promised [M3 26:23]; supplied by Brittany 2026-10-22. Restricted because the original file has live portal passwords typed into it.', sensitive: 1, task_id: 'tr-schedule-and-trade-coordination',
+      summary: `${r.steps - r.holds} ordered build steps from lot stake to the final city inspections, each with the responsible party and Maria's notes, plus ${r.holds} hold points and notifications. Written for the Villas. ${mch} steps are MCH's own action (scheduling, meter releases, city inspections); ${insp} are inspections; ${unmatched} steps name a party with no vendor record. Logins written in the sheet were not imported.`,
+      size: buf.length, source: src, imported_at: ts, file_path: fp, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      // The extracted text is stripped of the logins before it is stored; the original file still contains them,
+      // which is why the document itself is restricted. The redacted build steps stay open to everyone.
+      content: redactCredentials(xlsxText(buf)).notes.slice(0, 200 * 1024), underlying_status: 'extracted', underlying_path: 'How_to_build_a_house.xlsx' });
+
+    // It is the schedule procedure's steps — the task had none.
+    upsert(db, 'tasks', { id: 'tr-schedule-and-trade-coordination', documented: 1,
+      inputs: 'How to build a house (Maria, 10/22): the full build order with responsible party per step. See the Build view.',
+      verification_result: `Build order documented 2026-10-22: ${r.steps - r.holds} steps, ${r.holds} hold/notify points. Not yet walked through with Maria step by step.`,
+      next_action: 'Walk the build order with Maria once: confirm the steps she does herself (MCH) and who takes each after she leaves.',
+      missing_info: `${unmatched} steps name a responsible party with no vendor record${r.gaps ? `; ${r.gaps} steps still have no contractor chosen` : ''}; durations/lead times are in the notes but there is no calendar.` });
+
+    // What this changes for the handover.
+    for (const [hid, note] of [
+      ['ho-scheduling', `10/22: "How to build a house" received — the build order now exists in writing (${r.steps - r.holds} steps). What it does not give: how long each step takes, so the schedule still comes out of Maria's head. ${mch} steps are MCH's own action.`],
+      ['ho-trade-calls', `10/22: the build order names the responsible party for each step, so a successor knows who to call and when. ${unmatched} steps name a party with no vendor record.`],
+    ]) { const h = db.prepare('SELECT doc_ids, note FROM handover_items WHERE id = ?').get(hid); if (!h) continue;
+      const ids = JSON.parse(h.doc_ids || '[]'); if (!ids.includes('doc-how-to-build-a-house')) ids.unshift('doc-how-to-build-a-house');
+      upsert(db, 'handover_items', { id: hid, doc_ids: ids, documented: 'partly (build order 10/22; no durations)', note: [h.note, note].filter(Boolean).join('\n') }); }
+
+    // New handover items the document itself surfaces.
+    upsert(db, 'handover_items', { id: 'ho-builder-own-steps', person_id: 'maria', item: `The ${mch} build steps MCH does itself (meter releases, city inspections, notifying accounting of pour dates)`,
+      basis: 'How to build a house (Maria) 10/22 — rows where the responsible party is MCH', documented: 'yes (listed, with notes)', current: 'Maria', backup: 'nobody assigned', risk: 'high',
+      capture: 'Decide per step who does it after Maria: Ernesto, the new builder, or accounting. The city portal and utility releases need accounts in a successor\'s name.',
+      why: 'The sheet lists them but does not say who does them after Maria. These are the steps with no subcontractor to fall back on — if nobody schedules the city inspection or releases the meter, the job stops.',
+      cite: 'How to build a house (Maria) 10/22', status: 'open', doc_ids: ['doc-how-to-build-a-house'], task_ids: ['tr-schedule-and-trade-coordination'], updated_at: ts });
+    if (r.credentials) upsert(db, 'handover_items', { id: 'ho-portal-logins', person_id: 'maria', item: 'Logins for the city permit portal and the utility (Reliant/CenterPoint) builder sites',
+      basis: 'How to build a house (Maria) 10/22 — logins were typed into the notes column', documented: 'written in the sheet, which is the problem', current: 'Maria (accounts in her name)', backup: 'nobody assigned', risk: 'high',
+      capture: 'Move these to the password manager and re-register the accounts to a successor before her last day. The logins were deliberately not imported into this app.',
+      why: `${r.credentials} steps had a username and password typed into the notes column of a shared spreadsheet. They are not stored here. The accounts are in Maria's name, so when she leaves, meter releases and inspection scheduling stop until they are transferred.`,
+      cite: 'How to build a house (Maria) 10/22', status: 'open', doc_ids: ['doc-how-to-build-a-house'], updated_at: ts });
+
+    upsert(db, 'integrations', { id: 'excel', status: 'connected', last_import_at: ts, last_message: `Snapshot: How to build a house (${r.steps - r.holds} steps) + SOW re-import (${nSow} trades)` });
+    addEvent(db, { entity_type: 'document', entity_id: 'doc-how-to-build-a-house', kind: 'import', status: 'info',
+      label: `Snapshot import: How to build a house → ${r.steps - r.holds} ordered steps, ${r.holds} hold/notify points, ${r.credentials} logins redacted`, source: 'import', actor: 'brittany', external_id: 'update-buildseq-2026-10-22' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

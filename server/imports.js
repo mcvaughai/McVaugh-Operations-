@@ -372,7 +372,7 @@ function walk(dir, out = [], depth = 0) {
     if (e.name.startsWith('.') && e.isDirectory()) continue;
     const full = path.join(dir, e.name);
     if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(full, out, depth + 1); }
-    else if (/\.(md|markdown|csv|jsx|js)$/i.test(e.name)) out.push(full);
+    else if (/\.(md|markdown|csv|jsx|js|docx|xlsx|pdf|html|htm|txt)$/i.test(e.name) && !/^~\$/.test(e.name)) out.push(full);
   }
   return out;
 }
@@ -390,11 +390,18 @@ function importFolder(db, { dir, dryRun = false, force = false, csvTarget = 'aut
     const rel = path.relative(dir, full);
     let buf; try { buf = fs.readFileSync(full); } catch (e) { report.errors.push(`${rel}: ${e.message}`); continue; }
     const hash = hashOf(buf), prev = seen.get(full);
-    const entry = { path: rel, changed: !prev || prev.hash !== hash, kind: /\.csv$/i.test(full) ? 'csv' : /\.(jsx|js)$/i.test(full) ? 'hub' : 'md' };
+    const entry = { path: rel, changed: !prev || prev.hash !== hash, kind: /\.csv$/i.test(full) ? 'csv' : /\.(jsx|js)$/i.test(full) ? 'hub' : /\.(docx|xlsx|pdf|html|htm|txt)$/i.test(full) ? 'file' : 'md' };
     if (!entry.changed && !force) { report.skipped_unchanged++; entry.status = 'unchanged'; report.files.push(entry); continue; }
     const text = buf.toString('utf8');
     try {
-      if (entry.kind === 'hub') {
+      if (entry.kind === 'file') { // Word / Excel / PDF / HTML straight from the folder (e.g. the "Maria leaving" folder)
+        if (/\.html?$/i.test(full) && parseOpsHub(text)) { entry.kind = 'hub'; const hub = parseOpsHub(text); entry.preview = { target: 'ops hub', rows: hub.processes.length, mapping: { target: 'ops hub', columns: { processes: String(hub.processes.length) }, unmapped: [] }, warnings: [] }; if (!dryRun) { importOpsHub(db, { filename: rel, content: text }, role); entry.status = prev ? 're-imported' : 'imported'; } }
+        else {
+          const r = describeOfficeFile(db, rel, buf);
+          entry.preview = { title: r.title, kind: r.kind, kind_reason: r.reason, sensitive: r.sensitive, mapping: { mapped: [], unmapped: [] }, warnings: r.warnings, linked: { file: rel, status: r.status, chars: r.text ? r.text.length : 0 }, attaches_to: r.attachTo ? r.attachTo.title : null };
+          if (!dryRun) { importOfficeFile(db, { rel, full, buf, parsed: r }, role, overrides[rel]); entry.status = prev ? 're-imported' : 'imported'; }
+        }
+      } else if (entry.kind === 'hub') {
         const hub = parseOpsHub(text);
         if (!hub) { entry.status = 'skipped: not an ops-hub file'; report.files.push(entry); continue; }
         entry.preview = { target: 'ops hub', rows: hub.processes.length, mapping: { target: 'ops hub', columns: { processes: String(hub.processes.length), legacy_roles: String(hub.roles.length), team: String(hub.team.length) }, unmapped: [] }, warnings: [] };
@@ -525,6 +532,94 @@ function importSow(db, buf, source) {
   return n;
 }
 
+// ---------- "How to build a house" (Maria): the ordered build sequence ----------
+// A 100+ row worksheet: Description | Responsible Party | Notes. It is the only written description of the
+// order a McVaugh house is built in, so it is imported as ordered steps rather than one blob of text:
+// every step keeps its responsible party (matched to a SOW vendor where one exists), whether it is an
+// inspection (city vs third party), whether MCH itself does it (= the builder's own action, i.e. Maria's),
+// and whether the responsible party is still unresolved.
+
+// Phase boundaries: the first step whose description matches starts a new phase.
+const BUILD_PHASES = [
+  [/^lot stake/i, 'Site & slab'],
+  [/^form wreck/i, 'Frame & dry-in'],
+  [/^exterior top coat/i, 'Exterior envelope'],
+  [/^texture walls/i, 'Interior trim & mechanical trim'],
+  [/^hardwood floor/i, 'Floors, cabinets & fixtures'],
+  [/^balcony overlay/i, 'Landscape, final trims & finals'],
+];
+
+// Logins written into the sheet are never stored. The step keeps a pointer to the system, not the secret.
+const CRED_RE = /\b(user\s*-?\s*id|username|user|login|pass(?:word)?|pw)\s*[:=]\s*\S+/gi;
+function redactCredentials(text) {
+  const t = String(text || '');
+  if (!CRED_RE.test(t)) { CRED_RE.lastIndex = 0; return { notes: t, credential: null }; }
+  CRED_RE.lastIndex = 0;
+  const systems = [...t.matchAll(/https?:\/\/([^\s/]+)/gi)].map(m => m[1]);
+  return {
+    notes: t.replace(CRED_RE, '[login removed — kept in the password manager]').replace(/\s{2,}/g, ' ').trim(),
+    credential: 'A username and password for ' + (systems.length ? systems.join(', ') : 'this system') + ' was written in the source sheet. It is not stored here — move it to the password manager and give the successor access.',
+  };
+}
+
+function matchVendor(db, responsible) {
+  const name = String(responsible || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!name || name === 'mch' || name.includes('?')) return null;
+  const words = name.split(' ').filter(w => w.length > 2 && !/^(the|and|of|inc|llc|co|services|service)$/.test(w));
+  let best = null, bestScore = 0;
+  for (const v of db.prepare('SELECT id, vendor, trade FROM vendors').all()) {
+    for (const field of [v.vendor, v.trade]) {
+      const f = String(field || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ');
+      if (!f.trim()) continue;
+      const hits = words.filter(w => f.includes(w)).length;
+      const score = hits / Math.max(words.length, 1);
+      if (hits && score > bestScore) { bestScore = score; best = v.id; }
+    }
+  }
+  return bestScore >= 0.5 ? best : null;
+}
+
+function parseBuildSequence(buf) {
+  const sheet = xlsxSheets(buf)[0];
+  if (!sheet) return [];
+  const rows = sheet.rows.filter(r => String(r.A || '').trim() || String(r.B || '').trim());
+  const out = []; let phase = 'Site & slab', seq = 0;
+  for (const r of rows) {
+    const desc = String(r.A || '').trim(), responsible = String(r.B || '').trim(), rawNotes = String(r.C || '').trim();
+    if (/^how to build a house$/i.test(desc) || /^description$/i.test(desc)) continue;   // title and header
+    for (const [re, name] of BUILD_PHASES) if (re.test(desc)) phase = name;
+    // Rows with no responsible party are not steps: they are the hold points and notifications Maria wrote in caps.
+    let kind = 'step';
+    if (!responsible) kind = /^do not|^no work|until/i.test(desc) ? 'hold' : /^notify|^inform/i.test(desc) ? 'notify' : 'note';
+    const { notes, credential } = redactCredentials(rawNotes);
+    const inspection = /inspection/i.test(desc)
+      ? (/city of houston|^city\b/i.test(desc) ? 'city' : /third.?party/i.test(desc) ? 'third_party' : 'other')
+      : null;
+    out.push({
+      seq: kind === 'step' ? ++seq : seq,     // hold/notify rows hang off the step above them
+      row: out.length + 1, phase, description: desc.replace(/[.…]+$/, '').trim(), responsible: responsible || null,
+      kind, is_mch: /^mch$/i.test(responsible) ? 1 : 0, inspection, notes: notes || null, credential,
+      gap: kind === 'step' && (!responsible || responsible.includes('?')) ? 1 : 0,
+    });
+  }
+  return out;
+}
+
+function importBuildSequence(db, buf, source) {
+  const ts = nowIso(); const steps = parseBuildSequence(buf); let n = 0;
+  for (const s of steps) {
+    const id = 'bs-' + String(s.row).padStart(3, '0');
+    upsert(db, 'build_steps', {
+      id, seq: s.seq, row_no: s.row, phase: s.phase, description: s.description, responsible: s.responsible,
+      vendor_id: s.kind === 'step' ? matchVendor(db, s.responsible) : null, kind: s.kind, is_mch: s.is_mch,
+      inspection: s.inspection, notes: s.notes, credential_note: s.credential, gap: s.gap,
+      sensitive: s.credential ? 1 : 0, source, imported_at: ts, updated_at: ts,
+    });
+    n++;
+  }
+  return { steps: n, holds: steps.filter(s => s.kind !== 'step').length, gaps: steps.filter(s => s.gap).length, credentials: steps.filter(s => s.credential).length };
+}
+
 // ---------- regenerate the old MCH Operations Hub from the world's current data ----------
 // Keeps the hub's own UI (seed/mch-ops-hub.template.html) and replaces its data constants, so the old dashboard
 // stays in step with the world: SOPs (old + confirmed new, with supersedes), current-team responsibilities, cross-offs.
@@ -555,6 +650,45 @@ function regenerateOpsHub(db, templateHtml) {
   replaceConst('INITIAL_PROCESSES', processes); replaceConst('CURRENT_TEAM', team);
   html = html.replace(/<\/head>/, `<!-- regenerated by McVaugh Operations World on ${nowIso()}; data constants come from the world's database. Edit in the world, not here. -->\n</head>`);
   return html;
+}
+
+// ---------- office files from a folder: extract, classify, attach to the placeholder they match ----------
+function extractOffice(name, buf) {
+  const ext = path.extname(name).toLowerCase();
+  try {
+    if (ext === '.docx') return { status: 'extracted', text: docxText(buf) };
+    if (ext === '.xlsx') return { status: 'extracted', text: xlsxText(buf) };
+    if (ext === '.html' || ext === '.htm') return { status: 'extracted', text: htmlText(buf) };
+    if (ext === '.txt' || ext === '.md') return { status: 'extracted', text: buf.toString('utf8') };
+    return { status: 'needs_conversion', text: null }; // .pdf, .doc, .xls: stored, viewable in the browser, no text
+  } catch (e) { return { status: 'error: ' + e.message, text: null }; }
+}
+function describeOfficeFile(db, rel, buf) {
+  const name = path.basename(rel); const base = name.replace(/\.[^.]+$/, '');
+  const { status, text } = extractOffice(name, buf);
+  const cls = classifyNote(name, text || '');
+  const docs = db.prepare("SELECT id, title, task_id, underlying_status FROM documents WHERE underlying_status = 'not_attached' OR file_path IS NULL").all();
+  let attachTo = null, best = 0;
+  for (const d of docs) { const sc = similarity(d.title, base); if (sc > best) { best = sc; attachTo = d; } }
+  if (best < 0.5) attachTo = null;
+  const warnings = [];
+  if (status === 'needs_conversion') warnings.push('Stored for viewing; no text extracted (PDF/.doc/.xls). Save as .docx/.xlsx for searchable text.');
+  if (attachTo) warnings.push(`Attaches to the waiting card "${attachTo.title}"`);
+  return { title: base, kind: cls.kind, reason: cls.reason, sensitive: cls.sensitive, status, text, attachTo, warnings };
+}
+function importOfficeFile(db, { rel, full, buf, parsed }, role, kindOverride) {
+  const name = path.basename(rel); const ext = path.extname(name).toLowerCase();
+  const id = parsed.attachTo ? parsed.attachTo.id : 'doc-' + slug(parsed.title);
+  const dir = path.join(require('./db').DATA_DIR, 'uploads'); fs.mkdirSync(dir, { recursive: true });
+  const fp = path.join(dir, id + ext); fs.writeFileSync(fp, buf); // snapshot copy; the original stays on the drive
+  const mime = { '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.pdf': 'application/pdf', '.html': 'text/html', '.htm': 'text/html', '.txt': 'text/plain', '.doc': 'application/msword', '.xls': 'application/vnd.ms-excel' }[ext] || 'application/octet-stream';
+  const ex = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+  upsert(db, 'documents', { id, title: ex?.title || parsed.title, path: rel, kind: kindOverride || ex?.kind || parsed.kind, kind_reason: ex ? undefined : parsed.reason + ' · folder import', sensitive: ex ? undefined : parsed.sensitive, task_id: ex?.task_id || null,
+    summary: ex?.summary || (parsed.text ? parsed.text.replace(/\s+/g, ' ').slice(0, 280) : `${name} (${buf.length} bytes)`), size: buf.length, source: `Folder import: ${rel} (${nowIso().slice(0, 10)})`, imported_at: nowIso(),
+    file_path: fp, mime, content: parsed.text ? parsed.text.slice(0, MAX_CONTENT) : undefined, underlying_status: parsed.status, underlying_path: full });
+  if (ex?.task_id && parsed.text && (kindOverride || ex.kind) === 'procedure') { const t = db.prepare('SELECT steps, documented FROM tasks WHERE id = ?').get(ex.task_id); if (t && !t.steps) upsert(db, 'tasks', { id: ex.task_id, steps: parsed.text.slice(0, 4000), documented: 1, missing_info: null }); }
+  addEvent(db, { entity_type: 'document', entity_id: id, kind: 'import', status: 'info', label: `${ex ? 'Attached to waiting card' : 'Imported'}: ${name} (${parsed.status})`, source: 'import', actor: role, external_id: 'file-' + crypto.randomUUID() });
+  return id;
 }
 // ---------- review helpers ----------
 const tokens = s => new Set(String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !['the', 'and', 'for', 'procedure', 'process'].includes(w)));
@@ -597,4 +731,4 @@ function pagesMarkdown(state) {
   return L.filter(x => x !== undefined).join('\n');
 }
 
-module.exports = { parseSowWorkbook, importSow, regenerateOpsHub, xlsxSheets, xlsxText, parseOpsHub, importOpsHub, parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };
+module.exports = { redactCredentials, parseBuildSequence, importBuildSequence, describeOfficeFile, importOfficeFile, parseSowWorkbook, importSow, regenerateOpsHub, xlsxSheets, xlsxText, parseOpsHub, importOpsHub, parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };

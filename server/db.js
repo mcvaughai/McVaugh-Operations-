@@ -113,6 +113,16 @@ CREATE TABLE IF NOT EXISTS vendors (
   rate TEXT, docs_needed TEXT, notes TEXT, source TEXT, imported_at TEXT, updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS build_steps (
+  id TEXT PRIMARY KEY, seq INTEGER, row_no INTEGER, phase TEXT, description TEXT NOT NULL,
+  responsible TEXT, vendor_id TEXT, kind TEXT NOT NULL DEFAULT 'step',   -- step | hold | notify | note
+  is_mch INTEGER NOT NULL DEFAULT 0,          -- MCH (the builder) does it: Maria's own action today
+  inspection TEXT,                            -- city | third_party | other | NULL
+  notes TEXT, credential_note TEXT,           -- credential_note names the system, never the login itself
+  gap INTEGER NOT NULL DEFAULT 0,             -- responsible party still unresolved in the sheet
+  sensitive INTEGER NOT NULL DEFAULT 0, source TEXT, imported_at TEXT, updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS handover_items (
   id TEXT PRIMARY KEY, person_id TEXT NOT NULL, item TEXT NOT NULL, basis TEXT,
   documented TEXT, current TEXT, backup TEXT, risk TEXT, capture TEXT, cite TEXT,
@@ -173,7 +183,10 @@ const MIGRATIONS = [
   ['documents', 'file_path', 'TEXT'],       // uploaded file stored under data/uploads
   ['documents', 'mime', 'TEXT'],
   ['tasks', 'doc_ids', 'TEXT'],
-  ['tasks', 'supersedes', 'TEXT'],         // JSON array: old procedure ids this (new) procedure replaces or absorbs
+  ['tasks', 'supersedes', 'TEXT'],
+  ['vendors', 'pricing_basis', 'TEXT'],     // per_sqft | fixed | per_bid | unknown
+  ['vendors', 'wo_instructions', 'TEXT'],   // what a work order for this vendor must contain
+  ['vendors', 'wo_review', 'TEXT'],         // reusable | needs_review | reviewed         // JSON array: old procedure ids this (new) procedure replaces or absorbs
 ];
 function migrate(db) {
   for (const [table, column, type] of MIGRATIONS) {
@@ -192,7 +205,8 @@ const TABLES = {
   decisions: ['id','date','title','reason','decided_by','status','source','created_at'],
   integrations: ['id','name','kind','status','last_checked','last_message','last_import_at','config','notes'],
   documents: ['id','title','path','kind','kind_reason','sensitive','task_id','department_id','summary','size','source','imported_at','updated_at','underlying_path','underlying_status','content','hubs','entities','meeting_date','attendees','cite_key','file_path','mime'],
-  vendors: ['id','trade','vendor','contacts','rate','docs_needed','notes','source','imported_at','updated_at'],
+  vendors: ['id','trade','vendor','contacts','rate','docs_needed','notes','source','imported_at','updated_at','pricing_basis','wo_instructions','wo_review'],
+  build_steps: ['id','seq','row_no','phase','description','responsible','vendor_id','kind','is_mch','inspection','notes','credential_note','gap','sensitive','source','imported_at','updated_at'],
   handover_items: ['id','person_id','item','basis','documented','current','backup','risk','capture','cite','status','note','why','task_ids','doc_ids','updated_at'],
   ai_configs: ['id','agent_id','purpose','needs_ai','provider','model','why','expected_cost','approval','eval_examples','fallback','updated_at'],
 };

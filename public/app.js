@@ -51,7 +51,7 @@
     $('#demoToggle').checked = S.demo; $('#demoBanner').hidden = !S.demo;
     $('#addBtn').hidden = !S.permissions.write;
     $('#stagePill').textContent = 'Stage: ' + (S.checkpoint?.stage || 'gather');
-    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
+    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderApprovals(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
     const fs = $('#focusSelect'); const cur = fs.value;
     fs.innerHTML = '<option value="">Focus department…</option>' + S.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('') + '<option value="neighborhood">Active jobs</option><option value="snapshot">Job list snapshot</option>';
     fs.value = cur;
@@ -223,6 +223,49 @@
     }
     v.innerHTML = `<div class="world-toolbar"><b>Procedures</b><span class="views">${[['new', 'New'], ['old', 'Old'], ['both', 'Both']].map(([k, l]) => `<button class="${procFilter === k ? 'active' : ''}" data-procfilter="${k}">${l}</button>`).join('')}</span><span class="hint">New = confirmed in a meeting transcript (tr-). Old = hub SOP (2004–2022) or handoff placeholder. "Supersedes" links a new procedure to the old one it replaces; edit a task to change it.</span></div><div style="overflow:auto;flex:1">${body}</div>`;
     v.querySelectorAll('[data-procfilter]').forEach(b => b.onclick = () => { procFilter = b.dataset.procfilter; localStorage.setItem('mow_procfilter', procFilter); renderProcedures(); });
+  }
+
+  // ---------- pending approvals: shown in every view, because they block real work ----------
+  function renderApprovals() {
+    const bar = $('#approvalBar'); if (!bar) return;
+    const pending = (S.approvals || []).filter(a => a.status === 'pending');
+    bar.hidden = !pending.length;
+    if (!pending.length) return;
+    const vend = id => S.vendors.find(v => v.id === id);
+    const home = id => S.homes.find(h => h.id === id);
+    bar.innerHTML = pending.map(a => {
+      const draft = (() => { try { return JSON.parse(a.draft || '{}'); } catch { return {}; } })();
+      const label = k => String(k).replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase());
+      const seen = new Map();
+      for (const [k, v] of [['Vendor', vend(a.vendor_id)?.vendor], ['Job', home(a.home_id)?.address], ['Amount', a.amount],
+        ...Object.entries(draft).map(([k, v]) => [label(k), v])])
+        if (v != null && v !== '' && typeof v !== 'object') seen.set(k.toLowerCase(), [k, String(v)]);
+      const facts = [...seen.values()];
+      return `<div class="approval" data-ap="${esc(a.id)}">
+        <div class="ap-main">
+          <div class="ap-head"><span class="ap-icon" aria-hidden="true">⏳</span><b>${esc(a.subject)}</b>
+            ${chip('Waiting for ' + personName(a.requested_from), 'amber')}${a.channel ? chip(a.channel === 'teams' ? 'asked in Teams' : a.channel, 'gray') : ''}</div>
+          <p class="ap-q">${esc(a.question)}</p>
+          ${facts.length ? `<dl class="ap-facts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
+          ${a.evidence ? `<small class="src">From: ${esc(a.evidence)}</small>` : ''}
+          <small class="src">Nothing has been sent to the subcontractor. Approving is what sends it.</small>
+        </div>
+        <div class="ap-actions">${a.can_decide
+          ? `<button class="primary small" data-apdo="approve">Approve and send</button><button class="small ghost" data-apdo="reject">Reject</button>`
+          : `<small class="src">Only accounting or admin can approve a work order.</small>`}</div>
+      </div>`;
+    }).join('');
+    bar.querySelectorAll('[data-apdo]').forEach(b => b.onclick = async () => {
+      const id = b.closest('[data-ap]').dataset.ap, d = b.dataset.apdo;
+      const a = pending.find(x => x.id === id);
+      if (d === 'approve' && !confirm(`Approve "${a.subject}"?\n\nThis releases the work order to the subcontractor. Their acceptance is the price being agreed.`)) return;
+      const note = d === 'reject' ? prompt('Why is this being rejected? (recorded against the work order)', '') : null;
+      if (d === 'reject' && note === null) return;
+      b.disabled = true;
+      await api('POST', `/api/approvals/${id}/${d}`, { note });
+      toast(d === 'approve' ? 'Approved and released' : 'Rejected — nothing was sent');
+      refresh();
+    });
   }
 
   // ---------- Build view: Maria's "How to build a house" as an ordered, filterable sequence ----------

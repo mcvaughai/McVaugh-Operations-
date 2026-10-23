@@ -113,6 +113,22 @@ CREATE TABLE IF NOT EXISTS vendors (
   rate TEXT, docs_needed TEXT, notes TEXT, source TEXT, imported_at TEXT, updated_at TEXT
 );
 
+-- An agent asked a human to approve something before it leaves the building.
+-- Nothing an agent drafts reaches a subcontractor until a named person decides here.
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY, agent_id TEXT, task_id TEXT, kind TEXT NOT NULL DEFAULT 'work_order',
+  subject TEXT NOT NULL,                      -- what is being approved, e.g. "WO 4821 — Johnston Waterproofing — 11603"
+  vendor_id TEXT, home_id TEXT, amount TEXT,
+  question TEXT NOT NULL,                     -- the exact words put to the human
+  draft TEXT,                                 -- JSON of the fields the agent filled in
+  evidence TEXT,                              -- link/reference to the bid the draft came from
+  released INTEGER NOT NULL DEFAULT 0,        -- 1 only once a human approved and the WO went to the sub
+  status TEXT NOT NULL DEFAULT 'pending',     -- pending | approved | rejected | expired | cancelled
+  requested_from TEXT, channel TEXT, channel_ref TEXT, token TEXT,
+  requested_at TEXT, decided_at TEXT, decided_by TEXT, decided_via TEXT, decision_note TEXT,
+  source TEXT, external_id TEXT UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS build_steps (
   id TEXT PRIMARY KEY, seq INTEGER, row_no INTEGER, phase TEXT, description TEXT NOT NULL,
   responsible TEXT, vendor_id TEXT, kind TEXT NOT NULL DEFAULT 'step',   -- step | hold | notify | note
@@ -206,6 +222,7 @@ const TABLES = {
   integrations: ['id','name','kind','status','last_checked','last_message','last_import_at','config','notes'],
   documents: ['id','title','path','kind','kind_reason','sensitive','task_id','department_id','summary','size','source','imported_at','updated_at','underlying_path','underlying_status','content','hubs','entities','meeting_date','attendees','cite_key','file_path','mime'],
   vendors: ['id','trade','vendor','contacts','rate','docs_needed','notes','source','imported_at','updated_at','pricing_basis','wo_instructions','wo_review'],
+  approvals: ['id','agent_id','task_id','kind','subject','vendor_id','home_id','amount','question','draft','evidence','released','status','requested_from','channel','channel_ref','token','requested_at','decided_at','decided_by','decided_via','decision_note','source','external_id'],
   build_steps: ['id','seq','row_no','phase','description','responsible','vendor_id','kind','is_mch','inspection','notes','credential_note','gap','sensitive','source','imported_at','updated_at'],
   handover_items: ['id','person_id','item','basis','documented','current','backup','risk','capture','cite','status','note','why','task_ids','doc_ids','updated_at'],
   ai_configs: ['id','agent_id','purpose','needs_ai','provider','model','why','expected_cost','approval','eval_examples','fallback','updated_at'],

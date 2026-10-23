@@ -25,6 +25,7 @@ Optional environment variables:
 | `MOW_N8N_SECRET` | Shared secret n8n must send in `X-MOW-Secret`; webhook refuses everything until set |
 | `MOW_IMPORT_DIR` | Default folder for Option 3 bulk import (e.g. your Obsidian vault) |
 | `MOW_OPSHUB_PATH` | Path of the old `mch-ops-hub.html`; when set, the file is rewritten from the world's data after every change |
+| `MOW_PUBLIC_URL` | The address Teams links should point at (default `http://localhost:<port>`); set this before turning on the work-order approval workflow |
 | `MOW_MCHDB_URL` | Page used for the read-only reachability check (default `http://db.mcvaugh.com/buildconnect/NewStuff/wotracking.html`) |
 
 Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node server\server.js`
@@ -39,6 +40,7 @@ Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node
 * **Build** — Maria's "How to build a house" as 105 ordered steps from lot stake to the final city inspections, grouped into six phases, each with the responsible party (linked to its vendor record), the inspections to schedule, the hold points ("do not pour until…"), and the steps McVaugh does itself. Filter by *MCH does it*, *Inspections*, or *Needs a decision*. Logins that were typed into the source sheet are **not** stored: the step says a login is needed and names the system, and the original file is restricted.
 * **Board / Registry** — everything editable without the 3D view; Registry includes Vendors by trade (from the SOW Excel) with each vendor's pricing basis and what a work order for them must contain.
 * **Integrations** — each shown as disconnected / connected / failing; three import options (Obsidian `.md` from the browser, CSV from the browser, and **Option 3: bulk-import a folder on this computer** with a dry-run preview and skip-unchanged re-import); backup export/restore; handbook export for ChatGPT Pages.
+* **Approvals** — when an agent drafts something that commits money, a bar appears above every view with the drafted fields and the question put to the human. Only accounting/admin can decide; the decision is recorded with who, when, how, and any note. The same request also goes out as a Teams message with a link to a one-page approve/reject form.
 * **AI config** — per-agent purpose, needs-AI?, provider/model, why, cost, approval, eval examples, fallback.
 * **History** — all activity events with their source tag (MANUAL / N8N / IMPORT / DEMO), checkpoint history, audit (admin).
 
@@ -66,5 +68,17 @@ Runs `test/acceptance.js`: spawns a server on a temp folder and checks persisten
 5. Drop a QuickBooks CSV export into `C:\McVaugh\qb-exports` (the folder in `MOW_QB_EXPORT_DIR`) — the app notices the file, hands it to n8n, and the Accounting reconciliation agent turns amber (*waiting for approval*) with the file name.
 
 n8n 2.x needs **Node.js 24**; the setup script installs n8n 1.x instead if you have an older Node, but Node 24 is the better choice (the world runs on it too).
+
+### Work-order approvals (purchasing agent)
+
+`n8n\mow-wo-approval.json` is the workflow: a subcontractor's bid arrives → the ChatGPT skill drafts the work-order fields → the world is asked for approval (the purchasing agent turns amber, *waiting for approval*) → a card goes to Teams asking "a work order was entered as a draft, please verify it is correct, do you approve?" → Brittany or Ernesto opens the link, checks it, and approves or rejects.
+
+It ships **switched off** and needs three things first:
+
+1. `TEAMS_WEBHOOK_URL` in n8n — an incoming webhook for the channel the message should land in.
+2. `MOW_PUBLIC_URL` set to an address Teams can reach, so the link in the card works.
+3. An answer to the open question on the task: **can the MCH database hold a work order without emailing the subcontractor?** Entering one is what notifies the sub, and the sub accepting it is the price being agreed, so the draft has to be able to sit unsent. If it cannot, the agent stops at a prepared work order and a human does the final entry.
+
+The agent never sends, prices or accepts anything. A link that Teams merely previews never counts as a decision: the approve/reject buttons are a form POST, so a GET only shows the page.
 
 To add your own workflow: add an HTTP Request node at the start and end of a workflow: `POST http://<host>:8787/api/webhooks/n8n`, header `X-MOW-Secret`, JSON body `{ "agent_id": "...", "execution_id": "{{$execution.id}}", "status": "started" }` then `"finished"` or `"failed"`. Set the agent's *n8n workflow id* in the app to route by `workflow_id` instead.

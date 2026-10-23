@@ -456,6 +456,55 @@ const UPDATES = [
     addEvent(db, { entity_type: 'document', entity_id: 'doc-how-to-build-a-house', kind: 'import', status: 'info',
       label: `Snapshot import: How to build a house → ${r.steps - r.holds} ordered steps, ${r.holds} hold/notify points, ${r.credentials} logins redacted`, source: 'import', actor: 'brittany', external_id: 'update-buildseq-2026-10-22' });
   } },
+  { key: 'purchasing-agent-wo-job-2026-10-23', apply(db) {
+    const ts = nowIso();
+    // Brittany: make the work-order skill a purchasing agent job — on a bid from a sub, the agent enters the
+    // work order and asks a human in Teams to verify and approve.
+    //
+    // Built as DRAFT → ask → release, not enter → ask. Entering a work order in the MCH database emails the
+    // subcontractor, and the sub accepting it is the price being agreed [M 58:18–59:32]. Asking after that point
+    // would commit McVaugh to a price before a human approved it, which is the one thing agents must not do.
+    // Whether the database can hold a work order without notifying the sub is NOT known and must be checked.
+    upsert(db, 'agents', { id: 'agent-purchasing', name: 'Purchasing & deliveries',
+      purpose: 'Draft a work order from a subcontractor\'s approved bid, then ask a named human in Teams to verify and approve it. Also order deadlines and late deliveries. Drafts only: nothing reaches a subcontractor without a human approval recorded against a name.',
+      setup_stage: 'documented', approach: 'mixed',
+      approach_note: 'AI reads the bid (unstructured document) and fills the work-order fields. Everything around it is deterministic: budget-line check, the vendor\'s pricing basis, square footage for per-sq-ft trades, and the approval gate itself.',
+      human_authority: 'A named person approves every work order before it goes to the sub. Over the budget line, that person is Jim [J 10/12]. The agent never sends, never prices, never accepts work.',
+      initial_output: 'A drafted work order plus a Teams message: "A work order was entered as a draft. Please verify it is correct. Do you approve sending it to the subcontractor?"',
+      n8n_workflow_id: 'mow-wo-approval', enabled: 0, paused: 0, proposed: 1, updated_at: ts });
+
+    upsert(db, 'tasks', { id: 'tr-wo-entry-from-bid', agent_id: 'agent-purchasing',
+      title: 'Enter a work order into the database from a subcontractor\'s approved bid',
+      steps: '1. A bid or invoice arrives from a subcontractor (Teams or email).\n2. The agent reads it and fills the work-order fields: vendor, job, cost code, description, amount, draws.\n3. Deterministic checks run: is it within the budget line; what is this vendor\'s pricing basis; for a per-sq-ft trade, is the square footage on the order.\n4. The work order is saved as a DRAFT. Nothing goes to the sub yet.\n5. The agent posts in Teams: "A work order was entered as a draft. Please verify it is correct. Do you approve?" with the drafted fields and a link.\n6. Brittany or Ernesto opens it, checks it against the bid, and approves or rejects. Over the budget line it goes to Jim.\n7. On approval the work order is released and the database emails the sub; the sub accepting is the price agreed [M 58:18–59:32]. On rejection nothing is sent and the reason is recorded.',
+      approval_rules: 'Every work order is approved by a named person before it reaches the subcontractor. The approval is recorded with who, when and how. Over the budget line, Jim approves [J 10/12]. The agent cannot approve its own draft, and an approval link that is merely previewed never counts as a decision.',
+      automation_approach: 'n8n workflow mow-wo-approval: bid arrives → ChatGPT skill drafts the fields → POST /api/webhooks/approval creates a pending approval and turns the purchasing agent amber → Teams message with Approve/Reject links → the decision is posted back and recorded. The ChatGPT skill is Brittany\'s existing one (Business seat, no API cost); it is proven for Johnston Waterproofing only.',
+      blocker: 'Unverified: can the MCH database hold a work order as a draft without emailing the subcontractor? If it cannot, the agent must stop at a prepared work order and a human does the final entry. Ask Ernesto or whoever maintains db.mcvaugh.com before building this.',
+      waiting_on: 'Ernesto (can the database save a work order without notifying the sub?); Brittany (Teams channel and the incoming webhook)',
+      next_action: 'Answer the draft question above. Then set the Teams webhook in n8n and run one real bid end to end with Johnston Waterproofing.',
+      verification_result: 'The drafting step is proven by hand for Johnston Waterproofing only (2026-10-21). The Teams approval loop is designed and built in this app, but has not been run against a real bid.',
+      automated: 0, verified: 0, updated_at: ts });
+
+    upsert(db, 'integrations', { id: 'teams', name: 'Microsoft Teams (approval messages)', kind: 'callback', status: 'disconnected',
+      notes: 'Where the purchasing agent asks a human to approve a drafted work order. Needs an incoming webhook for the channel, set in n8n as TEAMS_WEBHOOK_URL, and MOW_PUBLIC_URL set to an address Teams can reach. Until both are set this stays disconnected and no approval message can be sent.',
+      config: JSON.stringify({ workflow: 'mow-wo-approval', channel: 'to be chosen by Brittany', env: ['TEAMS_WEBHOOK_URL', 'MOW_PUBLIC_URL', 'MOW_N8N_SECRET'] }), last_checked: ts });
+
+    upsert(db, 'ai_configs', { id: 'ai-wo-entry-from-bid', agent_id: 'agent-purchasing',
+      purpose: 'Read a subcontractor\'s bid or invoice and fill in the work-order fields, as a draft for a human to approve',
+      needs_ai: 'yes, for reading the bid only', provider: 'ChatGPT Business (existing seat) — custom skill', model: 'as configured in the ChatGPT skill (not an API call)',
+      why: 'Bids are unstructured documents, so pulling out vendor, job, scope and amount needs document understanding. Nothing else here does: the budget check, the pricing basis, the square-footage rule and the approval gate are all deterministic, and are kept out of the model.',
+      expected_cost: '$0 beyond the existing ChatGPT Business seat', approval: 'A named person approves every work order in Teams before it reaches the sub. The agent cannot send, approve or price.',
+      eval_examples: 'Johnston Waterproofing bid (2026-10-21) → correct work order. Still to add before this runs unattended: one per-sq-ft vendor (framer), one fixed-price vendor (garage door), one lumber order with draws, and one bid that is over the budget line (must route to Jim).',
+      fallback: 'Type the work order from the bid by hand, about a minute each [M 35:12]. The approval step still happens in Teams.', updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-wo-agent-draft-first', date: '2026-10-23',
+      title: 'The purchasing agent drafts a work order and a human releases it; it never sends one itself',
+      reason: 'Brittany asked for the agent to enter the work order and then ask for approval in Teams. Entering it in the MCH database is what emails the subcontractor, and the sub accepting is the price being agreed [M 58:18–59:32], so approving afterwards would come too late to stop a commitment. The agent therefore drafts, asks "a work order was entered as a draft, please verify it is correct, do you approve?", and the approval is what releases it. Open question: whether the database can hold a draft without notifying the sub.',
+      decided_by: 'Brittany (asked), recorded by the build', status: 'open', source: 'Brittany 2026-10-23', created_at: ts });
+
+    addEvent(db, { entity_type: 'agent', entity_id: 'agent-purchasing', kind: 'setup', status: 'info',
+      label: 'Manual: work-order entry from an approved bid became a purchasing agent job — drafts only, approved by a named human in Teams',
+      source: 'manual', actor: 'brittany', external_id: 'update-wo-agent-2026-10-23' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

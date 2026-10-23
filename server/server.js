@@ -133,11 +133,14 @@ function stateFor(role) {
   const vendors = db.prepare('SELECT * FROM vendors ORDER BY trade').all().map(v => sens ? v : { ...v, contacts: '[]', rate: v.rate ? '(restricted)' : null, restricted: true });
   // The build sequence is open to everyone who can see the world; only the credential pointer is held back.
   const build_steps = db.prepare('SELECT * FROM build_steps ORDER BY row_no').all().map(b => sens ? b : { ...b, credential_note: b.credential_note ? '(restricted: ask Brittany)' : null });
+  // Pending approvals are visible to everyone (so the team can see what is held up); only accounting/admin may decide.
+  const approvals = db.prepare("SELECT * FROM approvals ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, requested_at DESC LIMIT 100").all()
+    .map(a => ({ ...a, token: undefined, can_decide: can.sensitive(role) }));
   const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
   const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
   const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db), hubs: imports.hubMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
-    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, build_steps, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
+    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, build_steps, approvals, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
     server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET, n8n_url: N8N_URL, opshub_path: can.integrationConfig(role) ? (OPSHUB_PATH || null) : undefined } };
 }
 
@@ -218,6 +221,56 @@ function startFolderWatch() {
   console.log(`Watching QuickBooks export folder: ${QB_DIR}`);
 }
 
+
+// ---------- approvals ----------
+const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const PUBLIC_URL = process.env.MOW_PUBLIC_URL || `http://localhost:${PORT}`;
+const approvalLink = a => `${PUBLIC_URL}/approve/${a.id}?t=${a.token}`;
+// Decide an approval. `via` records how (app / teams-link / n8n) and `by` who. Never auto-approves.
+function decideApproval(a, decision, by, via, note) {
+  if (a.status !== 'pending') return { error: `already ${a.status}`, approval: a };
+  const ok = decision === 'approve';
+  dbm.upsert(db, 'approvals', { id: a.id, status: ok ? 'approved' : 'rejected', released: ok ? 1 : 0,
+    decided_at: dbm.nowIso(), decided_by: by, decided_via: via, decision_note: note || null });
+  dbm.addEvent(db, { entity_type: 'agent', entity_id: a.agent_id, kind: 'run', status: ok ? 'finished' : 'failed',
+    source: via === 'app' ? 'manual' : 'n8n', actor: by,
+    label: ok ? `${by} approved ${a.subject} — released to the subcontractor` : `${by} rejected ${a.subject}${note ? ' — ' + note : ''}`,
+    external_id: a.external_id + ':' + decision, payload: { approval_id: a.id } });
+  dbm.audit(db, by, 'approval_' + decision, 'approval', a.id, a.subject);
+  return { ok: true, approval: db.prepare('SELECT * FROM approvals WHERE id = ?').get(a.id) };
+}
+const FIELD_LABEL = k => String(k).replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase());
+// The facts shown on an approval, with the draft's own fields taking precedence and no key repeated.
+function approvalFacts(a) {
+  let draft = {}; try { draft = JSON.parse(a.draft || '{}'); } catch {}
+  const pairs = [['Vendor', a.vendor_id && (db.prepare('SELECT vendor FROM vendors WHERE id = ?').get(a.vendor_id) || {}).vendor],
+    ['Job', a.home_id && (db.prepare('SELECT address FROM homes WHERE id = ?').get(a.home_id) || {}).address],
+    ['Amount', a.amount], ...Object.entries(draft).map(([k, v]) => [FIELD_LABEL(k), v])];
+  const seen = new Map();
+  for (const [k, v] of pairs) { if (v == null || v === '' || typeof v === 'object') continue; seen.set(k.toLowerCase(), [k, String(v)]); }
+  return [...seen.values()];
+}
+const APPROVE_PAGE = (a, token, msg) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Approve a work order</title><style>
+body{font:15px/1.5 system-ui,Segoe UI,sans-serif;background:#eef3fb;color:#1b2436;margin:0;padding:24px;display:grid;place-items:start center}
+.card{background:#fff;border:1px solid #d9e1ef;border-radius:12px;max-width:560px;width:100%;padding:20px 22px;box-shadow:0 6px 24px rgba(27,36,54,.1)}
+h1{font-size:17px;margin:0 0 4px} .q{background:#fff8e6;border:1px solid #ecd9a3;border-radius:8px;padding:10px 12px;margin:12px 0}
+dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px;margin:12px 0} dt{color:#5d6b85} dd{margin:0}
+button{font:inherit;padding:9px 16px;border-radius:8px;border:1px solid transparent;cursor:pointer}
+.ok{background:#1d9e75;color:#fff} .no{background:#fff;border-color:#e24b4a;color:#e24b4a} .row{display:flex;gap:10px;margin-top:14px}
+textarea{width:100%;font:inherit;border:1px solid #d9e1ef;border-radius:8px;padding:8px;margin-top:6px}
+.done{background:#eef6f2;border:1px solid #bfe0d2;border-radius:8px;padding:12px}
+small{color:#5d6b85}</style></head><body><div class="card"><h1>${esc(a.subject)}</h1>
+<small>Asked by the purchasing agent · ${esc((a.requested_at || '').slice(0, 16).replace('T', ' '))}</small>
+${msg ? `<div class="done">${msg}</div>` : `<div class="q">${esc(a.question)}</div>
+<dl>${approvalFacts(a).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+${a.evidence ? `<small>From: ${esc(a.evidence)}</small>` : ''}
+<form method="POST" action="/approve/${a.id}"><input type="hidden" name="t" value="${esc(token)}">
+<label>Note (optional)<textarea name="note" rows="2"></textarea></label>
+<div class="row"><button class="ok" name="d" value="approve">Approve and send to the sub</button>
+<button class="no" name="d" value="reject">Reject</button></div></form>
+<p><small>Nothing has been sent to the subcontractor yet. Approving is what sends it.</small></p>`}</div></body></html>`;
+
 // ---------- succession: "if this person were gone tomorrow, what stops?" ----------
 const BACKUP_NONE = v => !v || /^(none|nobody|n\/a|-)?\s*$/i.test(v) || /nobody assigned|nobody else/i.test(v);
 function handoverView(pid, role) {
@@ -287,6 +340,26 @@ const server = http.createServer(async (req, res) => {
   const role = roleOf(req);
   try {
     if (p.startsWith('/api/')) return await api(req, res, url, p, role);
+    // The Approve/Reject links in the Teams message land here. A GET only *shows* the decision page:
+    // Teams and Outlook fetch links to build previews, so a GET must never decide anything.
+    if (p.startsWith('/approve/') && (req.method === 'GET' || req.method === 'POST')) {
+      const id = p.slice('/approve/'.length);
+      const a = db.prepare('SELECT * FROM approvals WHERE id = ?').get(id);
+      const html = (code, body) => send(res, code, body, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
+      if (!a) return html(404, '<p>That approval request no longer exists.</p>');
+      const q = req.method === 'POST' ? new URLSearchParams((await readBody(req)).toString('utf8')) : url.searchParams;
+      const token = q.get('t') || url.searchParams.get('t');
+      if (!a.token || token !== a.token) return html(403, '<p>That approval link is not valid. Open the world and approve it there.</p>');
+      if (a.status !== 'pending') return html(200, APPROVE_PAGE(a, token, `Already <b>${esc(a.status)}</b> by ${esc(a.decided_by || 'someone')} on ${esc((a.decided_at || '').slice(0, 16).replace('T', ' '))}.`));
+      if (req.method === 'GET') return html(200, APPROVE_PAGE(a, token));
+      const d = q.get('d') === 'approve' ? 'approve' : 'reject';
+      // The link proves the person opened the Teams message; it does not prove who they are, so that is recorded.
+      const by = q.get('by') || `${a.requested_from || 'someone'} (via the Teams link — identity not verified)`;
+      const r = decideApproval(a, d, by, 'teams-link', q.get('note'));
+      return html(200, APPROVE_PAGE(a, token, r.ok
+        ? (d === 'approve' ? 'Approved. The work order can now be sent to the subcontractor.' : 'Rejected. Nothing was sent.')
+        : `Already ${esc(r.error)}.`));
+    }
     if (p.startsWith('/files/')) { // uploaded documents; same role rules as the document record
       if (!role) return send(res, 401, 'login required');
       const d = db.prepare('SELECT * FROM documents WHERE id = ?').get(decodeURIComponent(p.slice(7)));
@@ -338,10 +411,41 @@ async function api(req, res, url, p, role) {
     setIntegration('n8n', 'connected', `Last authenticated event ${dbm.nowIso()}`);
     return send(res, 200, { ok: true, deduplicated: !r.inserted });
   }
+  // ---------- approvals: an agent drafted something; a named human decides before it leaves ----------
+  // n8n calls this when the purchasing agent has drafted a work order from a subcontractor's bid.
+  // The work order is NOT sent to the sub here: it stays a draft until someone approves below.
+  if (p === '/api/webhooks/approval' && m === 'POST') {
+    const given = req.headers['x-mow-secret'] || url.searchParams.get('secret');
+    if (!N8N_SECRET || given !== N8N_SECRET) { setIntegration('n8n', 'failing', 'Rejected an approval request with a bad or missing secret at ' + dbm.nowIso()); return send(res, 401, { error: 'bad secret' }); }
+    const b = await readJson(req);
+    if (!b.subject) return send(res, 400, { error: 'subject required' });
+    const ext = 'approval:' + (b.external_id || b.execution_id || crypto.randomUUID());
+    const existing = db.prepare('SELECT * FROM approvals WHERE external_id = ?').get(ext);
+    if (existing) return send(res, 200, { ok: true, deduplicated: true, id: existing.id, url: approvalLink(existing) });
+    const id = 'ap-' + crypto.randomUUID().slice(0, 8);
+    const token = crypto.randomBytes(16).toString('hex');
+    const agentId = b.agent_id || 'agent-purchasing';
+    const who = b.requested_from || db.prepare('SELECT owner_id FROM tasks WHERE id = ?').get(b.task_id || '')?.owner_id || 'brittany';
+    const row = { id, agent_id: agentId, task_id: b.task_id || null, kind: b.kind || 'work_order', subject: String(b.subject),
+      vendor_id: b.vendor_id || null, home_id: b.home_id || null, amount: b.amount != null ? String(b.amount) : null,
+      question: b.question || 'A work order was entered as a draft. Please verify it is correct. Do you approve sending it to the subcontractor?',
+      draft: b.draft ? JSON.stringify(b.draft) : null, evidence: b.evidence || null, released: 0, status: 'pending',
+      requested_from: who, channel: b.channel || 'teams', channel_ref: b.channel_ref || null, token,
+      requested_at: dbm.nowIso(), source: b.source || 'n8n', external_id: ext };
+    dbm.upsert(db, 'approvals', row);
+    dbm.addEvent(db, { entity_type: 'agent', entity_id: agentId, kind: 'run', status: 'waiting_approval', source: 'n8n', actor: 'n8n',
+      label: `Drafted ${row.subject} — waiting for ${who} to approve`, external_id: ext + ':waiting', payload: { approval_id: id } });
+    setIntegration('n8n', 'connected', `Last authenticated event ${dbm.nowIso()}`);
+    // One link only: the page is where the decision is made, so there is no one-click approve URL to leak.
+    return send(res, 200, { ok: true, id, question: row.question, url: approvalLink(row) });
+  }
+
+
   // --- everything else needs a session ---
   if (!role) return send(res, 401, { error: 'login required' });
 
   if (p === '/api/state' && m === 'GET') return send(res, 200, stateFor(role));
+  if (p === '/api/approvals' && m === 'GET') return send(res, 200, db.prepare("SELECT * FROM approvals ORDER BY requested_at DESC LIMIT 200").all().map(a => ({ ...a, token: undefined })));
   if (p === '/api/export' && m === 'GET') { if (!can.sensitive(role)) return send(res, 403, { error: 'restricted' }); dbm.audit(db, role, 'export'); return send(res, 200, dbm.exportAll(db), { 'Content-Disposition': `attachment; filename="mcvaugh-world-${new Date().toISOString().slice(0, 10)}.json"` }); }
   if (p.startsWith('/api/handover') && m === 'GET') {
     const pid = url.searchParams.get('person') || 'maria';
@@ -358,6 +462,18 @@ async function api(req, res, url, p, role) {
   if (m === 'GET') return send(res, 404, { error: 'not found' });
   requireWrite(role);
 
+  // Deciding inside the world. Purchasing commitments are accounting/admin only, and the decision is named and audited.
+  if (p.startsWith('/api/approvals/') && m === 'POST') {
+    const [, , , id, action] = p.split('/');
+    const a = db.prepare('SELECT * FROM approvals WHERE id = ?').get(id);
+    if (!a) return send(res, 404, { error: 'no such approval' });
+    if (!can.sensitive(role)) return send(res, 403, { error: 'approving a work order is restricted to accounting/admin' });
+    const b = await readJson(req);
+    if (action === 'cancel') { dbm.upsert(db, 'approvals', { id, status: 'cancelled', decided_at: dbm.nowIso(), decided_by: role, decided_via: 'app', decision_note: b.note || null }); dbm.audit(db, role, 'approval_cancel', 'approval', id, a.subject); return send(res, 200, { ok: true }); }
+    if (action !== 'approve' && action !== 'reject') return send(res, 404, { error: 'not found' });
+    const r = decideApproval(a, action, b.by || role, 'app', b.note);
+    return send(res, r.ok ? 200 : 409, r);
+  }
   if (p === '/api/import/backup' && m === 'POST') { if (role !== 'admin') return send(res, 403, { error: 'admin only' }); dbm.importBackup(db, await readJson(req)); dbm.audit(db, role, 'import_backup'); return send(res, 200, { ok: true }); }
 
   if (p === '/api/events' && m === 'POST') {

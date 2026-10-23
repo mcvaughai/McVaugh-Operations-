@@ -4,6 +4,8 @@ A persistent, interactive isometric workspace for McVaugh Custom Homes: the huma
 
 Stage 1 + Stage 2 build. See `docs/ARCHITECTURE.md` for the architecture, store and reuse decisions, and what was (and was not) inspected.
 
+Month-end close: `docs/MONTH_END_CLOSE_CHECKLIST.md` sequences McVaugh's documented accounting tasks into a T+1…T+5 close with owners, dependencies, a critical path and a status board.
+
 ## Run it (Windows, Mac or Linux)
 
 Requires Node.js 22.13 or newer (`node -v`). No `npm install` needed.

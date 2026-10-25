@@ -198,7 +198,8 @@ a.bvendor { color: var(--brand-dark); text-decoration: none; border-bottom: 1px 
 @media (max-width: 700px) { .bstats > div { flex-basis: 100%; } }
 
 /* ---------- pending approvals (an agent drafted something; a human decides) ---------- */
-.approval-bar { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; background: #fff8e6; border-bottom: 2px solid #e0a21b; }
+.approval-bar { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; background: #fff8e6;
+  border-bottom: 2px solid #e0a21b; max-height: 38vh; overflow-y: auto; }
 .approval { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;
   background: var(--panel); border: 1px solid #ecd9a3; border-radius: var(--radius); padding: 10px 14px; }
 .ap-main { min-width: 0; flex: 1 1 420px; }
@@ -211,3 +212,31 @@ a.bvendor { color: var(--brand-dark); text-decoration: none; border-bottom: 1px 
 .ap-main .src { display: block; margin-top: 3px; }
 .ap-actions { display: flex; gap: 8px; align-items: center; flex: none; }
 @media (max-width: 700px) { .ap-actions { width: 100%; } }
+
+/* ---------- Bids ---------- */
+#viewBids { display: flex; flex-direction: column; min-height: 0; }
+#viewBids h3 { margin: 10px 0 8px; font-size: 14px; }
+.bidreq { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--gray);
+  border-radius: var(--radius); padding: 10px 14px; margin: 0 0 8px; }
+.bidreq.complete { border-left-color: var(--purple); } .bidreq.overdue { border-left-color: var(--red); }
+.bidreq.awarded { border-left-color: var(--ok); } .bidreq.partial, .bidreq.draft { border-left-color: var(--amber); }
+.bidreq.sent { border-left-color: var(--brand); } .bidreq.cancelled { opacity: .65; }
+.br-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.br-head b { font-size: 13.5px; }
+.br-meter { display: flex; align-items: center; gap: 4px; margin: 6px 0 4px; }
+.br-meter span { width: 22px; height: 6px; border-radius: 3px; background: var(--line); }
+.br-meter span.in { background: var(--ok); }
+.br-meter small { margin-left: 8px; color: var(--muted); }
+.br-bids { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+.br-bids td { padding: 3px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+.br-bids td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.br-bids tr.awaited td { color: var(--muted); } .br-bids tr.superseded td, .br-bids tr.rejected td { opacity: .6; }
+.warnmark { color: var(--amber); cursor: help; }
+.bidreq .src { display: block; margin-top: 3px; }
+.ap-opts { border: 0; padding: 0; margin: 8px 0 0; }
+.ap-opts legend { font-size: 12px; color: var(--muted); padding: 0; }
+.ap-opts label { display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; border: 1px solid var(--line);
+  border-radius: 8px; margin: 4px 0; cursor: pointer; font-size: 13px; }
+.ap-opts label:hover { background: #f6f9ff; }
+.ap-opts .num { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ap-opts small { color: var(--muted); }

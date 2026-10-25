@@ -254,7 +254,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const dbFile = require('node:sqlite'); const raw = new dbFile.DatabaseSync(path.join(dataDir, 'mcvaugh-world.sqlite'));
     const t = raw.prepare('SELECT token FROM approvals WHERE id = ?').get(row.id).token; raw.close();
     const preview = await fetch(`${B}/approve/${row.id}?t=${t}&d=approve`); assert.equal(preview.status, 200);
-    assert.match(await preview.text(), /Approve and send to the sub/, 'a GET shows the page, it does not approve');
+    assert.match(await preview.text(), /Approve and enter the work order/, 'a GET shows the page, it does not approve');
     const still = (await call('GET', '/api/state')).body.approvals.find(a => a.id === row.id);
     assert.equal(still.status, 'pending'); assert.equal(still.released, 0);
   });
@@ -272,7 +272,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.equal(a.status, 'approved'); assert.equal(a.released, 1, 'approval is what releases it');
     assert.equal(a.decided_by, 'admin'); assert.equal(a.decided_via, 'app'); assert.equal(a.decision_note, 'checked against the bid');
     const twice = await call('POST', `/api/approvals/${row.id}/reject`, {}); assert.equal(twice.status, 409, 'a decided approval cannot be re-decided');
-    assert.ok(after.events.some(e => /approved .*Johnston/i.test(e.label) && e.entity_id === 'agent-purchasing'), 'the decision is in the history');
+    assert.ok(after.events.some(e => /approved:.*Johnston/i.test(e.label) && e.entity_id === 'agent-purchasing'), 'the decision is in the history');
     assert.notEqual(after.agents.find(g => g.id === 'agent-purchasing').runtime.status, 'waiting', 'the agent stops waiting once decided');
   });
   await check('rejecting sends nothing and records why', async () => {
@@ -283,19 +283,154 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.equal(a.status, 'rejected'); assert.equal(a.released, 0, 'a rejected work order is never released');
     assert.match(a.decision_note, /square footage/);
   });
-  await check('the agent job is recorded as drafts-only, with the database question left open', async () => {
+  await check('the agent job is recorded honestly: asks before entering, not yet run against a real bid', async () => {
     const s = (await call('GET', '/api/state')).body;
     const ag = s.agents.find(a => a.id === 'agent-purchasing');
     assert.equal(ag.enabled, 0, 'not switched on until it has been run against a real bid');
-    assert.match(ag.purpose, /drafts only/i); assert.match(ag.human_authority, /never sends/i);
+    assert.match(ag.purpose, /never enters anything without a named person approving/i);
+    assert.match(ag.human_authority, /cannot send, price, award or accept/i);
     assert.equal(ag.n8n_workflow_id, 'mow-wo-approval');
     const t = s.tasks.find(t => t.id === 'tr-wo-entry-from-bid');
-    assert.equal(t.automated, 0, 'the Teams loop is designed, not yet built against the real database');
-    assert.match(t.blocker, /without emailing the subcontractor/i);
-    assert.ok(s.decisions.some(d => d.id === 'dec-wo-agent-draft-first' && d.status === 'open'));
+    assert.equal(t.automated, 0, 'the loop is built here but has not run against the real database');
+    // Settled by Maria on 10/24: entering the work order is what notifies and approves the sub, so the agent asks first.
+    assert.equal(t.blocker, null, 'the draft-state question fell away once the agent asks before entering');
+    assert.ok(s.decisions.some(d => d.id === 'dec-wo-agent-draft-first' && d.status === 'accepted'));
+    assert.match(t.verification_result, /M-chat 10\/24/);
+    for (const f of ['mow-wo-approval', 'mow-bid-requests']) {
+      const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', f + '.json'), 'utf8'));
+      assert.equal(wf.active, false, f + ' ships switched off');
+    }
     const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'mow-wo-approval.json'), 'utf8'));
-    assert.equal(wf.active, false, 'the workflow ships switched off');
-    assert.ok(JSON.stringify(wf).includes('/api/webhooks/approval'));
+    assert.ok(JSON.stringify(wf).includes('/api/webhooks/bid'), 'bids are recorded against a request');
+    assert.ok(JSON.stringify(wf).includes('asked_for_decision'), 'the Teams card only posts when all bids are in');
+  });
+  await check('bid request: built from the vendor contact list, sole source flagged, nothing sent before approval', async () => {
+    const H = { Cookie: '', 'X-MOW-Secret': 's3cret' };
+    const r = await call('POST', '/api/webhooks/bid-request', { line_item: 'WATERPROOFING AND OVERLAY', home_id: 'home-11603', execution_id: 'br-1', due_days: 3 }, H);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.sole_source, true, 'only Johnston is on the contact list for that trade');
+    assert.deepEqual(r.body.vendors, ['Johnston Waterproofing'], 'vendors came from the contact list, not the caller');
+    const s = (await call('GET', '/api/state')).body;
+    const br = s.bid_requests.find(x => x.id === r.body.bid_request_id);
+    assert.equal(br.status, 'draft', 'nothing goes out before a human approves');
+    assert.equal(br.expected, 1); assert.equal(br.sole_source, 1); assert.ok(br.due_by);
+    const ap = s.approvals.find(a => a.id === r.body.id);
+    assert.equal(ap.kind, 'bid_request');
+    assert.match(ap.question, /more than one bid/i, 'a single-vendor trade says so, per Maria');
+    const unknown = await call('POST', '/api/webhooks/bid-request', { line_item: 'UNDERWATER BASKET WEAVING', execution_id: 'br-x' }, H);
+    assert.equal(unknown.status, 400, 'a trade with no vendor on the list is refused, not guessed');
+  });
+  await check('a bid cannot be recorded against a line item nobody asked for', async () => {
+    const r = await call('POST', '/api/webhooks/bid', { line_item: 'FRAMING', amount: '$90,000' }, { Cookie: '', 'X-MOW-Secret': 's3cret' });
+    assert.equal(r.status, 409, 'the request has to exist first — that is what makes "all bids in" answerable');
+  });
+  await check('several bids: nobody is asked until the last one is in, then it is a choice not a yes/no', async () => {
+    const H = { Cookie: '', 'X-MOW-Secret': 's3cret' };
+    const req = await call('POST', '/api/webhooks/bid-request', { line_item: 'FRAMING', home_id: 'home-11603', execution_id: 'br-2',
+      vendors: ['vendor-framing', 'vendor-foundation', 'vendor-plumbing'], expected: 3 }, H);
+    const brId = req.body.bid_request_id;
+    await call('POST', `/api/approvals/${req.body.id}/approve`, { note: 'send it' });
+    assert.equal((await call('GET', '/api/state')).body.bid_requests.find(b => b.id === brId).status, 'sent');
+
+    const first = await call('POST', '/api/webhooks/bid', { bid_request_id: brId, vendor_id: 'vendor-framing', amount: '$92,000', external_id: 'b1' }, H);
+    assert.equal(first.body.asked_for_decision, false, '1 of 3 in — no one is bothered yet');
+    const dupe = await call('POST', '/api/webhooks/bid', { bid_request_id: brId, vendor_id: 'vendor-framing', amount: '$92,000', external_id: 'b1' }, H);
+    assert.equal(dupe.body.deduplicated, true);
+    const second = await call('POST', '/api/webhooks/bid', { bid_request_id: brId, vendor_id: 'vendor-foundation', amount: '$88,500', external_id: 'b2' }, H);
+    assert.equal(second.body.asked_for_decision, false, '2 of 3 in — still waiting');
+    assert.equal((await call('GET', '/api/state')).body.approvals.filter(a => a.bid_request_id === brId && a.status === 'pending').length, 0);
+
+    const third = await call('POST', '/api/webhooks/bid', { bid_request_id: brId, vendor_id: 'vendor-plumbing', amount: '$95,000', external_id: 'b3' }, H);
+    assert.equal(third.body.asked_for_decision, true, 'the last bid is what triggers the question');
+    const s = (await call('GET', '/api/state')).body;
+    const ap = s.approvals.find(a => a.id === third.body.approval_id);
+    assert.equal(ap.kind, 'bid_award');
+    const opts = JSON.parse(ap.options);
+    assert.equal(opts.length, 3); assert.equal(opts[0].amount, '$88,500', 'cheapest first, but the human still picks');
+    assert.match(ap.question, /which one/i);
+
+    const vague = await call('POST', `/api/approvals/${ap.id}/approve`, {});
+    assert.equal(vague.status, 409, 'approving without saying which bid is not a decision');
+    const ok = await call('POST', `/api/approvals/${ap.id}/approve`, { chosen: opts[0].id, note: 'best price, scope matches' });
+    assert.equal(ok.status, 200);
+    const after = (await call('GET', '/api/state')).body.bid_requests.find(b => b.id === brId);
+    assert.equal(after.status, 'awarded'); assert.equal(after.awarded_bid_id, opts[0].id);
+    assert.equal(after.bids.find(b => b.id === opts[0].id).status, 'approved');
+    assert.ok(after.bids.filter(b => b.status === 'superseded').length === 2, 'losing bids are kept, marked not chosen');
+  });
+  await check('the work order is only entered for a bid that was approved, and the number comes back', async () => {
+    const H = { Cookie: '', 'X-MOW-Secret': 's3cret' };
+    const work = (await call('GET', '/api/webhooks/work', null, H)).body;
+    const todo = work.enter_work_orders; assert.ok(todo.length >= 1, 'n8n is told which approved bid to enter');
+    const notApproved = (await call('GET', '/api/state')).body.bid_requests.flatMap(b => b.bids).find(b => b.status === 'superseded');
+    const refused = await call('POST', '/api/webhooks/bid/entered', { bid_id: notApproved.id, wo_ref: '9999' }, H);
+    assert.equal(refused.status, 409, 'a losing bid can never become a work order');
+    const done = await call('POST', '/api/webhooks/bid/entered', { bid_id: todo[0].id, wo_ref: 'WO-4821' }, H);
+    assert.equal(done.status, 200);
+    const s = (await call('GET', '/api/state')).body;
+    assert.equal(s.bid_requests.flatMap(b => b.bids).find(b => b.id === todo[0].id).wo_ref, 'WO-4821');
+    assert.ok(s.events.some(e => /WO-4821 entered/.test(e.label) && /notified/.test(e.label)));
+  });
+  await check('rejecting a line item sends nothing, keeps the reason, and hands it back to a human', async () => {
+    const H = { Cookie: '', 'X-MOW-Secret': 's3cret' };
+    const req = await call('POST', '/api/webhooks/bid-request', { line_item: 'INSULATION', home_id: 'home-11603', execution_id: 'br-3' }, H);
+    await call('POST', `/api/approvals/${req.body.id}/approve`, {});
+    const bid = await call('POST', '/api/webhooks/bid', { bid_request_id: req.body.bid_request_id, vendor_id: 'vendor-insulation', amount: '$31,000', external_id: 'b9' }, H);
+    assert.equal(bid.body.asked_for_decision, true, 'a sole-sourced request is complete on the first bid');
+    const bare = await call('POST', `/api/approvals/${bid.body.approval_id}/reject`, {});
+    assert.equal(bare.status, 400, 'a rejection with no reason is refused by the server, not just the page');
+    const out = await call('POST', `/api/approvals/${bid.body.approval_id}/reject`, { note: 'scope is missing the garage' });
+    assert.equal(out.status, 200);
+    const br = (await call('GET', '/api/state')).body.bid_requests.find(b => b.id === req.body.bid_request_id);
+    assert.equal(br.status, 'partial', 'the line item goes back to a human until another bid arrives');
+    assert.notEqual(br.status, 'awarded');
+    assert.ok(br.bids.every(b => b.status === 'rejected' && !b.wo_ref), 'nothing entered');
+    assert.match(br.notes || br.bids[0].reject_reason, /garage/);
+  });
+  await check('an overdue request is chased, never left silent', async () => {
+    const dbFile = require('node:sqlite'); const raw = new dbFile.DatabaseSync(path.join(dataDir, 'mcvaugh-world.sqlite'));
+    const H = { Cookie: '', 'X-MOW-Secret': 's3cret' };
+    const req = await call('POST', '/api/webhooks/bid-request', { line_item: 'ELECTRICAL', home_id: 'home-11603', execution_id: 'br-4',
+      vendors: ['vendor-electrical', 'vendor-low-voltage'], expected: 2 }, H);
+    await call('POST', `/api/approvals/${req.body.id}/approve`, {});
+    await call('POST', '/api/webhooks/bid', { bid_request_id: req.body.bid_request_id, vendor_id: 'vendor-electrical', amount: '$60,000', external_id: 'b10' }, H);
+    raw.prepare("UPDATE bid_requests SET due_by = ? WHERE id = ?").run(new Date(Date.now() - 864e5).toISOString(), req.body.bid_request_id);
+    raw.close();
+    await call('POST', '/api/bids/sweep', {});
+    const s = (await call('GET', '/api/state')).body;
+    const br = s.bid_requests.find(b => b.id === req.body.bid_request_id);
+    assert.equal(br.status, 'overdue');
+    const ap = s.approvals.find(a => a.bid_request_id === br.id && a.kind === 'bid_chase' && a.status === 'pending');
+    assert.ok(ap, 'a passed date raises a question instead of stalling quietly');
+    assert.match(ap.question, /chase/i);
+    const opts = JSON.parse(ap.options); assert.ok(opts.some(o => o.id === 'decide') && opts.some(o => o.id === 'chase'));
+    await call('POST', `/api/approvals/${ap.id}/approve`, { chosen: 'decide' });
+    const after = (await call('GET', '/api/state')).body;
+    assert.ok(after.approvals.some(a => a.bid_request_id === br.id && a.kind !== 'bid_chase' && a.status === 'pending'), 'deciding early asks about the bid that did arrive');
+  });
+  await check('a Teams-channel decision must carry a name and a reason, recorded as self-declared', async () => {
+    const H = { Cookie: '', 'X-MOW-Secret': 's3cret' };
+    const req = await call('POST', '/api/webhooks/bid-request', { line_item: 'STUCCO', home_id: 'home-11603', execution_id: 'br-5' }, H);
+    const dbFile = require('node:sqlite'); const raw = new dbFile.DatabaseSync(path.join(dataDir, 'mcvaugh-world.sqlite'));
+    const t = raw.prepare('SELECT token FROM approvals WHERE id = ?').get(req.body.id).token; raw.close();
+    const anon = await fetch(`${B}/approve/${req.body.id}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `t=${t}&d=approve` });
+    assert.match(await anon.text(), /Choose your name/, 'the purchasing channel is not a person, so the approver names themselves');
+    const noReason = await fetch(`${B}/approve/${req.body.id}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `t=${t}&d=reject&by=brittany` });
+    assert.match(await noReason.text(), /Say why/, 'a rejection without a reason is refused');
+    const good = await fetch(`${B}/approve/${req.body.id}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `t=${t}&d=approve&by=brittany` });
+    assert.equal(good.status, 200);
+    const a = (await call('GET', '/api/state')).body.approvals.find(x => x.id === req.body.id);
+    assert.equal(a.decided_by, 'brittany'); assert.equal(a.identity, 'self_declared'); assert.equal(a.decided_via, 'teams-link');
+  });
+  await check("Maria's answer is stored with provenance and linked to both procedures", async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const d = s.documents.find(x => x.id === 'doc-maria-bid-process-answer');
+    assert.equal(d.meeting_date, '2026-10-24'); assert.equal(d.cite_key, 'M-chat 10/24');
+    assert.match(d.content, /work order entered\/ approved/);
+    assert.match(d.summary, /more than one bid/);
+    for (const t of ['tr-wo-entry-from-bid', 'tr-bid-requests'])
+      assert.ok(JSON.parse(s.tasks.find(x => x.id === t).doc_ids || '[]').includes('doc-maria-bid-process-answer'), t + ' cites her answer');
+    assert.ok(s.decisions.some(x => x.id === 'dec-bid-rule' && /due date/i.test(x.reason)));
   });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('export contains everything', async () => { const x = (await call('GET', '/api/export')).body; assert.equal(x.format, 'mcvaugh-operations-world/1'); assert.ok(x.tasks.length > 0 && x.events.length > 0 && x.checkpoints.length > 0); });

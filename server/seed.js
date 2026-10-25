@@ -505,6 +505,75 @@ const UPDATES = [
       label: 'Manual: work-order entry from an approved bid became a purchasing agent job — drafts only, approved by a named human in Teams',
       source: 'manual', actor: 'brittany', external_id: 'update-wo-agent-2026-10-23' });
   } },
+  { key: 'bid-request-flow-2026-10-25', apply(db) {
+    const ts = nowIso();
+    // Brittany's design, after checking it with Maria: the agent runs on its own when a bid arrives, but only
+    // asks a human once every bid requested for that line item is in. That rule needs the request recorded first.
+    //
+    // Maria's answer (Teams, 10/24) settled two facts this is built on:
+    //   1. Entering the work order IS the approval — "they get an email on their end saying there's a work
+    //      order entered/approved". So approval has to come before entry, which is why the agent asks first.
+    //   2. Waterproofing is sole-sourced to Johnston today, and that is her practice rather than a rule:
+    //      "absolutely moving forward whomever is doing it can get more than one bid, this is just what we
+    //      have been doing". So a single-vendor line item is allowed but has to say so, in writing.
+    upsert(db, 'documents', { id: 'doc-maria-bid-process-answer', title: 'Maria on how bids and work orders actually work (Teams, 10/24)',
+      path: null, kind: 'procedure', kind_reason: 'Maria answering Brittany directly; the only written confirmation that entering a work order is what approves it',
+      sensitive: 0, task_id: 'tr-wo-entry-from-bid', meeting_date: '2026-10-24', cite_key: 'M-chat 10/24',
+      attendees: JSON.stringify(['maria', 'brittany']),
+      summary: 'Q: is the bid sheet sent after agreeing a price, or do they send it on request and you compare and then enter it, which is what approves it? A: "yes and no." For waterproofing and balcony coatings she does not get other pricing, only Johnston — there is no comparable company for the workmanship, the price is reasonable, and they have had no issues. She adds that whoever takes it over can and should get more than one bid, and that this is just what they have been doing. Confirmed: "yes they get an email on their end saying theres a work order entered/ approved."',
+      content: 'Brittany: when they email that sheet of paper like with the Johnston waterproofing one, is that after a discussion and agreeing to the price, or do they just send it after you request a bid and then you look at it, decide if it is the cheapest of the 3 or just a good price (if not comparing it to two other subcontractors), and then you enter it into the database, which is saying you approve it, and they see it was submitted and approve it on their end?\n\nMaria: yes and no. for waterproofing and balcony coatings i don\'t get other pricing just Johnston. there\'s not really a good waterproofing company with their workmanship and i think for waterproofing it\'s worth to pay the price. and their price is reasonable. but absolutely moving forward whomever is doing it can get more than one bid, this is just what we have been doing and fortunately haven\'t had any issues with the work. yes they get an email on their end saying theres a work order entered/ approved.',
+      source: 'Maria to Brittany, Teams chat 2026-10-24', imported_at: ts, underlying_status: 'extracted' });
+
+    // The new procedure: requesting bids off the vendor contact list.
+    upsert(db, 'tasks', { id: 'tr-bid-requests', title: 'Request bids for a line item from the vendor contact list', department_id: 'purchasing',
+      owner_id: 'brittany', backup_id: 'ernesto', agent_id: 'agent-purchasing', proposed: 0, documented: 1, automated: 0, verified: 0, board: 'next',
+      trigger: 'A line item on a job needs pricing — usually the next trade in the build sequence.',
+      inputs: 'The line item/trade, the job, the documents that trade needs in order to bid (Registry → Vendors → documents to provide), and the vendors on the contact list for that trade.',
+      steps: '1. The agent builds the request from the vendor contact list for that trade: who to ask, what documents they need, when it is due back.\n2. The agent asks in the purchasing Teams channel: "Send a bid request to X, Y, Z?" If only one vendor is on the list it says so, because one bid is a choice, not a default [M-chat 10/24].\n3. A named person approves. Nothing reaches a vendor before that.\n4. The request goes out and the clock starts. The request records how many bids are expected — this is what makes "are they all in?" answerable.\n5. Bids come back and are recorded against the request. No one is asked anything yet.\n6. When the last expected bid lands, the agent asks for a decision. If the due date passes first, it asks whether to chase the missing vendors or decide on what is in.',
+      approval_rules: 'Sending a bid request is approved by a named person. A single-vendor request is allowed but must carry the reason — Maria\'s practice on waterproofing is the example, and she said it should not stay the default [M-chat 10/24].',
+      automation_approach: 'n8n workflow mow-bid-requests: build the request from the vendors table → POST /api/webhooks/bid-request → the purchasing channel gets the approval card → on approval the request is marked sent and n8n picks it up from /api/webhooks/work and emails the vendors.',
+      evidence: 'A bid request recorded against the line item with the vendors asked, the documents sent and the due date.',
+      next_action: 'Decide the house rule: how many bids per line item before a sole-source reason is required.',
+      missing_info: 'There is no budget line or cost-code list in this app yet, so a line item is matched by trade and job. Cost codes would make the match exact.',
+      source: 'Brittany 2026-10-25; Maria chat 2026-10-24', updated_at: ts });
+
+    // The work-order procedure now starts from an approved bid on a complete request.
+    upsert(db, 'tasks', { id: 'tr-wo-entry-from-bid', supersedes: ['hub-new_work_order'],
+      trigger: 'Every bid requested for a line item has come in (or the request was sole-sourced, or the due date passed and a human chose to decide early).',
+      steps: '1. Bids are in against the bid request. The agent does not ask before they all are.\n2. The agent posts one message to the purchasing Teams channel. One bid asks "do you approve?"; several bids show them side by side and ask "which one?".\n3. The message says plainly what yes does: entering the work order is what emails the subcontractor to say it is approved [M-chat 10/24].\n4. Per-square-foot vendors are flagged in the message if the square footage is missing, because their work order cannot be entered without it.\n5. A named person approves one bid, or rejects with a reason. Rejecting enters nothing and sends nothing; the line item goes back to a human until another bid arrives.\n6. On approval the agent enters the work order in db.mcvaugh.com and reports the work-order number back. The losing bids are marked superseded, not deleted.',
+      approval_rules: 'A named person approves before anything is entered. Over the budget line, that person is Jim [J 10/12]. Approving with several bids on the table requires naming which one. Rejecting requires a reason. The agent never sends, prices or accepts.',
+      blocker: null,
+      waiting_on: 'Brittany (purchasing Teams channel webhook, and the house rule on how many bids per line item)',
+      next_action: 'Create the purchasing channel webhook, then run one real Johnston waterproofing bid end to end.',
+      verification_result: 'The ordering question is settled: Maria confirmed entering the work order is what notifies and approves the sub [M-chat 10/24], so the agent asks first. The loop is built and tested in this app but has not been run against a real bid or the real database.',
+      updated_at: ts });
+
+    const link = (tid, did) => { const t = db.prepare('SELECT doc_ids FROM tasks WHERE id = ?').get(tid); if (!t) return; const ids = JSON.parse(t.doc_ids || '[]'); if (!ids.includes(did)) upsert(db, 'tasks', { id: tid, doc_ids: [...ids, did] }); };
+    link('tr-wo-entry-from-bid', 'doc-maria-bid-process-answer'); link('tr-bid-requests', 'doc-maria-bid-process-answer');
+
+    upsert(db, 'agents', { id: 'agent-purchasing',
+      purpose: 'Run the bid loop for a line item: build the request from the vendor contact list, collect the bids, and ask the purchasing channel to decide once they are all in. Then enter the approved work order. Never contacts a vendor and never enters anything without a named person approving it first.',
+      approach_note: 'AI reads the incoming bid document. Everything else is deterministic and kept out of the model: who to ask (the vendors table), whether all bids are in (a count against the request), the budget check, the pricing basis, the square-footage rule, the due-date chase, and both approval gates.',
+      human_authority: 'Two gates, both named: a person approves sending a bid request, and a person approves the bid that becomes a work order. Over the budget line that person is Jim. The agent cannot send, price, award or accept work.',
+      initial_output: 'A bid request waiting to be approved; later, "all bids are in for this line item — which one?" in the purchasing Teams channel.',
+      n8n_workflow_id: 'mow-wo-approval', updated_at: ts });
+
+    upsert(db, 'integrations', { id: 'teams', name: 'Microsoft Teams — purchasing channel (approvals)', status: 'disconnected',
+      notes: 'Approval cards go to the purchasing channel, agreed with Brittany 2026-10-25. Because a channel is not a person, the approval page makes whoever decides pick their name, and records it as self-declared rather than verified. Needs an incoming webhook for that channel in TEAMS_WEBHOOK_URL, and MOW_PUBLIC_URL set to an address Teams can reach.',
+      config: JSON.stringify({ channel: 'Purchasing', workflows: ['mow-bid-requests', 'mow-wo-approval'], identity: 'self-declared: the approver picks their name', env: ['TEAMS_WEBHOOK_URL', 'MOW_PUBLIC_URL', 'MOW_N8N_SECRET'] }), last_checked: ts });
+
+    upsert(db, 'decisions', { id: 'dec-bid-rule', date: '2026-10-25',
+      title: 'The agent asks for a decision only once every bid requested for a line item is in',
+      reason: 'Brittany\'s rule, to stop the agent asking about each bid separately when a line item is out to several vendors. It needs a bid request recorded up front with how many bids are expected, which is what the bid_requests table is for. A request that passes its due date is never left silent: the agent asks whether to chase or to decide on what is in. Sole-sourced line items are allowed but must carry the reason, because Maria said more than one bid should become the norm [M-chat 10/24].',
+      decided_by: 'Brittany', status: 'accepted', source: 'Brittany 2026-10-25', created_at: ts });
+    upsert(db, 'decisions', { id: 'dec-wo-agent-draft-first', status: 'accepted',
+      reason: 'Settled 10/24. Maria confirmed the subcontractor is emailed when the work order is entered, and that this is what tells them it is approved. So the agent asks before entering, not after. Brittany\'s flow does this: the Teams message comes first, and entry only happens on a yes. The earlier open question about holding an unsent draft in the database no longer applies, because nothing is entered until a person has approved.',
+      title: 'The purchasing agent asks before it enters a work order, never after' });
+
+    addEvent(db, { entity_type: 'agent', entity_id: 'agent-purchasing', kind: 'setup', status: 'info',
+      label: 'Manual: bid request → collect bids → decide once all are in → enter the work order; both gates approved in the purchasing Teams channel',
+      source: 'manual', actor: 'brittany', external_id: 'update-bid-flow-2026-10-25' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

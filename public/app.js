@@ -51,7 +51,7 @@
     $('#demoToggle').checked = S.demo; $('#demoBanner').hidden = !S.demo;
     $('#addBtn').hidden = !S.permissions.write;
     $('#stagePill').textContent = 'Stage: ' + (S.checkpoint?.stage || 'gather');
-    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderApprovals(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
+    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderBids(); renderApprovals(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
     const fs = $('#focusSelect'); const cur = fs.value;
     fs.innerHTML = '<option value="">Focus department…</option>' + S.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('') + '<option value="neighborhood">Active jobs</option><option value="snapshot">Job list snapshot</option>';
     fs.value = cur;
@@ -235,6 +235,7 @@
     const home = id => S.homes.find(h => h.id === id);
     bar.innerHTML = pending.map(a => {
       const draft = (() => { try { return JSON.parse(a.draft || '{}'); } catch { return {}; } })();
+      const opts = (() => { try { return JSON.parse(a.options || '[]'); } catch { return []; } })();
       const label = k => String(k).replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase());
       const seen = new Map();
       for (const [k, v] of [['Vendor', vend(a.vendor_id)?.vendor], ['Job', home(a.home_id)?.address], ['Amount', a.amount],
@@ -250,22 +251,69 @@
           ${a.evidence ? `<small class="src">From: ${esc(a.evidence)}</small>` : ''}
           <small class="src">Nothing has been sent to the subcontractor. Approving is what sends it.</small>
         </div>
+        ${opts.length > 1 ? `<fieldset class="ap-opts"><legend>Pick one</legend>${opts.map(o => `<label><input type="radio" name="opt-${esc(a.id)}" value="${esc(o.id)}"> <b>${esc(o.label)}</b>${o.amount ? ` <span class="num">${esc(o.amount)}</span>` : ''}${o.note ? `<small>${esc(o.note)}</small>` : ''}</label>`).join('')}</fieldset>` : ''}
         <div class="ap-actions">${a.can_decide
-          ? `<button class="primary small" data-apdo="approve">Approve and send</button><button class="small ghost" data-apdo="reject">Reject</button>`
-          : `<small class="src">Only accounting or admin can approve a work order.</small>`}</div>
+          ? `<button class="primary small" data-apdo="approve">${opts.length > 1 ? 'Approve the one I picked' : a.kind === 'bid_request' ? 'Approve and send the request' : 'Approve and enter the work order'}</button><button class="small ghost" data-apdo="reject">${a.kind === 'bid_chase' ? 'Cancel the line item' : 'Reject'}</button>`
+          : `<small class="src">Only accounting or admin can approve this.</small>`}</div>
       </div>`;
     }).join('');
     bar.querySelectorAll('[data-apdo]').forEach(b => b.onclick = async () => {
       const id = b.closest('[data-ap]').dataset.ap, d = b.dataset.apdo;
       const a = pending.find(x => x.id === id);
-      if (d === 'approve' && !confirm(`Approve "${a.subject}"?\n\nThis releases the work order to the subcontractor. Their acceptance is the price being agreed.`)) return;
-      const note = d === 'reject' ? prompt('Why is this being rejected? (recorded against the work order)', '') : null;
-      if (d === 'reject' && note === null) return;
+      const o = (() => { try { return JSON.parse(a.options || '[]'); } catch { return []; } })();
+      const chosen = o.length > 1 ? (b.closest('[data-ap]').querySelector(`input[name="opt-${id}"]:checked`) || {}).value : null;
+      if (d === 'approve' && o.length > 1 && !chosen) { toast('Pick which one you are approving'); return; }
+      const what = a.kind === 'bid_request' ? 'This sends the bid request to those vendors.'
+        : a.kind === 'bid_chase' ? 'This cancels the line item.'
+        : 'This enters the work order, which emails the subcontractor to say it is approved.';
+      if (d === 'approve' && !confirm(`Approve "${a.subject}"?\n\n${what}`)) return;
+      const note = d === 'reject' ? prompt('Why? (recorded, so the next person knows what to do)', '') : null;
+      if (d === 'reject' && !String(note || '').trim()) { if (note !== null) toast('A reason is required'); return; }
       b.disabled = true;
-      await api('POST', `/api/approvals/${id}/${d}`, { note });
+      await api('POST', `/api/approvals/${id}/${d}`, { note, chosen });
       toast(d === 'approve' ? 'Approved and released' : 'Rejected — nothing was sent');
       refresh();
     });
+  }
+
+  // ---------- Bids: request → bids in → decision → work order ----------
+  const BR_STATUS = { draft: ['Waiting to be sent', 'amber'], sent: ['Out to vendors', 'blue'], partial: ['Some bids in', 'amber'],
+    complete: ['All bids in — waiting on a decision', 'purple'], overdue: ['Overdue', 'red'], awarded: ['Awarded', 'ok'], cancelled: ['Cancelled', 'gray'] };
+  function renderBids() {
+    const v = $('#viewBids'); if (v.hidden) return;
+    const rows = S.bid_requests || [];
+    const vend = id => S.vendors.find(x => x.id === id);
+    const home = id => S.homes.find(h => h.id === id);
+    const open = rows.filter(r => !['awarded', 'cancelled'].includes(r.status));
+    const closed = rows.filter(r => ['awarded', 'cancelled'].includes(r.status));
+    const days = iso => iso ? Math.round((new Date(iso) - Date.now()) / 864e5) : null;
+    const card = r => {
+      const [lbl, cls] = BR_STATUS[r.status] || [r.status, 'gray'];
+      const got = r.bids.filter(b => b.status !== 'rejected').length;
+      const d = days(r.due_by);
+      const won = r.bids.find(b => b.id === r.awarded_bid_id);
+      return `<div class="bidreq ${r.status}">
+        <div class="br-head"><b>${esc(r.line_item)}</b>${home(r.home_id) ? `<span class="src">${esc(home(r.home_id).address)}</span>` : ''}${chip(lbl, cls)}
+          ${r.sole_source ? chip('Sole source', 'amber') : ''}</div>
+        <div class="br-meter" title="${got} of ${r.expected} bids in">${Array.from({ length: Math.max(r.expected, got) }, (_, i) => `<span class="${i < got ? 'in' : ''}"></span>`).join('')}
+          <small>${got} of ${r.expected} bids in${d != null && !['awarded', 'cancelled'].includes(r.status) ? ` · ${d < 0 ? `${-d} day${d === -1 ? '' : 's'} overdue` : `due in ${d} day${d === 1 ? '' : 's'}`}` : ''}</small></div>
+        ${r.sole_source && r.sole_source_reason ? `<small class="src">Only vendor asked: ${esc(r.sole_source_reason)}</small>` : ''}
+        <table class="br-bids"><tbody>${(r.vendors || []).map(vid => {
+          const b = r.bids.find(x => x.vendor_id === vid);
+          const nm = vend(vid)?.vendor || vid;
+          if (!b) return `<tr class="awaited"><td>${esc(nm)}</td><td colspan="2"><small>no bid yet</small></td></tr>`;
+          const st = { received: ['received', 'gray'], approved: ['approved → work order', 'ok'], rejected: ['rejected', 'red'], superseded: ['not chosen', 'gray'] }[b.status] || [b.status, 'gray'];
+          return `<tr class="${b.status}"><td>${esc(nm)}${b.basis === 'per_sqft' && !b.sqft ? ' <span class="warnmark" title="Priced per square foot — the work order needs the square footage">⚠</span>' : ''}</td>
+            <td class="num">${esc(b.restricted ? '(restricted)' : b.amount || '—')}</td><td>${chip(st[0], st[1])}${b.wo_ref ? chip('WO ' + b.wo_ref, 'ok') : ''}</td></tr>`;
+        }).join('')}</tbody></table>
+        ${won ? `<small class="src">Awarded to ${esc(won.vendor_name || vend(won.vendor_id)?.vendor || '')}${won.wo_ref ? ` · work order ${esc(won.wo_ref)}` : ' · work order not entered yet'}</small>` : ''}
+        ${r.notes ? `<small class="src">${esc(r.notes)}</small>` : ''}</div>`;
+    };
+    v.innerHTML = `<div class="world-toolbar"><b>Bids</b><span class="hint">A request is recorded before any bid arrives, so "have they all come in?" can be answered. Nobody is asked to decide until they are all in, or the due date passes.</span></div>
+      <div class="bscroll">
+        <h3>Open <span class="chip gray">${open.length}</span></h3>${open.map(card).join('') || '<p class="empty">No open bid requests. The purchasing agent creates one when a line item needs pricing.</p>'}
+        ${closed.length ? `<h3 style="margin-top:18px">Closed <span class="chip gray">${closed.length}</span></h3>${closed.map(card).join('')}` : ''}
+      </div>`;
   }
 
   // ---------- Build view: Maria's "How to build a house" as an ordered, filterable sequence ----------
@@ -645,11 +693,12 @@
   // ---------- views & global events ----------
   function showView(v) {
     document.querySelectorAll('.views button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
-    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', build: '#viewBuild', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
+    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', build: '#viewBuild', bids: '#viewBids', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
     if (v === 'world') World.overview();
     if (v === 'handover') renderHandover(true);
     if (v === 'procedures') renderProcedures();
     if (v === 'build') renderBuild();
+    if (v === 'bids') renderBids();
     localStorage.setItem('mow_view', v);
   }
   document.querySelectorAll('.views button').forEach(b => b.onclick = () => showView(b.dataset.view));

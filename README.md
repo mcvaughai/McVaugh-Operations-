@@ -40,6 +40,7 @@ Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node
 * **Build** — Maria's "How to build a house" as 105 ordered steps from lot stake to the final city inspections, grouped into six phases, each with the responsible party (linked to its vendor record), the inspections to schedule, the hold points ("do not pour until…"), and the steps McVaugh does itself. Filter by *MCH does it*, *Inspections*, or *Needs a decision*. Logins that were typed into the source sheet are **not** stored: the step says a login is needed and names the system, and the original file is restricted.
 * **Board / Registry** — everything editable without the 3D view; Registry includes Vendors by trade (from the SOW Excel) with each vendor's pricing basis and what a work order for them must contain.
 * **Integrations** — each shown as disconnected / connected / failing; three import options (Obsidian `.md` from the browser, CSV from the browser, and **Option 3: bulk-import a folder on this computer** with a dry-run preview and skip-unchanged re-import); backup export/restore; handbook export for ChatGPT Pages.
+* **Bids** — every line item out for pricing: who was asked, how many bids are expected, how many are in, what each one quoted, which one won and its work-order number. A request is recorded *before* any bid arrives, which is what makes "have they all come in?" answerable.
 * **Approvals** — when an agent drafts something that commits money, a bar appears above every view with the drafted fields and the question put to the human. Only accounting/admin can decide; the decision is recorded with who, when, how, and any note. The same request also goes out as a Teams message with a link to a one-page approve/reject form.
 * **AI config** — per-agent purpose, needs-AI?, provider/model, why, cost, approval, eval examples, fallback.
 * **History** — all activity events with their source tag (MANUAL / N8N / IMPORT / DEMO), checkpoint history, audit (admin).
@@ -69,16 +70,23 @@ Runs `test/acceptance.js`: spawns a server on a temp folder and checks persisten
 
 n8n 2.x needs **Node.js 24**; the setup script installs n8n 1.x instead if you have an older Node, but Node 24 is the better choice (the world runs on it too).
 
-### Work-order approvals (purchasing agent)
+### The purchasing agent's bid loop
 
-`n8n\mow-wo-approval.json` is the workflow: a subcontractor's bid arrives → the ChatGPT skill drafts the work-order fields → the world is asked for approval (the purchasing agent turns amber, *waiting for approval*) → a card goes to Teams asking "a work order was entered as a draft, please verify it is correct, do you approve?" → Brittany or Ernesto opens the link, checks it, and approves or rejects.
+Two workflows, two approval gates, both answered in the **purchasing Teams channel**:
 
-It ships **switched off** and needs three things first:
+1. `n8n\mow-bid-requests.json` — a line item needs pricing. The agent builds the request from the vendor contact list for that trade (who to ask, what documents they need, when it is due) and asks the channel *"send a bid request to X, Y, Z?"*. If only one vendor is on the list it says so, because one bid should be a choice rather than a default. Nothing reaches a vendor before someone approves.
+2. `n8n\mow-wo-approval.json` — a bid comes back. It is recorded against its request and **nobody is asked anything yet**. Only when the last expected bid lands does the agent post to the channel: one bid asks *"do you approve?"*, several show the bids side by side and ask *"which one?"*. Approving is what enters the work order, and entering it is what emails the subcontractor to say it is approved.
 
-1. `TEAMS_WEBHOOK_URL` in n8n — an incoming webhook for the channel the message should land in.
+A request that passes its due date is never left silent: the agent asks whether to chase the missing vendors or decide on what is in. Rejecting enters nothing, keeps the reason, and hands the line item back to a human until another bid arrives. Losing bids are marked not chosen, never deleted.
+
+Because the messages go to a channel rather than a person, the approval page makes whoever decides pick their name, and records it as self-declared. Decisions made inside the world are authenticated instead.
+
+Both workflows ship **switched off** and need:
+
+1. `TEAMS_WEBHOOK_URL` in n8n — an incoming webhook for the purchasing channel.
 2. `MOW_PUBLIC_URL` set to an address Teams can reach, so the link in the card works.
-3. An answer to the open question on the task: **can the MCH database hold a work order without emailing the subcontractor?** Entering one is what notifies the sub, and the sub accepting it is the price being agreed, so the draft has to be able to sit unsent. If it cannot, the agent stops at a prepared work order and a human does the final entry.
+3. A house rule on how many bids per line item before a sole-source reason is required. Maria's practice on waterproofing was one vendor, and she said that should not stay the default.
 
-The agent never sends, prices or accepts anything. A link that Teams merely previews never counts as a decision: the approve/reject buttons are a form POST, so a GET only shows the page.
+The agent never contacts a vendor, prices, awards or accepts work. A link Teams merely previews never counts as a decision: the buttons are a form POST, so a GET only shows the page.
 
 To add your own workflow: add an HTTP Request node at the start and end of a workflow: `POST http://<host>:8787/api/webhooks/n8n`, header `X-MOW-Secret`, JSON body `{ "agent_id": "...", "execution_id": "{{$execution.id}}", "status": "started" }` then `"finished"` or `"failed"`. Set the agent's *n8n workflow id* in the app to route by `workflow_id` instead.

@@ -136,11 +136,14 @@ function stateFor(role) {
   // Pending approvals are visible to everyone (so the team can see what is held up); only accounting/admin may decide.
   const approvals = db.prepare("SELECT * FROM approvals ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, requested_at DESC LIMIT 100").all()
     .map(a => ({ ...a, token: undefined, can_decide: can.sensitive(role) }));
+  const bid_requests = db.prepare('SELECT * FROM bid_requests ORDER BY requested_at DESC LIMIT 200').all()
+    .map(r => ({ ...r, vendors: JSON.parse(r.vendors || '[]'), bids: db.prepare('SELECT * FROM bids WHERE bid_request_id = ? ORDER BY amount_value IS NULL, amount_value').all(r.id)
+      .map(b => sens ? b : { ...b, amount: b.amount ? '(restricted)' : null, amount_value: null, restricted: true }) }));
   const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
   const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
   const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db), hubs: imports.hubMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
-    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, build_steps, approvals, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
+    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, build_steps, approvals, bid_requests, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
     server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET, n8n_url: N8N_URL, opshub_path: can.integrationConfig(role) ? (OPSHUB_PATH || null) : undefined } };
 }
 
@@ -227,14 +230,21 @@ const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const PUBLIC_URL = process.env.MOW_PUBLIC_URL || `http://localhost:${PORT}`;
 const approvalLink = a => `${PUBLIC_URL}/approve/${a.id}?t=${a.token}`;
 // Decide an approval. `via` records how (app / teams-link / n8n) and `by` who. Never auto-approves.
-function decideApproval(a, decision, by, via, note) {
+function decideApproval(a, decision, by, via, note, chosen, identity) {
   if (a.status !== 'pending') return { error: `already ${a.status}`, approval: a };
   const ok = decision === 'approve';
-  dbm.upsert(db, 'approvals', { id: a.id, status: ok ? 'approved' : 'rejected', released: ok ? 1 : 0,
+  const opts = JSON.parse(a.options || '[]');
+  // When there is a choice to make, approving without naming the choice is not a decision.
+  if (ok && opts.length > 1 && !opts.some(o => o.id === chosen)) return { error: 'pick which one you are approving', approval: a, options: opts };
+  const pick = ok ? (chosen || (opts.length === 1 ? opts[0].id : null)) : null;
+  dbm.upsert(db, 'approvals', { id: a.id, status: ok ? 'approved' : 'rejected', released: ok ? 1 : 0, chosen: pick,
+    identity: identity || (via === 'app' ? 'authenticated' : 'self_declared'),
     decided_at: dbm.nowIso(), decided_by: by, decided_via: via, decision_note: note || null });
+  const fresh = db.prepare('SELECT * FROM approvals WHERE id = ?').get(a.id);
+  applyApprovalOutcome(fresh, ok);
   dbm.addEvent(db, { entity_type: 'agent', entity_id: a.agent_id, kind: 'run', status: ok ? 'finished' : 'failed',
     source: via === 'app' ? 'manual' : 'n8n', actor: by,
-    label: ok ? `${by} approved ${a.subject} — released to the subcontractor` : `${by} rejected ${a.subject}${note ? ' — ' + note : ''}`,
+    label: ok ? `${by} approved: ${a.subject}${pick && opts.length > 1 ? ' → ' + (opts.find(o => o.id === pick) || {}).label : ''}` : `${by} rejected: ${a.subject}${note ? ' — ' + note : ''}`,
     external_id: a.external_id + ':' + decision, payload: { approval_id: a.id } });
   dbm.audit(db, by, 'approval_' + decision, 'approval', a.id, a.subject);
   return { ok: true, approval: db.prepare('SELECT * FROM approvals WHERE id = ?').get(a.id) };
@@ -250,26 +260,140 @@ function approvalFacts(a) {
   for (const [k, v] of pairs) { if (v == null || v === '' || typeof v === 'object') continue; seen.set(k.toLowerCase(), [k, String(v)]); }
   return [...seen.values()];
 }
-const APPROVE_PAGE = (a, token, msg) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Approve a work order</title><style>
+const APPROVE_PAGE = (a, token, msg) => { const opts = JSON.parse(a.options || '[]'); const choice = opts.length > 1; return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Approval — McVaugh purchasing</title><style>
 body{font:15px/1.5 system-ui,Segoe UI,sans-serif;background:#eef3fb;color:#1b2436;margin:0;padding:24px;display:grid;place-items:start center}
-.card{background:#fff;border:1px solid #d9e1ef;border-radius:12px;max-width:560px;width:100%;padding:20px 22px;box-shadow:0 6px 24px rgba(27,36,54,.1)}
-h1{font-size:17px;margin:0 0 4px} .q{background:#fff8e6;border:1px solid #ecd9a3;border-radius:8px;padding:10px 12px;margin:12px 0}
+.card{background:#fff;border:1px solid #d9e1ef;border-radius:12px;max-width:620px;width:100%;padding:20px 22px;box-shadow:0 6px 24px rgba(27,36,54,.1)}
+h1{font-size:17px;margin:0 0 4px} .q{background:#fff8e6;border:1px solid #ecd9a3;border-radius:8px;padding:10px 12px;margin:12px 0;font-weight:600}
 dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px;margin:12px 0} dt{color:#5d6b85} dd{margin:0}
 button{font:inherit;padding:9px 16px;border-radius:8px;border:1px solid transparent;cursor:pointer}
-.ok{background:#1d9e75;color:#fff} .no{background:#fff;border-color:#e24b4a;color:#e24b4a} .row{display:flex;gap:10px;margin-top:14px}
-textarea{width:100%;font:inherit;border:1px solid #d9e1ef;border-radius:8px;padding:8px;margin-top:6px}
+.ok{background:#1d9e75;color:#fff} .no{background:#fff;border-color:#e24b4a;color:#e24b4a} .row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+textarea,select{width:100%;font:inherit;border:1px solid #d9e1ef;border-radius:8px;padding:8px;margin-top:6px;background:#fff}
 .done{background:#eef6f2;border:1px solid #bfe0d2;border-radius:8px;padding:12px}
+label.opt{display:flex;gap:10px;align-items:flex-start;border:1px solid #d9e1ef;border-radius:8px;padding:10px 12px;margin:6px 0;cursor:pointer}
+label.opt:hover{background:#f6f9ff} label.opt b{display:block} label.opt small{color:#5d6b85}
+fieldset{border:0;padding:0;margin:12px 0} legend{font-weight:600;font-size:13.5px;padding:0}
 small{color:#5d6b85}</style></head><body><div class="card"><h1>${esc(a.subject)}</h1>
 <small>Asked by the purchasing agent · ${esc((a.requested_at || '').slice(0, 16).replace('T', ' '))}</small>
 ${msg ? `<div class="done">${msg}</div>` : `<div class="q">${esc(a.question)}</div>
-<dl>${approvalFacts(a).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-${a.evidence ? `<small>From: ${esc(a.evidence)}</small>` : ''}
+${approvalFacts(a).length ? `<dl>${approvalFacts(a).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
 <form method="POST" action="/approve/${a.id}"><input type="hidden" name="t" value="${esc(token)}">
-<label>Note (optional)<textarea name="note" rows="2"></textarea></label>
-<div class="row"><button class="ok" name="d" value="approve">Approve and send to the sub</button>
-<button class="no" name="d" value="reject">Reject</button></div></form>
-<p><small>Nothing has been sent to the subcontractor yet. Approving is what sends it.</small></p>`}</div></body></html>`;
+${choice ? `<fieldset><legend>Pick one</legend>${opts.map((o, i) => `<label class="opt"><input type="radio" name="chosen" value="${esc(o.id)}"${opts.length === 1 ? ' checked' : ''}><span><b>${esc(o.label)}</b>${o.amount ? `<small>${esc(o.amount)}</small>` : ''}${o.note ? `<small>${esc(o.note)}</small>` : ''}</span></label>`).join('')}</fieldset>` : ''}
+<label>Who is approving this?<select name="by" required><option value="">Choose your name…</option>${APPROVERS.map(id => `<option value="${esc(id)}"${id === a.requested_from ? ' selected' : ''}>${esc((db.prepare('SELECT name, full_name FROM people WHERE id = ?').get(id) || {}).full_name || id)}</option>`).join('')}</select></label>
+<label>Note (optional; required if you reject)<textarea name="note" rows="2"></textarea></label>
+<div class="row"><button class="ok" name="d" value="approve">${choice ? 'Approve the one I picked' : a.kind === 'bid_request' ? 'Approve and send the request' : 'Approve and enter the work order'}</button>
+<button class="no" name="d" value="reject">${a.kind === 'bid_chase' ? 'Cancel this line item' : 'Reject'}</button></div></form>
+<p><small>${a.kind === 'bid_request' ? 'Nothing has been sent to any vendor yet. Approving is what sends the request.' : a.kind === 'bid_chase' ? 'Nothing has been entered.' : 'Nothing has been entered and no subcontractor has been told anything. Approving is what enters the work order and notifies them.'} This page is in the purchasing channel, so it records the name you choose above as self-declared.</small></p>`}</div></body></html>`; };
+
+// ---------- bids: request → receive → decide → enter ----------
+// The rule Brittany set: do not ask a human to approve a line item until every bid asked for has come in.
+// That is only answerable because the request is recorded first, with how many were expected.
+const money = v => { const n = parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : null; };
+const APPROVERS = ['brittany', 'jim', 'kenneth', 'ernesto'];
+
+function newApproval(fields) {
+  const id = 'ap-' + crypto.randomUUID().slice(0, 8);
+  const row = { id, token: crypto.randomBytes(16).toString('hex'), released: 0, status: 'pending',
+    channel: 'teams', requested_at: dbm.nowIso(), ...fields };
+  dbm.upsert(db, 'approvals', row);
+  if (row.agent_id) dbm.addEvent(db, { entity_type: 'agent', entity_id: row.agent_id, kind: 'run', status: 'waiting_approval',
+    source: row.source === 'manual' ? 'manual' : 'n8n', actor: row.source === 'manual' ? 'app' : 'n8n',
+    label: `${row.subject} — waiting for ${row.requested_from || 'a decision'}`, external_id: (row.external_id || id) + ':waiting', payload: { approval_id: id } });
+  return db.prepare('SELECT * FROM approvals WHERE id = ?').get(id);
+}
+
+// Every bid asked for has arrived (or it was always a single, sole-sourced vendor).
+function bidsComplete(br) {
+  const n = db.prepare("SELECT COUNT(*) c FROM bids WHERE bid_request_id = ? AND status IN ('received','approved')").get(br.id).c;
+  return n >= Math.max(1, br.expected);
+}
+
+// Ask the human to decide a line item. One bid is yes/no; several is "pick one", with the bids side by side.
+function askToDecide(br, reason) {
+  const open = db.prepare("SELECT * FROM approvals WHERE bid_request_id = ? AND status = 'pending'").get(br.id);
+  if (open) return open;
+  const bids = db.prepare("SELECT * FROM bids WHERE bid_request_id = ? AND status = 'received' ORDER BY amount_value IS NULL, amount_value").all(br.id);
+  if (!bids.length) return null;
+  const home = br.home_id && db.prepare('SELECT address FROM homes WHERE id = ?').get(br.home_id);
+  const where = home ? ` — ${home.address}` : '';
+  const vendorOf = id => db.prepare('SELECT * FROM vendors WHERE id = ?').get(id || '') || {};
+  const sqftWarn = b => { const v = vendorOf(b.vendor_id); return v.pricing_basis === 'per_sqft' && !b.sqft ? ' (priced per square foot — the work order needs the square footage)' : ''; };
+  const multi = bids.length > 1;
+  const subject = multi ? `${bids.length} bids in for ${br.line_item}${where} — which one?` : `Bid received for ${br.line_item}${where} — ${bids[0].vendor_name || vendorOf(bids[0].vendor_id).vendor || 'vendor'}`;
+  const question = multi
+    ? `All ${br.expected} bids requested for ${br.line_item} have come in. Which one do you want? Approving enters the work order, which emails that subcontractor to say it is approved.`
+    : `A bid was received for ${br.line_item}${br.sole_source ? ` (only vendor asked${br.sole_source_reason ? `: ${br.sole_source_reason}` : ''})` : ''}. Do you approve? Approving enters the work order, which emails ${bids[0].vendor_name || 'the subcontractor'} to say it is approved.`;
+  const a = newApproval({ agent_id: 'agent-purchasing', task_id: 'tr-wo-entry-from-bid', kind: multi ? 'bid_award' : 'work_order',
+    bid_request_id: br.id, subject, question, requested_from: br.requested_by || 'brittany',
+    vendor_id: multi ? null : bids[0].vendor_id, home_id: br.home_id, amount: multi ? null : bids[0].amount,
+    options: JSON.stringify(bids.map(b => ({ id: b.id, label: (b.vendor_name || vendorOf(b.vendor_id).vendor || b.vendor_id) + sqftWarn(b), amount: b.amount, note: b.scope_notes || null }))),
+    evidence: reason || (multi ? `All ${bids.length} bids in` : br.sole_source ? 'Sole-sourced line item' : 'Bid received'),
+    due_by: br.due_by, source: 'n8n', external_id: 'award:' + br.id });
+  dbm.upsert(db, 'bid_requests', { id: br.id, status: 'complete', updated_at: dbm.nowIso() });
+  return a;
+}
+
+// Called when a bid lands. Stays quiet until the request is complete — that is the whole point of the rule.
+function onBidReceived(br) {
+  const got = db.prepare("SELECT COUNT(*) c FROM bids WHERE bid_request_id = ? AND status IN ('received','approved')").get(br.id).c;
+  if (bidsComplete(br)) return askToDecide(br);
+  dbm.upsert(db, 'bid_requests', { id: br.id, status: 'partial', updated_at: dbm.nowIso() });
+  dbm.addEvent(db, { entity_type: 'agent', entity_id: 'agent-purchasing', kind: 'run', status: 'finished', source: 'n8n', actor: 'n8n',
+    label: `${br.line_item}: ${got} of ${br.expected} bids in — waiting for the rest before asking anyone`,
+    external_id: `bidwait:${br.id}:${got}` });
+  return null;
+}
+
+// A bid request past its due date is never left silent: the human is asked to chase or decide on what is in.
+function sweepOverdueBids() {
+  const now = Date.now();
+  for (const br of db.prepare("SELECT * FROM bid_requests WHERE status IN ('sent','partial') AND due_by IS NOT NULL").all()) {
+    if (new Date(br.due_by).getTime() > now) continue;
+    const got = db.prepare("SELECT COUNT(*) c FROM bids WHERE bid_request_id = ? AND status = 'received'").get(br.id).c;
+    dbm.upsert(db, 'bid_requests', { id: br.id, status: 'overdue', updated_at: dbm.nowIso() });
+    if (db.prepare("SELECT 1 FROM approvals WHERE bid_request_id = ? AND status = 'pending'").get(br.id)) continue;
+    const missing = db.prepare('SELECT vendors FROM bid_requests WHERE id = ?').get(br.id);
+    const asked = JSON.parse(missing.vendors || '[]');
+    const inIds = db.prepare('SELECT vendor_id FROM bids WHERE bid_request_id = ?').all(br.id).map(b => b.vendor_id);
+    const late = asked.filter(v => !inIds.includes(v)).map(v => (db.prepare('SELECT vendor FROM vendors WHERE id = ?').get(v) || {}).vendor || v);
+    newApproval({ agent_id: 'agent-purchasing', kind: 'bid_chase', bid_request_id: br.id,
+      subject: `${br.line_item}: ${got} of ${br.expected} bids in and the date has passed`,
+      question: `${late.length ? late.join(', ') + ' have not sent a bid. ' : ''}Do you want to chase them, or decide on the ${got} you have? Nothing has been entered.`,
+      options: JSON.stringify([{ id: 'chase', label: 'Chase the missing bids' }, ...(got ? [{ id: 'decide', label: `Decide on the ${got} bid${got === 1 ? '' : 's'} already in` }] : []), { id: 'cancel', label: 'Cancel this line item' }]),
+      requested_from: br.requested_by || 'brittany', home_id: br.home_id, due_by: br.due_by, source: 'manual', external_id: 'chase:' + br.id });
+    dbm.addEvent(db, { entity_type: 'agent', entity_id: 'agent-purchasing', kind: 'run', status: 'waiting_approval', source: 'manual', actor: 'app',
+      label: `${br.line_item} overdue: ${got} of ${br.expected} bids in`, external_id: `overdue:${br.id}` });
+  }
+}
+
+// What happens once a human has decided. Nothing here contacts a vendor: it records the decision and
+// leaves the work for n8n to pick up, so the act of sending is always downstream of a recorded approval.
+function applyApprovalOutcome(a, approved) {
+  const ts = dbm.nowIso();
+  if (a.kind === 'bid_request' && approved) {
+    dbm.upsert(db, 'bid_requests', { id: a.bid_request_id, status: 'sent', sent_at: ts, updated_at: ts });
+  } else if (a.kind === 'bid_request') {
+    dbm.upsert(db, 'bid_requests', { id: a.bid_request_id, status: 'cancelled', closed_at: ts, updated_at: ts });
+  } else if (a.kind === 'bid_chase') {
+    const br = db.prepare('SELECT * FROM bid_requests WHERE id = ?').get(a.bid_request_id || '');
+    if (!br) return;
+    if (a.chosen === 'cancel') dbm.upsert(db, 'bid_requests', { id: br.id, status: 'cancelled', closed_at: ts, updated_at: ts });
+    else if (a.chosen === 'decide') { dbm.upsert(db, 'bid_requests', { id: br.id, status: 'partial', updated_at: ts }); askToDecide(br, 'Decided early: the rest did not come in'); }
+    else dbm.upsert(db, 'bid_requests', { id: br.id, status: 'partial', due_by: new Date(Date.now() + 5 * 864e5).toISOString(), updated_at: ts });
+  } else if (a.kind === 'work_order' || a.kind === 'bid_award') {
+    const br = a.bid_request_id && db.prepare('SELECT * FROM bid_requests WHERE id = ?').get(a.bid_request_id);
+    const opts = JSON.parse(a.options || '[]');
+    const winner = a.chosen || (opts.length === 1 ? opts[0].id : null);
+    if (!approved) {
+      // Rejected: nothing is entered and nothing is sent. The reason is kept, and the line item goes back to a human.
+      for (const o of opts) dbm.upsert(db, 'bids', { id: o.id, status: 'rejected', reject_reason: a.decision_note || 'rejected without a reason given', updated_at: ts });
+      if (br) dbm.upsert(db, 'bid_requests', { id: br.id, status: 'partial', notes: [br.notes, `${ts.slice(0, 10)}: rejected — ${a.decision_note || 'no reason given'}`].filter(Boolean).join('\n'), updated_at: ts });
+      return;
+    }
+    for (const o of opts) dbm.upsert(db, 'bids', { id: o.id, status: o.id === winner ? 'approved' : 'superseded', updated_at: ts });
+    if (br && winner) dbm.upsert(db, 'bid_requests', { id: br.id, status: 'awarded', awarded_bid_id: winner, closed_at: ts, updated_at: ts });
+  }
+}
 
 // ---------- succession: "if this person were gone tomorrow, what stops?" ----------
 const BACKUP_NONE = v => !v || /^(none|nobody|n\/a|-)?\s*$/i.test(v) || /nobody assigned|nobody else/i.test(v);
@@ -334,6 +458,8 @@ function scheduleOpsHubWrite(reason) {
 }
 
 // ---------- router ----------
+setInterval(() => { try { sweepOverdueBids(); } catch (e) { console.error('bid sweep', e.message); } }, 5 * 60 * 1000).unref();
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
@@ -353,11 +479,18 @@ const server = http.createServer(async (req, res) => {
       if (a.status !== 'pending') return html(200, APPROVE_PAGE(a, token, `Already <b>${esc(a.status)}</b> by ${esc(a.decided_by || 'someone')} on ${esc((a.decided_at || '').slice(0, 16).replace('T', ' '))}.`));
       if (req.method === 'GET') return html(200, APPROVE_PAGE(a, token));
       const d = q.get('d') === 'approve' ? 'approve' : 'reject';
-      // The link proves the person opened the Teams message; it does not prove who they are, so that is recorded.
-      const by = q.get('by') || `${a.requested_from || 'someone'} (via the Teams link — identity not verified)`;
-      const r = decideApproval(a, d, by, 'teams-link', q.get('note'));
+      // The message goes to the purchasing channel, so the link proves someone in that channel opened it,
+      // not which person. They name themselves and it is recorded as self-declared.
+      const by = q.get('by');
+      if (!by || !APPROVERS.includes(by)) return html(200, APPROVE_PAGE(a, token, 'Choose your name before approving, so the decision has someone\'s name on it. <a href="">Go back</a>.'));
+      const note = q.get('note');
+      if (d === 'reject' && !String(note || '').trim()) return html(200, APPROVE_PAGE(a, token, 'Say why you are rejecting it, so the next person knows what to do. <a href="">Go back</a>.'));
+      const r = decideApproval(a, d, by, 'teams-link', note, q.get('chosen'), 'self_declared');
+      if (!r.ok && r.options) return html(200, APPROVE_PAGE(a, token, 'Pick which bid you are approving. <a href="">Go back</a>.'));
       return html(200, APPROVE_PAGE(a, token, r.ok
-        ? (d === 'approve' ? 'Approved. The work order can now be sent to the subcontractor.' : 'Rejected. Nothing was sent.')
+        ? (d === 'approve'
+          ? (a.kind === 'bid_request' ? 'Approved. The bid request goes out to those vendors.' : 'Approved. The work order will be entered and the subcontractor notified.')
+          : 'Rejected. Nothing was sent and the reason is recorded.')
         : `Already ${esc(r.error)}.`));
     }
     if (p.startsWith('/files/')) { // uploaded documents; same role rules as the document record
@@ -412,6 +545,8 @@ async function api(req, res, url, p, role) {
     return send(res, 200, { ok: true, deduplicated: !r.inserted });
   }
   // ---------- approvals: an agent drafted something; a named human decides before it leaves ----------
+  const secretOk = (rq, u) => !!N8N_SECRET && (rq.headers['x-mow-secret'] || u.searchParams.get('secret')) === N8N_SECRET;
+
   // n8n calls this when the purchasing agent has drafted a work order from a subcontractor's bid.
   // The work order is NOT sent to the sub here: it stays a draft until someone approves below.
   if (p === '/api/webhooks/approval' && m === 'POST') {
@@ -440,6 +575,89 @@ async function api(req, res, url, p, role) {
     return send(res, 200, { ok: true, id, question: row.question, url: approvalLink(row) });
   }
 
+
+  // The agent proposes a set of bid requests, built from the vendor contact list. Sending them to vendors
+  // is outward-facing, so it is its own approval: nothing reaches a vendor before a human says so.
+  if (p === '/api/webhooks/bid-request' && m === 'POST') {
+    if (!secretOk(req, url)) return send(res, 401, { error: 'bad secret' });
+    const b = await readJson(req);
+    if (!b.line_item) return send(res, 400, { error: 'line_item required' });
+    const ext = 'bidreq:' + (b.external_id || b.execution_id || crypto.randomUUID());
+    const dupe = db.prepare('SELECT * FROM approvals WHERE external_id = ?').get(ext);
+    if (dupe) return send(res, 200, { ok: true, deduplicated: true, id: dupe.id, bid_request_id: dupe.bid_request_id, url: approvalLink(dupe) });
+    // Vendors come from the contact list for that trade unless the agent named them explicitly.
+    let vendors = Array.isArray(b.vendors) && b.vendors.length ? b.vendors
+      : db.prepare('SELECT id FROM vendors WHERE UPPER(trade) = UPPER(?)').all(b.line_item).map(v => v.id);
+    vendors = [...new Set(vendors)].filter(Boolean);
+    if (!vendors.length) return send(res, 400, { error: `no vendor on the contact list for "${b.line_item}" — add one in Registry → Vendors` });
+    const names = vendors.map(v => (db.prepare('SELECT vendor, trade FROM vendors WHERE id = ?').get(v) || {}).vendor || v);
+    const sole = vendors.length === 1;
+    const ts = dbm.nowIso();
+    const brId = 'br-' + crypto.randomUUID().slice(0, 8);
+    const days = Number(b.due_days) > 0 ? Number(b.due_days) : 7;
+    dbm.upsert(db, 'bid_requests', { id: brId, line_item: b.line_item, cost_code: b.cost_code || null, home_id: b.home_id || null,
+      build_step_id: b.build_step_id || null, scope: b.scope || null,
+      docs_provided: b.docs_provided || (db.prepare('SELECT docs_needed FROM vendors WHERE id = ?').get(vendors[0]) || {}).docs_needed || null,
+      vendors: JSON.stringify(vendors), expected: Number(b.expected) || vendors.length,
+      sole_source: sole ? 1 : 0, sole_source_reason: sole ? (b.sole_source_reason || 'only one vendor on the contact list for this trade') : null,
+      due_by: new Date(Date.now() + days * 864e5).toISOString(), status: 'draft', requested_by: b.requested_by || 'brittany',
+      requested_at: ts, source: b.source || 'agent-purchasing', updated_at: ts });
+    const home = b.home_id && db.prepare('SELECT address FROM homes WHERE id = ?').get(b.home_id);
+    const a = newApproval({ agent_id: 'agent-purchasing', task_id: 'tr-bid-requests', kind: 'bid_request', bid_request_id: brId,
+      subject: `Request bids for ${b.line_item}${home ? ' — ' + home.address : ''}`,
+      question: `Send a bid request to ${names.join(', ')}?${sole ? ' That is the only vendor on the contact list for this trade — Maria\'s note was that whoever takes this over should get more than one bid, so add another vendor if you want a comparison.' : ''} Nothing goes out until you approve.`,
+      draft: JSON.stringify({ 'Line item': b.line_item, Vendors: names.join(', '), 'Documents to send': b.docs_provided || '(from the SOW)', 'Bids expected': String(Number(b.expected) || vendors.length), 'Due back': `${days} days` }),
+      requested_from: b.requested_by || 'brittany', home_id: b.home_id || null, due_by: null, source: b.source || 'n8n', external_id: ext });
+    setIntegration('n8n', 'connected', `Last authenticated event ${ts}`);
+    return send(res, 200, { ok: true, id: a.id, bid_request_id: brId, sole_source: sole, vendors: names, url: approvalLink(a) });
+  }
+
+  // A bid came back from a vendor. Recorded against its request; the human is only asked once they are all in.
+  if (p === '/api/webhooks/bid' && m === 'POST') {
+    if (!secretOk(req, url)) return send(res, 401, { error: 'bad secret' });
+    const b = await readJson(req);
+    const br = b.bid_request_id ? db.prepare('SELECT * FROM bid_requests WHERE id = ?').get(b.bid_request_id)
+      : db.prepare("SELECT * FROM bid_requests WHERE UPPER(line_item) = UPPER(?) AND (home_id IS ? OR home_id = ?) AND status IN ('sent','partial','overdue') ORDER BY requested_at DESC").get(b.line_item || '', b.home_id || null, b.home_id || null);
+    if (!br) return send(res, 409, { error: 'no open bid request for that line item — the agent must ask for bids before one can be recorded against it' });
+    const ext = 'bid:' + (b.external_id || `${br.id}:${b.vendor_id || b.vendor_name}`);
+    const dupe = db.prepare('SELECT id FROM bids WHERE source = ?').get(ext);
+    if (dupe) return send(res, 200, { ok: true, deduplicated: true, id: dupe.id });
+    const vend = b.vendor_id && db.prepare('SELECT * FROM vendors WHERE id = ?').get(b.vendor_id);
+    const ts = dbm.nowIso();
+    const id = 'bid-' + crypto.randomUUID().slice(0, 8);
+    dbm.upsert(db, 'bids', { id, bid_request_id: br.id, vendor_id: b.vendor_id || null, vendor_name: b.vendor_name || (vend || {}).vendor || null,
+      amount: b.amount != null ? String(b.amount) : null, amount_value: money(b.amount), basis: (vend || {}).pricing_basis || null,
+      sqft: b.sqft != null ? String(b.sqft) : null, scope_notes: b.scope_notes || null, doc_id: b.doc_id || null,
+      received_at: ts, status: 'received', source: ext, updated_at: ts });
+    const a = onBidReceived(db.prepare('SELECT * FROM bid_requests WHERE id = ?').get(br.id));
+    const got = db.prepare("SELECT COUNT(*) c FROM bids WHERE bid_request_id = ? AND status = 'received'").get(br.id).c;
+    setIntegration('n8n', 'connected', `Last authenticated event ${ts}`);
+    return send(res, 200, { ok: true, id, received: got, expected: br.expected, asked_for_decision: !!a, approval_id: a ? a.id : null, url: a ? approvalLink(a) : null });
+  }
+
+  // n8n reports back the work-order number after entering an approved bid into the MCH database.
+  if (p === '/api/webhooks/bid/entered' && m === 'POST') {
+    if (!secretOk(req, url)) return send(res, 401, { error: 'bad secret' });
+    const b = await readJson(req);
+    const bid = db.prepare('SELECT * FROM bids WHERE id = ?').get(b.bid_id || '');
+    if (!bid) return send(res, 404, { error: 'no such bid' });
+    if (bid.status !== 'approved') return send(res, 409, { error: 'that bid was not approved, so no work order may be entered for it' });
+    dbm.upsert(db, 'bids', { id: bid.id, wo_ref: b.wo_ref || null, entered_at: dbm.nowIso(), entered_by: b.entered_by || 'n8n', updated_at: dbm.nowIso() });
+    dbm.addEvent(db, { entity_type: 'agent', entity_id: 'agent-purchasing', kind: 'run', status: 'finished', source: 'n8n', actor: 'n8n',
+      label: `Work order ${b.wo_ref || ''} entered for ${bid.vendor_name || bid.vendor_id} — the subcontractor has been notified`.replace(/\s+/g, ' '),
+      external_id: `entered:${bid.id}` });
+    return send(res, 200, { ok: true });
+  }
+
+  // n8n polls these: what has been approved and is waiting to be acted on.
+  if (p === '/api/webhooks/work' && m === 'GET') {
+    if (!secretOk(req, url)) return send(res, 401, { error: 'bad secret' });
+    return send(res, 200, {
+      send_bid_requests: db.prepare("SELECT * FROM bid_requests WHERE status = 'sent' AND sent_at IS NOT NULL").all()
+        .map(r => ({ ...r, vendors: JSON.parse(r.vendors || '[]').map(v => db.prepare('SELECT id, vendor, trade, contacts FROM vendors WHERE id = ?').get(v)).filter(Boolean) })),
+      enter_work_orders: db.prepare("SELECT * FROM bids WHERE status = 'approved' AND wo_ref IS NULL").all(),
+    });
+  }
 
   // --- everything else needs a session ---
   if (!role) return send(res, 401, { error: 'login required' });
@@ -471,9 +689,15 @@ async function api(req, res, url, p, role) {
     const b = await readJson(req);
     if (action === 'cancel') { dbm.upsert(db, 'approvals', { id, status: 'cancelled', decided_at: dbm.nowIso(), decided_by: role, decided_via: 'app', decision_note: b.note || null }); dbm.audit(db, role, 'approval_cancel', 'approval', id, a.subject); return send(res, 200, { ok: true }); }
     if (action !== 'approve' && action !== 'reject') return send(res, 404, { error: 'not found' });
-    const r = decideApproval(a, action, b.by || role, 'app', b.note);
+    // Already decided beats every other complaint: re-deciding is the thing to refuse.
+    if (a.status !== 'pending') return send(res, 409, { error: `already ${a.status}`, approval: a });
+    // A rejection without a reason tells the next person nothing, so it is not accepted.
+    if (action === 'reject' && !String(b.note || '').trim()) return send(res, 400, { error: 'say why you are rejecting it' });
+    const r = decideApproval(a, action, b.by || role, 'app', b.note, b.chosen);
     return send(res, r.ok ? 200 : 409, r);
   }
+  // Run the overdue check now (it also runs on a timer).
+  if (p === '/api/bids/sweep' && m === 'POST') { sweepOverdueBids(); return send(res, 200, { ok: true }); }
   if (p === '/api/import/backup' && m === 'POST') { if (role !== 'admin') return send(res, 403, { error: 'admin only' }); dbm.importBackup(db, await readJson(req)); dbm.audit(db, role, 'import_backup'); return send(res, 200, { ok: true }); }
 
   if (p === '/api/events' && m === 'POST') {

@@ -129,6 +129,31 @@ CREATE TABLE IF NOT EXISTS approvals (
   source TEXT, external_id TEXT UNIQUE
 );
 
+-- A request for bids on one line item. Created before any bid arrives, because "have all the bids come in?"
+-- cannot be answered unless something first recorded how many were asked for.
+CREATE TABLE IF NOT EXISTS bid_requests (
+  id TEXT PRIMARY KEY, line_item TEXT NOT NULL, cost_code TEXT, home_id TEXT, build_step_id TEXT,
+  scope TEXT, docs_provided TEXT,
+  vendors TEXT NOT NULL,                      -- JSON array of vendor ids the request went to
+  expected INTEGER NOT NULL DEFAULT 1,        -- how many bids we are waiting for
+  sole_source INTEGER NOT NULL DEFAULT 0, sole_source_reason TEXT,
+  due_by TEXT,                                -- when they were asked for; a request past this is chased, never left silent
+  status TEXT NOT NULL DEFAULT 'draft',       -- draft | sent | partial | complete | overdue | awarded | cancelled
+  awarded_bid_id TEXT, requested_by TEXT, requested_at TEXT, sent_at TEXT, closed_at TEXT,
+  notes TEXT, source TEXT, updated_at TEXT
+);
+
+-- One bid received against a request.
+CREATE TABLE IF NOT EXISTS bids (
+  id TEXT PRIMARY KEY, bid_request_id TEXT, vendor_id TEXT, vendor_name TEXT,
+  amount TEXT, amount_value REAL,             -- amount_value is the number, for comparing bids
+  basis TEXT, sqft TEXT,                      -- pricing basis copied from the vendor when the bid landed
+  scope_notes TEXT, doc_id TEXT, received_at TEXT,
+  status TEXT NOT NULL DEFAULT 'received',    -- received | approved | rejected | superseded
+  reject_reason TEXT, wo_ref TEXT, entered_at TEXT, entered_by TEXT,
+  source TEXT, updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS build_steps (
   id TEXT PRIMARY KEY, seq INTEGER, row_no INTEGER, phase TEXT, description TEXT NOT NULL,
   responsible TEXT, vendor_id TEXT, kind TEXT NOT NULL DEFAULT 'step',   -- step | hold | notify | note
@@ -202,7 +227,12 @@ const MIGRATIONS = [
   ['tasks', 'supersedes', 'TEXT'],
   ['vendors', 'pricing_basis', 'TEXT'],     // per_sqft | fixed | per_bid | unknown
   ['vendors', 'wo_instructions', 'TEXT'],   // what a work order for this vendor must contain
-  ['vendors', 'wo_review', 'TEXT'],         // reusable | needs_review | reviewed         // JSON array: old procedure ids this (new) procedure replaces or absorbs
+  ['vendors', 'wo_review', 'TEXT'],
+  ['approvals', 'options', 'TEXT'],          // JSON [{id,label,amount,note}] when the human picks one of several bids
+  ['approvals', 'chosen', 'TEXT'],           // which option was picked
+  ['approvals', 'bid_request_id', 'TEXT'],
+  ['approvals', 'identity', 'TEXT'],         // authenticated (signed in) | self_declared (picked their name on the Teams page)
+  ['approvals', 'due_by', 'TEXT'],         // reusable | needs_review | reviewed         // JSON array: old procedure ids this (new) procedure replaces or absorbs
 ];
 function migrate(db) {
   for (const [table, column, type] of MIGRATIONS) {
@@ -222,7 +252,9 @@ const TABLES = {
   integrations: ['id','name','kind','status','last_checked','last_message','last_import_at','config','notes'],
   documents: ['id','title','path','kind','kind_reason','sensitive','task_id','department_id','summary','size','source','imported_at','updated_at','underlying_path','underlying_status','content','hubs','entities','meeting_date','attendees','cite_key','file_path','mime'],
   vendors: ['id','trade','vendor','contacts','rate','docs_needed','notes','source','imported_at','updated_at','pricing_basis','wo_instructions','wo_review'],
-  approvals: ['id','agent_id','task_id','kind','subject','vendor_id','home_id','amount','question','draft','evidence','released','status','requested_from','channel','channel_ref','token','requested_at','decided_at','decided_by','decided_via','decision_note','source','external_id'],
+  approvals: ['id','agent_id','task_id','kind','subject','vendor_id','home_id','amount','question','draft','evidence','released','status','requested_from','channel','channel_ref','token','requested_at','decided_at','decided_by','decided_via','decision_note','source','external_id','options','chosen','bid_request_id','identity','due_by'],
+  bid_requests: ['id','line_item','cost_code','home_id','build_step_id','scope','docs_provided','vendors','expected','sole_source','sole_source_reason','due_by','status','awarded_bid_id','requested_by','requested_at','sent_at','closed_at','notes','source','updated_at'],
+  bids: ['id','bid_request_id','vendor_id','vendor_name','amount','amount_value','basis','sqft','scope_notes','doc_id','received_at','status','reject_reason','wo_ref','entered_at','entered_by','source','updated_at'],
   build_steps: ['id','seq','row_no','phase','description','responsible','vendor_id','kind','is_mch','inspection','notes','credential_note','gap','sensitive','source','imported_at','updated_at'],
   handover_items: ['id','person_id','item','basis','documented','current','backup','risk','capture','cite','status','note','why','task_ids','doc_ids','updated_at'],
   ai_configs: ['id','agent_id','purpose','needs_ai','provider','model','why','expected_cost','approval','eval_examples','fallback','updated_at'],

@@ -1,0 +1,17 @@
+{
+  "id": "mowbidrequests1",
+  "name": "MOW — Request bids for a line item (approved in the purchasing channel)",
+  "nodes": [
+    { "parameters": { "httpMethod": "POST", "path": "mow-need-bids", "responseMode": "lastNode", "options": {} }, "id": "c1", "name": "Line item needs pricing (POST /webhook/mow-need-bids)", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [0, 0], "webhookId": "mow-need-bids" },
+
+    { "parameters": { "method": "POST", "url": "={{ $env.MOW_URL }}/api/webhooks/bid-request", "sendHeaders": true, "headerParameters": { "parameters": [ { "name": "X-MOW-Secret", "value": "={{ $env.MOW_N8N_SECRET }}" } ] }, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ line_item: $json.body.line_item, home_id: $json.body.home_id, cost_code: $json.body.cost_code, scope: $json.body.scope, vendors: $json.body.vendors, expected: $json.body.expected, due_days: $json.body.due_days || 7, execution_id: $execution.id }) }}", "options": {} }, "id": "c2", "name": "Build the request from the vendor list, ask for approval", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [260, 0] },
+
+    { "parameters": { "method": "POST", "url": "={{ $env.TEAMS_WEBHOOK_URL }}", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ type: 'message', attachments: [ { contentType: 'application/vnd.microsoft.card.adaptive', content: { type: 'AdaptiveCard', version: '1.4', body: [ { type: 'TextBlock', size: 'Medium', weight: 'Bolder', wrap: true, text: 'Request bids for ' + $('Line item needs pricing (POST /webhook/mow-need-bids)').item.json.body.line_item }, { type: 'TextBlock', wrap: true, text: 'Send a bid request to ' + ($json.vendors || []).join(', ') + '?' }, { type: 'TextBlock', wrap: true, isSubtle: true, size: 'Small', text: $json.sole_source ? 'Only one vendor is on the contact list for this trade. One bid is a choice, not a default.' : 'Nothing goes out to any vendor until someone approves.' } ], actions: [ { type: 'Action.OpenUrl', title: 'Review and approve', url: $json.url } ] } } ] }) }}", "options": {} }, "id": "c3", "name": "Ask the purchasing channel", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [520, 0] }
+  ],
+  "connections": {
+    "Line item needs pricing (POST /webhook/mow-need-bids)": { "main": [ [ { "node": "Build the request from the vendor list, ask for approval", "type": "main", "index": 0 } ] ] },
+    "Build the request from the vendor list, ask for approval": { "main": [ [ { "node": "Ask the purchasing channel", "type": "main", "index": 0 } ] ] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

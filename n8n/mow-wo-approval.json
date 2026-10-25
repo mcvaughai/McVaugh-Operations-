@@ -1,23 +1,200 @@
 {
   "id": "mowwoapproval1",
-  "name": "MOW — Sub bid arrives → draft work order → ask in Teams",
+  "name": "MOW \u2014 Bid arrives \u2192 record it \u2192 ask the purchasing channel once all bids are in",
   "nodes": [
-    { "parameters": { "httpMethod": "POST", "path": "mow-sub-bid", "responseMode": "lastNode", "options": {} }, "id": "a1", "name": "Bid received (POST /webhook/mow-sub-bid)", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [0, 0], "webhookId": "mow-sub-bid" },
-
-    { "parameters": { "method": "POST", "url": "={{ $env.MOW_URL }}/api/webhooks/n8n", "sendHeaders": true, "headerParameters": { "parameters": [ { "name": "X-MOW-Secret", "value": "={{ $env.MOW_N8N_SECRET }}" } ] }, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ agent_id: 'agent-purchasing', execution_id: $execution.id, status: 'started', label: 'Reading bid: ' + ($json.body.subject || $json.body.file || 'untitled') }) }}", "options": {} }, "id": "a2", "name": "Tell MOW: started", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [240, 0] },
-
-    { "parameters": { "jsCode": "// Replace this node with the call to Brittany's ChatGPT work-order skill.\n// It must return the drafted work-order fields — it must NOT send anything to the subcontractor.\n// Until it is wired up, the bid is passed through unchanged so the approval loop can be tested end to end.\nconst b = $('Bid received (POST /webhook/mow-sub-bid)').first().json.body || {};\nreturn [{ json: {\n  subject: b.subject || ('Work order — ' + (b.vendor || 'vendor') + ' — ' + (b.job || 'job')),\n  vendor_id: b.vendor_id || null,\n  home_id: b.home_id || null,\n  amount: b.amount || null,\n  evidence: b.evidence || b.file || 'bid received by webhook',\n  draft: b.draft || { vendor: b.vendor, job: b.job, cost_code: b.cost_code, description: b.description, amount: b.amount, draws: b.draws }\n} }];" }, "id": "a3", "name": "Draft the work order (ChatGPT skill)", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [480, 0] },
-
-    { "parameters": { "method": "POST", "url": "={{ $env.MOW_URL }}/api/webhooks/approval", "sendHeaders": true, "headerParameters": { "parameters": [ { "name": "X-MOW-Secret", "value": "={{ $env.MOW_N8N_SECRET }}" } ] }, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ agent_id: 'agent-purchasing', task_id: 'tr-wo-entry-from-bid', kind: 'work_order', execution_id: $execution.id, subject: $json.subject, vendor_id: $json.vendor_id, home_id: $json.home_id, amount: $json.amount, evidence: $json.evidence, draft: $json.draft, channel: 'teams', question: 'A work order was entered as a draft. Please verify it is correct. Do you approve sending it to the subcontractor?' }) }}", "options": {} }, "id": "a4", "name": "Ask MOW for approval (agent turns amber)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [720, 0] },
-
-    { "parameters": { "method": "POST", "url": "={{ $env.TEAMS_WEBHOOK_URL }}", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ type: 'message', attachments: [ { contentType: 'application/vnd.microsoft.card.adaptive', content: { type: 'AdaptiveCard', version: '1.4', body: [ { type: 'TextBlock', size: 'Medium', weight: 'Bolder', text: $('Draft the work order (ChatGPT skill)').item.json.subject }, { type: 'TextBlock', wrap: true, text: 'A work order was entered as a draft. Please verify it is correct. Do you approve sending it to the subcontractor?' }, { type: 'FactSet', facts: Object.entries($('Draft the work order (ChatGPT skill)').item.json.draft || {}).filter(e => e[1]).map(e => ({ title: e[0], value: String(e[1]) })) }, { type: 'TextBlock', wrap: true, isSubtle: true, size: 'Small', text: 'Nothing has been sent to the subcontractor yet. Approving is what sends it.' } ], actions: [ { type: 'Action.OpenUrl', title: 'Review and approve', url: $json.url } ] } } ] }) }}", "options": {} }, "id": "a5", "name": "Post the approval card to Teams", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [960, 0] }
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mow-sub-bid",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "a1",
+      "name": "Bid received (POST /webhook/mow-sub-bid)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "mow-sub-bid"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MOW_URL }}/api/webhooks/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-MOW-Secret",
+              "value": "={{ $env.MOW_N8N_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ agent_id: 'agent-purchasing', execution_id: $execution.id, status: 'started', label: 'Reading bid: ' + ($json.body.subject || $json.body.file || 'untitled') }) }}",
+        "options": {}
+      },
+      "id": "a2",
+      "name": "Tell MOW: started",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Replace this node with the call to Brittany's ChatGPT work-order skill.\n// It must return the drafted work-order fields \u2014 it must NOT send anything to the subcontractor.\n// Until it is wired up, the bid is passed through unchanged so the approval loop can be tested end to end.\nconst b = $('Bid received (POST /webhook/mow-sub-bid)').first().json.body || {};\nreturn [{ json: {\n  subject: b.subject || ('Work order \u2014 ' + (b.vendor || 'vendor') + ' \u2014 ' + (b.job || 'job')),\n  vendor_id: b.vendor_id || null,\n  home_id: b.home_id || null,\n  amount: b.amount || null,\n  evidence: b.evidence || b.file || 'bid received by webhook',\n  draft: b.draft || { vendor: b.vendor, job: b.job, cost_code: b.cost_code, description: b.description, amount: b.amount, draws: b.draws }\n} }];"
+      },
+      "id": "a3",
+      "name": "Draft the work order (ChatGPT skill)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MOW_URL }}/api/webhooks/bid",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-MOW-Secret",
+              "value": "={{ $env.MOW_N8N_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ bid_request_id: $('Bid received (POST /webhook/mow-sub-bid)').item.json.body.bid_request_id, line_item: $('Bid received (POST /webhook/mow-sub-bid)').item.json.body.line_item, home_id: $('Bid received (POST /webhook/mow-sub-bid)').item.json.body.home_id, vendor_id: $json.vendor_id, vendor_name: ($json.draft || {}).vendor, amount: $json.amount, sqft: ($json.draft || {}).sqft, scope_notes: ($json.draft || {}).description, external_id: $execution.id }) }}",
+        "options": {}
+      },
+      "id": "a4",
+      "name": "Record the bid (asks for a decision only when all are in)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.asked_for_decision }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a45",
+      "name": "All bids in?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ type: 'message', attachments: [ { contentType: 'application/vnd.microsoft.card.adaptive', content: { type: 'AdaptiveCard', version: '1.4', body: [ { type: 'TextBlock', size: 'Medium', weight: 'Bolder', wrap: true, text: 'All ' + $json.expected + ' bids are in' }, { type: 'TextBlock', wrap: true, text: 'A line item is ready for a decision. Approving enters the work order, which emails that subcontractor to say it is approved.' } ], actions: [ { type: 'Action.OpenUrl', title: 'Review and decide', url: $json.url } ] } } ] }) }}",
+        "options": {}
+      },
+      "id": "a5",
+      "name": "Ask the purchasing channel (only if all bids are in)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ]
+    }
   ],
   "connections": {
-    "Bid received (POST /webhook/mow-sub-bid)": { "main": [ [ { "node": "Tell MOW: started", "type": "main", "index": 0 } ] ] },
-    "Tell MOW: started": { "main": [ [ { "node": "Draft the work order (ChatGPT skill)", "type": "main", "index": 0 } ] ] },
-    "Draft the work order (ChatGPT skill)": { "main": [ [ { "node": "Ask MOW for approval (agent turns amber)", "type": "main", "index": 0 } ] ] },
-    "Ask MOW for approval (agent turns amber)": { "main": [ [ { "node": "Post the approval card to Teams", "type": "main", "index": 0 } ] ] }
+    "Bid received (POST /webhook/mow-sub-bid)": {
+      "main": [
+        [
+          {
+            "node": "Tell MOW: started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tell MOW: started": {
+      "main": [
+        [
+          {
+            "node": "Draft the work order (ChatGPT skill)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft the work order (ChatGPT skill)": {
+      "main": [
+        [
+          {
+            "node": "Record the bid (asks for a decision only when all are in)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record the bid (asks for a decision only when all are in)": {
+      "main": [
+        [
+          {
+            "node": "All bids in?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All bids in?": {
+      "main": [
+        [
+          {
+            "node": "Ask the purchasing channel (only if all bids are in)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "active": false
 }

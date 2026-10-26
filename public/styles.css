@@ -42,7 +42,8 @@ label.field > span { display: block; margin-bottom: 3px; }
 .start-here { background: #fff; border-right: 1px solid var(--line); padding: 14px; overflow: auto; }
 .center { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.view[hidden] { display: none; }
+/* id-based view rules below set display, which outranks this attribute selector — hence !important */
+.view[hidden] { display: none !important; }
 .detail { width: 560px; background: #fff; border-left: 1px solid var(--line); padding: 14px; overflow: auto; }
 .detail[hidden] { display: none; }
 
@@ -213,7 +214,19 @@ a.bvendor { color: var(--brand-dark); text-decoration: none; border-bottom: 1px 
 .ap-actions { display: flex; gap: 8px; align-items: center; flex: none; }
 @media (max-width: 700px) { .ap-actions { width: 100%; } }
 
-/* ---------- Bids ---------- */
+/* ---------- Work orders / parked bid flow ---------- */
+#viewWo { display: flex; flex-direction: column; min-height: 0; }
+#viewWo h3 { margin: 10px 0 8px; font-size: 14px; }
+#viewWo td { vertical-align: top; }
+#viewWo td.num, #viewWo th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#viewWo tr.rejected td { opacity: .65; }
+#viewWo .src { display: block; }
+.parked { margin: 20px 0 0; padding: 12px 14px; background: #f2f5fa; border: 1px dashed var(--line);
+  border-radius: var(--radius); color: var(--muted); font-size: 12.5px; }
+.parked b { color: var(--ink); }
+.parked p { margin: 6px 0 0; line-height: 1.5; }
+
+/* ---------- Bids (parked; kept for the recorded data) ---------- */
 #viewBids { display: flex; flex-direction: column; min-height: 0; }
 #viewBids h3 { margin: 10px 0 8px; font-size: 14px; }
 .bidreq { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--gray);

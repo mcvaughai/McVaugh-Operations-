@@ -36,11 +36,11 @@ Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node
 * **Start here, Brittany** — current step, last completed, one recommended next action, waiting on whom, decisions needed, mini Next/Working/Waiting/Done board, last checkpoint. *Save checkpoint* writes a new dated checkpoint; history is kept.
 * **Review** — the Stage 2 queue (people show their org-chart title, absorbed legacy roles and the responsibility list from the old ops hub): unverified people, then PROPOSED tasks, one at a time, with duplicate suggestions and merge/reject/verify. Decisions are stamped and survive re-imports.
 * **Handover** — succession view for a departing person (Maria): what only she does, documented vs in her head, who else can do it today, what to capture before she leaves, sorted no-backup first; her procedures with step-by-step reviews and flow charts; each active job's status; a generated next-meeting agenda.
-* **Procedures** — old SOPs vs the procedures confirmed in meetings, paired by *supersedes*; filter New / Old / Both.
+* **Procedures** — old SOPs vs the procedures confirmed in meetings, paired by *supersedes*. **Needs work** lists what is missing from each one, worst first: no steps written down, owner leaving with nobody named, no owner, never confirmed in a meeting.
 * **Build** — Maria's "How to build a house" as 105 ordered steps from lot stake to the final city inspections, grouped into six phases, each with the responsible party (linked to its vendor record), the inspections to schedule, the hold points ("do not pour until…"), and the steps McVaugh does itself. Filter by *MCH does it*, *Inspections*, or *Needs a decision*. Logins that were typed into the source sheet are **not** stored: the step says a login is needed and names the system, and the original file is restricted.
 * **Board / Registry** — everything editable without the 3D view; Registry includes Vendors by trade (from the SOW Excel) with each vendor's pricing basis and what a work order for them must contain.
 * **Integrations** — each shown as disconnected / connected / failing; three import options (Obsidian `.md` from the browser, CSV from the browser, and **Option 3: bulk-import a folder on this computer** with a dry-run preview and skip-unchanged re-import); backup export/restore; handbook export for ChatGPT Pages.
-* **Bids** — every line item out for pricing: who was asked, how many bids are expected, how many are in, what each one quoted, which one won and its work-order number. A request is recorded *before* any bid arrives, which is what makes "have they all come in?" answerable.
+* **Work orders** — *Create a work order* when you have an approved bid in hand. The agent fills in the fields from the bid and the vendor record, flags anything missing (a per-square-foot vendor with no square footage cannot be entered), and enters it only once a person confirms. The agent never starts one. Requesting and comparing bids is **parked** — see below.
 * **Approvals** — when an agent drafts something that commits money, a bar appears above every view with the drafted fields and the question put to the human. Only accounting/admin can decide; the decision is recorded with who, when, how, and any note. The same request also goes out as a Teams message with a link to a one-page approve/reject form.
 * **AI config** — per-agent purpose, needs-AI?, provider/model, why, cost, approval, eval examples, fallback.
 * **History** — all activity events with their source tag (MANUAL / N8N / IMPORT / DEMO), checkpoint history, audit (admin).
@@ -70,23 +70,25 @@ Runs `test/acceptance.js`: spawns a server on a temp folder and checks persisten
 
 n8n 2.x needs **Node.js 24**; the setup script installs n8n 1.x instead if you have an older Node, but Node 24 is the better choice (the world runs on it too).
 
-### The purchasing agent's bid loop
+### The purchasing agent: work orders
 
-Two workflows, two approval gates, both answered in the **purchasing Teams channel**:
+A work order starts when **a person asks for one**. Nothing else starts one: the agent does not watch for incoming bids and does not decide a work order is due.
 
-1. `n8n\mow-bid-requests.json` — a line item needs pricing. The agent builds the request from the vendor contact list for that trade (who to ask, what documents they need, when it is due) and asks the channel *"send a bid request to X, Y, Z?"*. If only one vendor is on the list it says so, because one bid should be a choice rather than a default. Nothing reaches a vendor before someone approves.
-2. `n8n\mow-wo-approval.json` — a bid comes back. It is recorded against its request and **nobody is asked anything yet**. Only when the last expected bid lands does the agent post to the channel: one bid asks *"do you approve?"*, several show the bids side by side and ask *"which one?"*. Approving is what enters the work order, and entering it is what emails the subcontractor to say it is approved.
+1. Someone with an approved bid in hand opens **Work orders → Create a work order** (or tells the agent in Teams, once the channel webhook is set).
+2. The agent fills in the fields from the bid and the vendor record, and flags what is missing. A vendor priced per square foot cannot be entered without the square footage.
+3. It shows exactly what will be entered and asks for a check. Over the budget line it goes to Jim.
+4. On confirmation `n8n\mow-wo-approval.json` enters it in the database and reports the number back. Entering it is what emails the subcontractor to say it is approved.
 
-A request that passes its due date is never left silent: the agent asks whether to chase the missing vendors or decide on what is in. Rejecting enters nothing, keeps the reason, and hands the line item back to a human until another bid arrives. Losing bids are marked not chosen, never deleted.
+Rejecting enters nothing and requires a reason, which the server enforces. Because confirmations go to the purchasing channel rather than a person, whoever confirms picks their name and it is recorded as self-declared; confirming inside the world is recorded as authenticated. A link Teams merely previews never decides: the buttons are a form POST.
 
-Because the messages go to a channel rather than a person, the approval page makes whoever decides pick their name, and records it as self-declared. Decisions made inside the world are authenticated instead.
+Needs `TEAMS_WEBHOOK_URL` (purchasing channel) and `MOW_PUBLIC_URL` before the Teams half works. The app half works now.
 
-Both workflows ship **switched off** and need:
+### Requesting and comparing bids — parked
 
-1. `TEAMS_WEBHOOK_URL` in n8n — an incoming webhook for the purchasing channel.
-2. `MOW_PUBLIC_URL` set to an address Teams can reach, so the link in the card works.
-3. A house rule on how many bids per line item before a sole-source reason is required. Maria's practice on waterproofing was one vendor, and she said that should not stay the default.
+Parked on 2026-10-26. How a bid gets requested and compared varies too much between trades to automate before the process is written down: some line items go to one vendor, some to three, and what makes two bids comparable differs by trade.
 
-The agent never contacts a vendor, prices, awards or accepts work. A link Teams merely previews never counts as a decision: the buttons are a form POST, so a GET only shows the page.
+Nothing was thrown away. The bid request and bid records, the "ask only once every bid is in" rule, the overdue chase and `n8n\mow-bid-requests.json` are all still here and still covered by the tests, which switch the flag on to exercise them. While parked the bid webhooks answer `410` and the sweep does not run.
+
+To turn it back on, set `bid_flow` to `active` in the `meta` table. Do that after there is a written bid process and an agent of its own, not before.
 
 To add your own workflow: add an HTTP Request node at the start and end of a workflow: `POST http://<host>:8787/api/webhooks/n8n`, header `X-MOW-Secret`, JSON body `{ "agent_id": "...", "execution_id": "{{$execution.id}}", "status": "started" }` then `"finished"` or `"failed"`. Set the agent's *n8n workflow id* in the app to route by `workflow_id` instead.

@@ -139,11 +139,12 @@ function stateFor(role) {
   const bid_requests = db.prepare('SELECT * FROM bid_requests ORDER BY requested_at DESC LIMIT 200').all()
     .map(r => ({ ...r, vendors: JSON.parse(r.vendors || '[]'), bids: db.prepare('SELECT * FROM bids WHERE bid_request_id = ? ORDER BY amount_value IS NULL, amount_value').all(r.id)
       .map(b => sens ? b : { ...b, amount: b.amount ? '(restricted)' : null, amount_value: null, restricted: true }) }));
+    const bid_flow = db.prepare("SELECT value FROM meta WHERE key = 'bid_flow'").get()?.value || 'parked';
   const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
   const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
   const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db), hubs: imports.hubMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
-    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, build_steps, approvals, bid_requests, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
+    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, build_steps, approvals, bid_requests, bid_flow, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
     server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET, n8n_url: N8N_URL, opshub_path: can.integrationConfig(role) ? (OPSHUB_PATH || null) : undefined } };
 }
 
@@ -288,6 +289,11 @@ ${choice ? `<fieldset><legend>Pick one</legend>${opts.map((o, i) => `<label clas
 // ---------- bids: request → receive → decide → enter ----------
 // The rule Brittany set: do not ask a human to approve a line item until every bid asked for has come in.
 // That is only answerable because the request is recorded first, with how many were expected.
+// Bids are parked (Brittany, 2026-10-26): how a bid is requested and compared varies too much per trade to
+// automate before a bid process exists on paper. The tables, endpoints and view stay so the work is not lost
+// and anything already recorded is still readable, but nothing here runs until the flag is flipped back.
+const bidFlowActive = () => db.prepare("SELECT value FROM meta WHERE key = 'bid_flow'").get()?.value === 'active';
+const PARKED = { error: 'the bid flow is parked', detail: 'Requesting and comparing bids is not automated yet: it needs its own process and agent first. A work order is created when a person asks for one. See the Purchasing procedures.' };
 const money = v => { const n = parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : null; };
 const APPROVERS = ['brittany', 'jim', 'kenneth', 'ernesto'];
 
@@ -346,6 +352,7 @@ function onBidReceived(br) {
 
 // A bid request past its due date is never left silent: the human is asked to chase or decide on what is in.
 function sweepOverdueBids() {
+  if (!bidFlowActive()) return;
   const now = Date.now();
   for (const br of db.prepare("SELECT * FROM bid_requests WHERE status IN ('sent','partial') AND due_by IS NOT NULL").all()) {
     if (new Date(br.due_by).getTime() > now) continue;
@@ -579,6 +586,7 @@ async function api(req, res, url, p, role) {
   // The agent proposes a set of bid requests, built from the vendor contact list. Sending them to vendors
   // is outward-facing, so it is its own approval: nothing reaches a vendor before a human says so.
   if (p === '/api/webhooks/bid-request' && m === 'POST') {
+    if (!bidFlowActive()) return send(res, 410, PARKED);
     if (!secretOk(req, url)) return send(res, 401, { error: 'bad secret' });
     const b = await readJson(req);
     if (!b.line_item) return send(res, 400, { error: 'line_item required' });
@@ -590,6 +598,7 @@ async function api(req, res, url, p, role) {
       : db.prepare('SELECT id FROM vendors WHERE UPPER(trade) = UPPER(?)').all(b.line_item).map(v => v.id);
     vendors = [...new Set(vendors)].filter(Boolean);
     if (!vendors.length) return send(res, 400, { error: `no vendor on the contact list for "${b.line_item}" — add one in Registry → Vendors` });
+    if (b.home_id && !db.prepare('SELECT 1 FROM homes WHERE id = ?').get(b.home_id)) return send(res, 400, { error: 'no such job', detail: `"${b.home_id}" is not a job in the registry` });
     const names = vendors.map(v => (db.prepare('SELECT vendor, trade FROM vendors WHERE id = ?').get(v) || {}).vendor || v);
     const sole = vendors.length === 1;
     const ts = dbm.nowIso();
@@ -614,6 +623,7 @@ async function api(req, res, url, p, role) {
 
   // A bid came back from a vendor. Recorded against its request; the human is only asked once they are all in.
   if (p === '/api/webhooks/bid' && m === 'POST') {
+    if (!bidFlowActive()) return send(res, 410, PARKED);
     if (!secretOk(req, url)) return send(res, 401, { error: 'bad secret' });
     const b = await readJson(req);
     const br = b.bid_request_id ? db.prepare('SELECT * FROM bid_requests WHERE id = ?').get(b.bid_request_id)
@@ -639,13 +649,18 @@ async function api(req, res, url, p, role) {
   if (p === '/api/webhooks/bid/entered' && m === 'POST') {
     if (!secretOk(req, url)) return send(res, 401, { error: 'bad secret' });
     const b = await readJson(req);
-    const bid = db.prepare('SELECT * FROM bids WHERE id = ?').get(b.bid_id || '');
-    if (!bid) return send(res, 404, { error: 'no such bid' });
-    if (bid.status !== 'approved') return send(res, 409, { error: 'that bid was not approved, so no work order may be entered for it' });
-    dbm.upsert(db, 'bids', { id: bid.id, wo_ref: b.wo_ref || null, entered_at: dbm.nowIso(), entered_by: b.entered_by || 'n8n', updated_at: dbm.nowIso() });
+    const ts = dbm.nowIso();
+    const row = b.bid_id ? db.prepare('SELECT * FROM bids WHERE id = ?').get(b.bid_id)
+      : db.prepare("SELECT * FROM approvals WHERE id = ? AND kind = 'work_order'").get(b.approval_id || '');
+    if (!row) return send(res, 404, { error: 'no such bid or work-order request' });
+    const approved = b.bid_id ? row.status === 'approved' : row.status === 'approved';
+    if (!approved) return send(res, 409, { error: 'that was not approved, so no work order may be entered for it' });
+    if (row.wo_ref) return send(res, 409, { error: 'a work order was already entered for this', wo_ref: row.wo_ref });
+    const who = b.bid_id ? (row.vendor_name || row.vendor_id) : (db.prepare('SELECT vendor FROM vendors WHERE id = ?').get(row.vendor_id || '') || {}).vendor || row.subject;
+    dbm.upsert(db, b.bid_id ? 'bids' : 'approvals', { id: row.id, wo_ref: b.wo_ref || null, entered_at: ts, entered_by: b.entered_by || 'n8n', ...(b.bid_id ? { updated_at: ts } : {}) });
     dbm.addEvent(db, { entity_type: 'agent', entity_id: 'agent-purchasing', kind: 'run', status: 'finished', source: 'n8n', actor: 'n8n',
-      label: `Work order ${b.wo_ref || ''} entered for ${bid.vendor_name || bid.vendor_id} — the subcontractor has been notified`.replace(/\s+/g, ' '),
-      external_id: `entered:${bid.id}` });
+      label: `Work order ${b.wo_ref || ''} entered for ${who} — the subcontractor has been notified`.replace(/\s+/g, ' '),
+      external_id: `entered:${row.id}` });
     return send(res, 200, { ok: true });
   }
 
@@ -655,7 +670,11 @@ async function api(req, res, url, p, role) {
     return send(res, 200, {
       send_bid_requests: db.prepare("SELECT * FROM bid_requests WHERE status = 'sent' AND sent_at IS NOT NULL").all()
         .map(r => ({ ...r, vendors: JSON.parse(r.vendors || '[]').map(v => db.prepare('SELECT id, vendor, trade, contacts FROM vendors WHERE id = ?').get(v)).filter(Boolean) })),
-      enter_work_orders: db.prepare("SELECT * FROM bids WHERE status = 'approved' AND wo_ref IS NULL").all(),
+      enter_work_orders: [
+        ...db.prepare("SELECT * FROM bids WHERE status = 'approved' AND wo_ref IS NULL").all().map(b => ({ ...b, from: 'bid' })),
+        ...db.prepare("SELECT * FROM approvals WHERE kind = 'work_order' AND status = 'approved' AND bid_request_id IS NULL AND wo_ref IS NULL").all()
+          .map(a => ({ ...a, token: undefined, from: 'request' })),
+      ],
     });
   }
 
@@ -698,6 +717,34 @@ async function api(req, res, url, p, role) {
   }
   // Run the overdue check now (it also runs on a timer).
   if (p === '/api/bids/sweep' && m === 'POST') { sweepOverdueBids(); return send(res, 200, { ok: true }); }
+  // A person asks the agent to create a work order. This is the only way one starts: the agent never
+  // decides on its own that a work order is due. The person names the vendor, job and amount (or points at
+  // the bid), the agent fills the rest in, and it is confirmed before anything is entered — because
+  // entering is what emails the subcontractor to say it is approved [M-chat 10/24].
+  if (p === '/api/work-orders/request' && m === 'POST') {
+    const b = await readJson(req);
+    if (!b.vendor_id) return send(res, 400, { error: 'which vendor?' });
+    const v = db.prepare('SELECT * FROM vendors WHERE id = ?').get(b.vendor_id);
+    if (!v) return send(res, 400, { error: 'no such vendor' });
+    const home = b.home_id ? db.prepare('SELECT address FROM homes WHERE id = ?').get(b.home_id) : null;
+    // A work order against the wrong job, or a job that does not exist, is worse than no work order.
+    if (b.home_id && !home) return send(res, 400, { error: 'no such job', detail: `"${b.home_id}" is not a job in the registry` });
+    const needsSqft = v.pricing_basis === 'per_sqft' && !String(b.sqft || '').trim();
+    const over = !!b.over_budget;
+    const a = newApproval({ agent_id: 'agent-purchasing', task_id: 'tr-wo-entry-from-bid', kind: 'work_order',
+      subject: `Work order — ${v.vendor || v.trade}${home ? ' — ' + home.address : ''}`,
+      question: `${role === 'admin' || role === 'accounting' ? 'You asked' : 'Someone asked'} for this work order. Check what will be entered. Entering it emails ${v.vendor || 'the subcontractor'} to say it is approved.${needsSqft ? ' This vendor prices per square foot, so the square footage has to be on the order.' : ''}${over ? ' It is over the budget line, so Jim approves this one.' : ''}`,
+      draft: JSON.stringify({ Vendor: v.vendor || v.trade, Trade: v.trade, Job: home ? home.address : '(not set)',
+        'Cost code': b.cost_code || '(not set)', Description: b.description || '(not set)', Amount: b.amount || '(not set)',
+        ...(v.pricing_basis === 'per_sqft' ? { 'Square footage': b.sqft || 'MISSING — required for this vendor', Rate: v.rate || '(see Vendors)' } : {}),
+        Draws: b.draws || '1' }),
+      evidence: b.evidence || (b.bid_doc_id ? 'Bid document ' + b.bid_doc_id : 'Asked for by ' + role),
+      vendor_id: b.vendor_id, home_id: b.home_id || null, amount: b.amount != null ? String(b.amount) : null,
+      requested_by: role, requested_from: over ? 'jim' : 'brittany',
+      channel: b.channel || 'app', source: 'manual', external_id: 'wo:' + crypto.randomUUID() });
+    dbm.audit(db, role, 'work_order_requested', 'approval', a.id, a.subject);
+    return send(res, 200, { ok: true, id: a.id, url: approvalLink(a), needs_sqft: needsSqft });
+  }
   if (p === '/api/import/backup' && m === 'POST') { if (role !== 'admin') return send(res, 403, { error: 'admin only' }); dbm.importBackup(db, await readJson(req)); dbm.audit(db, role, 'import_backup'); return send(res, 200, { ok: true }); }
 
   if (p === '/api/events' && m === 'POST') {

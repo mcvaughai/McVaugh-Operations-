@@ -51,7 +51,7 @@
     $('#demoToggle').checked = S.demo; $('#demoBanner').hidden = !S.demo;
     $('#addBtn').hidden = !S.permissions.write;
     $('#stagePill').textContent = 'Stage: ' + (S.checkpoint?.stage || 'gather');
-    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderBids(); renderApprovals(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
+    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderWorkOrders(); renderApprovals(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
     const fs = $('#focusSelect'); const cur = fs.value;
     fs.innerHTML = '<option value="">Focus department…</option>' + S.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('') + '<option value="neighborhood">Active jobs</option><option value="snapshot">Job list snapshot</option>';
     fs.value = cur;
@@ -206,14 +206,37 @@
     const tasks = S.tasks.filter(t => !t.restricted && (isNew(t) || isOld(t)));
     const byId = Object.fromEntries(S.tasks.map(t => [t.id, t]));
     const supersededBy = {}; for (const t of tasks) for (const old of JSON.parse(t.supersedes || '[]')) (supersededBy[old] = supersededBy[old] || []).push(t.id);
+    // What is missing from a procedure, in the order it matters for the handover.
+    const LEAVING = S.people.filter(x => /LEAVING/i.test(x.notes || '')).map(x => x.id);
+    const gapsOf = t => {
+      const g = [];
+      if (!String(t.steps || '').trim()) g.push(['No steps written down', 'red']);
+      if (LEAVING.includes(t.owner_id) && !t.backup_id) g.push(['Owner is leaving, no backup', 'red']);
+      else if (!t.backup_id) g.push(['No backup', 'amber']);
+      if (!t.owner_id) g.push(['No owner', 'red']);
+      if (isOld(t) && !(supersededBy[t.id] || []).length) g.push(['Never confirmed in a meeting', 'amber']);
+      if (isOld(t) && !t.step_review && (supersededBy[t.id] || []).length === 0) g.push(['Not reviewed against the transcripts', 'gray']);
+      return g;
+    };
+    const severity = t => gapsOf(t).reduce((n, [, c]) => n + (c === 'red' ? 10 : c === 'amber' ? 3 : 1), 0);
     const reviewChips = t => t.step_review ? Object.entries(JSON.parse(t.step_review).reduce((a, r) => (a[r.verdict] = (a[r.verdict] || 0) + 1, a), {})).map(([k, n]) => chip(n + ' ' + (VERDICT[k]?.[0] || k).split(' —')[0], VERDICT[k]?.[1] || 'gray')).join('') : '';
     const card = (t, side) => `<div class="card-t ${t.proposed ? 'proposed' : 'verified'}" data-open="task:${t.id}" style="border-left-color:${side === 'new' ? 'var(--ok)' : 'var(--gray)'}"><div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(t.title)}</b><span>${side === 'new' ? chip('NEW · confirmed in meetings', 'ok') : chip(t.id.startsWith('hub-') ? 'OLD · SOP ' + (t.source || '').replace(/.*SOP dated /, '').slice(0, 24) : 'OLD · handoff', 'gray')}</span></div>
       <small>${esc(personName(t.owner_id))} · ${esc(dept(t.department_id)?.short || '—')} · ${t.documented ? 'documented' : 'not documented'}${t.flow ? ' · 🗺 flow' : ''}</small>${reviewChips(t) ? `<small>${reviewChips(t)}</small>` : ''}
       ${side === 'new' && JSON.parse(t.supersedes || '[]').length ? `<small>Supersedes: ${JSON.parse(t.supersedes).map(id => `<a href="#" data-open="task:${id}">${esc(byId[id]?.title || id)}</a>`).join(' · ')}</small>` : ''}
+      ${gapsOf(t).length ? `<small>${gapsOf(t).map(([l, c]) => chip(l, c)).join('')}</small>` : `<small>${chip('nothing missing', 'ok')}</small>`}
       ${side === 'old' && (supersededBy[t.id] || []).length ? `<small>Superseded by: ${supersededBy[t.id].map(id => `<a href="#" data-open="task:${id}">${esc(byId[id]?.title || id)}</a>`).join(' · ')}</small>` : side === 'old' ? `<small class="src">No confirmed replacement yet — still the only description of this process.</small>` : ''}</div>`;
     const news = tasks.filter(isNew).sort((a, b) => a.title.localeCompare(b.title)), olds = tasks.filter(isOld).sort((a, b) => a.title.localeCompare(b.title));
     let body = '';
-    if (procFilter === 'new') body = `<div class="board" style="grid-template-columns:1fr"><div class="col"><h3>New — confirmed in the meetings <span>${news.length}</span></h3>${news.map(t => card(t, 'new')).join('')}</div></div>`;
+    if (procFilter === 'todo') {
+      const todo = tasks.filter(t => gapsOf(t).length).sort((a, b) => severity(b) - severity(a) || a.title.localeCompare(b.title));
+      const worst = todo.filter(t => gapsOf(t).some(([, c]) => c === 'red'));
+      body = `<p class="hint" style="margin:6px 0 10px">${todo.length} of ${tasks.length} procedures are missing something. ${worst.length} are urgent: no steps written down, or the person who owns them is leaving and nobody is named to take over.</p>
+        <div class="board" style="grid-template-columns:1fr">${['red', 'rest'].map(band => {
+          const rows = band === 'red' ? worst : todo.filter(t => !worst.includes(t));
+          return rows.length ? `<div class="col"><h3>${band === 'red' ? 'Urgent' : 'The rest'} <span>${rows.length}</span></h3>${rows.map(t => card(t, isNew(t) ? 'new' : 'old')).join('')}</div>` : '';
+        }).join('')}</div>`;
+    }
+    else if (procFilter === 'new') body = `<div class="board" style="grid-template-columns:1fr"><div class="col"><h3>New — confirmed in the meetings <span>${news.length}</span></h3>${news.map(t => card(t, 'new')).join('')}</div></div>`;
     else if (procFilter === 'old') body = `<div class="board" style="grid-template-columns:1fr"><div class="col"><h3>Old — SOPs and handoff placeholders <span>${olds.length}</span></h3>${olds.map(t => card(t, 'old')).join('')}</div></div>`;
     else { // both: pairs side by side, then unpaired on each side
       const paired = news.filter(t => JSON.parse(t.supersedes || '[]').length);
@@ -221,7 +244,7 @@
       body = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="col"><h3>New (confirmed) <span>${news.length}</span></h3>${paired.map(t => card(t, 'new')).join('')}<h4>New with no old counterpart</h4>${news.filter(t => !JSON.parse(t.supersedes || '[]').length).map(t => card(t, 'new')).join('') || '<p class="empty">—</p>'}</div>
         <div class="col"><h3>Old (SOP / handoff) <span>${olds.length}</span></h3>${paired.map(t => JSON.parse(t.supersedes).map(id => byId[id] ? card(byId[id], 'old') : '').join('')).join('')}<h4>Old with no confirmed replacement</h4>${olds.filter(t => !pairedOld.has(t.id)).map(t => card(t, 'old')).join('') || '<p class="empty">—</p>'}</div></div>`;
     }
-    v.innerHTML = `<div class="world-toolbar"><b>Procedures</b><span class="views">${[['new', 'New'], ['old', 'Old'], ['both', 'Both']].map(([k, l]) => `<button class="${procFilter === k ? 'active' : ''}" data-procfilter="${k}">${l}</button>`).join('')}</span><span class="hint">New = confirmed in a meeting transcript (tr-). Old = hub SOP (2004–2022) or handoff placeholder. "Supersedes" links a new procedure to the old one it replaces; edit a task to change it.</span></div><div style="overflow:auto;flex:1">${body}</div>`;
+    v.innerHTML = `<div class="world-toolbar"><b>Procedures</b><span class="views">${[['todo', 'Needs work'], ['new', 'New'], ['old', 'Old'], ['both', 'Both']].map(([k, l]) => `<button class="${procFilter === k ? 'active' : ''}" data-procfilter="${k}">${l}</button>`).join('')}</span><span class="hint">Needs work = what is missing, worst first. New = confirmed in a meeting transcript (tr-). Old = hub SOP (2004–2022) or handoff placeholder. "Supersedes" links a new procedure to the old one it replaces; edit a task to change it.</span></div><div style="overflow:auto;flex:1">${body}</div>`;
     v.querySelectorAll('[data-procfilter]').forEach(b => b.onclick = () => { procFilter = b.dataset.procfilter; localStorage.setItem('mow_procfilter', procFilter); renderProcedures(); });
   }
 
@@ -276,44 +299,65 @@
     });
   }
 
-  // ---------- Bids: request → bids in → decision → work order ----------
-  const BR_STATUS = { draft: ['Waiting to be sent', 'amber'], sent: ['Out to vendors', 'blue'], partial: ['Some bids in', 'amber'],
-    complete: ['All bids in — waiting on a decision', 'purple'], overdue: ['Overdue', 'red'], awarded: ['Awarded', 'ok'], cancelled: ['Cancelled', 'gray'] };
-  function renderBids() {
-    const v = $('#viewBids'); if (v.hidden) return;
-    const rows = S.bid_requests || [];
+  // ---------- Work orders: a person asks, the agent fills it in, a person confirms, then it is entered ----------
+  function woModal() {
+    const m = $('#modal'), c = $('#modalCard');
+    const vopts = S.vendors.slice().sort((a, b) => (a.vendor || a.trade).localeCompare(b.vendor || b.trade))
+      .map(v => `<option value="${esc(v.id)}">${esc(v.vendor || v.trade)} — ${esc(v.trade)}${v.pricing_basis === 'per_sqft' ? ' (per sq ft)' : ''}</option>`).join('');
+    const hopts = S.homes.filter(h => h.active === 'active').map(h => `<option value="${esc(h.id)}">${esc(h.address)}</option>`).join('');
+    c.innerHTML = `<h2>Create a work order</h2>
+      <p class="src">You are asking the agent to create this. It fills in what it can, shows you the result, and enters it only after you confirm. Entering it emails the subcontractor to say it is approved.</p>
+      <form id="mform">
+        <label class="field"><span>Vendor</span><select id="woVendor" required><option value="">Choose…</option>${vopts}</select></label>
+        <label class="field"><span>Job</span><select id="woHome"><option value="">(not set)</option>${hopts}</select></label>
+        <label class="field"><span>What the work is</span><input id="woDesc" placeholder="e.g. balcony door pans + first coat"></label>
+        <label class="field"><span>Amount</span><input id="woAmount" placeholder="e.g. $4,850.00"></label>
+        <label class="field" id="woSqftRow" hidden><span>Square footage <small class="src">this vendor prices per square foot, so the order needs it</small></span><input id="woSqft"></label>
+        <label class="field"><span>Cost code</span><input id="woCode" placeholder="optional"></label>
+        <label class="field"><span>Where the bid came from</span><input id="woEvidence" placeholder="e.g. Johnston bid PDF, emailed 10/26"></label>
+        <label class="toggle"><input type="checkbox" id="woOver"> <span>Over the budget line (Jim confirms)</span></label>
+        <div class="actions"><button type="submit" class="primary">Ask the agent</button><button type="button" id="mcancel">Cancel</button></div></form>`;
+    m.hidden = false; $('#mcancel').onclick = () => m.hidden = true;
+    const sync = () => { const v = S.vendors.find(x => x.id === $('#woVendor').value); $('#woSqftRow').hidden = !(v && v.pricing_basis === 'per_sqft'); };
+    $('#woVendor').onchange = sync; sync();
+    $('#mform').onsubmit = async e => { e.preventDefault();
+      await api('POST', '/api/work-orders/request', { vendor_id: $('#woVendor').value, home_id: $('#woHome').value || null,
+        description: $('#woDesc').value, amount: $('#woAmount').value, sqft: $('#woSqft').value, cost_code: $('#woCode').value,
+        evidence: $('#woEvidence').value, over_budget: $('#woOver').checked });
+      m.hidden = true; toast('Asked — check it above and confirm'); refresh(); };
+  }
+  function renderWorkOrders() {
+    const v = $('#viewWo'); if (v.hidden) return;
+    const all = (S.approvals || []).filter(a => a.kind === 'work_order');
+    const pending = all.filter(a => a.status === 'pending');
+    const done = all.filter(a => a.status !== 'pending');
     const vend = id => S.vendors.find(x => x.id === id);
     const home = id => S.homes.find(h => h.id === id);
-    const open = rows.filter(r => !['awarded', 'cancelled'].includes(r.status));
-    const closed = rows.filter(r => ['awarded', 'cancelled'].includes(r.status));
-    const days = iso => iso ? Math.round((new Date(iso) - Date.now()) / 864e5) : null;
-    const card = r => {
-      const [lbl, cls] = BR_STATUS[r.status] || [r.status, 'gray'];
-      const got = r.bids.filter(b => b.status !== 'rejected').length;
-      const d = days(r.due_by);
-      const won = r.bids.find(b => b.id === r.awarded_bid_id);
-      return `<div class="bidreq ${r.status}">
-        <div class="br-head"><b>${esc(r.line_item)}</b>${home(r.home_id) ? `<span class="src">${esc(home(r.home_id).address)}</span>` : ''}${chip(lbl, cls)}
-          ${r.sole_source ? chip('Sole source', 'amber') : ''}</div>
-        <div class="br-meter" title="${got} of ${r.expected} bids in">${Array.from({ length: Math.max(r.expected, got) }, (_, i) => `<span class="${i < got ? 'in' : ''}"></span>`).join('')}
-          <small>${got} of ${r.expected} bids in${d != null && !['awarded', 'cancelled'].includes(r.status) ? ` · ${d < 0 ? `${-d} day${d === -1 ? '' : 's'} overdue` : `due in ${d} day${d === 1 ? '' : 's'}`}` : ''}</small></div>
-        ${r.sole_source && r.sole_source_reason ? `<small class="src">Only vendor asked: ${esc(r.sole_source_reason)}</small>` : ''}
-        <table class="br-bids"><tbody>${(r.vendors || []).map(vid => {
-          const b = r.bids.find(x => x.vendor_id === vid);
-          const nm = vend(vid)?.vendor || vid;
-          if (!b) return `<tr class="awaited"><td>${esc(nm)}</td><td colspan="2"><small>no bid yet</small></td></tr>`;
-          const st = { received: ['received', 'gray'], approved: ['approved → work order', 'ok'], rejected: ['rejected', 'red'], superseded: ['not chosen', 'gray'] }[b.status] || [b.status, 'gray'];
-          return `<tr class="${b.status}"><td>${esc(nm)}${b.basis === 'per_sqft' && !b.sqft ? ' <span class="warnmark" title="Priced per square foot — the work order needs the square footage">⚠</span>' : ''}</td>
-            <td class="num">${esc(b.restricted ? '(restricted)' : b.amount || '—')}</td><td>${chip(st[0], st[1])}${b.wo_ref ? chip('WO ' + b.wo_ref, 'ok') : ''}</td></tr>`;
-        }).join('')}</tbody></table>
-        ${won ? `<small class="src">Awarded to ${esc(won.vendor_name || vend(won.vendor_id)?.vendor || '')}${won.wo_ref ? ` · work order ${esc(won.wo_ref)}` : ' · work order not entered yet'}</small>` : ''}
-        ${r.notes ? `<small class="src">${esc(r.notes)}</small>` : ''}</div>`;
-    };
-    v.innerHTML = `<div class="world-toolbar"><b>Bids</b><span class="hint">A request is recorded before any bid arrives, so "have they all come in?" can be answered. Nobody is asked to decide until they are all in, or the due date passes.</span></div>
+    const row = a => `<tr class="${a.status}">
+      <td><b>${esc(a.subject.replace(/^Work order — /, '').replace(/ — .*$/, ''))}</b>${a.evidence ? `<small class="src">${esc(a.evidence)}</small>` : ''}</td>
+      <td>${esc(home(a.home_id)?.address || '—')}</td>
+      <td class="num">${esc(a.amount || '—')}</td>
+      <td>${a.status === 'pending' ? chip('waiting to be confirmed', 'amber')
+        : a.status === 'approved' ? (a.wo_ref ? chip(/^wo/i.test(a.wo_ref) ? a.wo_ref : 'WO ' + a.wo_ref, 'ok') : chip('confirmed — not entered yet', 'purple'))
+        : chip(a.status, 'red')}</td>
+      <td><small>${esc(a.requested_by || '—')}${a.decided_by ? ` → ${esc(a.decided_by)}` : ''}${a.identity === 'self_declared' ? ' (self-declared)' : ''}</small>
+        ${a.decision_note ? `<small class="src">${esc(a.decision_note)}</small>` : ''}</td></tr>`;
+    const parked = S.bid_flow !== 'active';
+    const brs = S.bid_requests || [];
+    v.innerHTML = `<div class="world-toolbar"><b>Work orders</b>
+      ${S.permissions.write ? '<button class="primary small" id="woNew">+ Create a work order</button>' : ''}
+      <span class="hint">A person asks for a work order; the agent fills it in and enters it only once a person confirms. The agent never starts one.</span></div>
       <div class="bscroll">
-        <h3>Open <span class="chip gray">${open.length}</span></h3>${open.map(card).join('') || '<p class="empty">No open bid requests. The purchasing agent creates one when a line item needs pricing.</p>'}
-        ${closed.length ? `<h3 style="margin-top:18px">Closed <span class="chip gray">${closed.length}</span></h3>${closed.map(card).join('')}` : ''}
+        ${pending.length ? `<h3>Waiting to be confirmed <span class="chip amber">${pending.length}</span></h3>
+          <div class="table-wrap"><table><tbody>${pending.map(row).join('')}</tbody></table></div>` : ''}
+        <h3 style="margin-top:${pending.length ? 18 : 0}px">${pending.length ? 'Decided' : 'Work orders'} <span class="chip gray">${done.length}</span></h3>
+        ${done.length ? `<div class="table-wrap"><table><thead><tr><th>Vendor</th><th>Job</th><th class="num">Amount</th><th>Status</th><th>Asked / confirmed by</th></tr></thead><tbody>${done.map(row).join('')}</tbody></table></div>`
+          : '<p class="empty">None yet. Use <b>Create a work order</b> when you have an approved bid in hand.</p>'}
+        ${parked ? `<div class="parked"><b>Requesting and comparing bids is parked.</b>
+          <p>How a bid gets requested and compared varies too much between trades to automate before the process is written down, so none of it runs. Nothing was thrown away: the bid request and bid records, the "ask only once all bids are in" rule, the overdue chase and the n8n workflow are all still here, switched off. Turning them back on is one setting once a bid process and its own agent exist.</p>
+          ${brs.length ? `<small class="src">${brs.length} bid request${brs.length === 1 ? '' : 's'} recorded before it was parked; the data is kept.</small>` : ''}</div>` : ''}
       </div>`;
+    const b = $('#woNew'); if (b) b.onclick = woModal;
   }
 
   // ---------- Build view: Maria's "How to build a house" as an ordered, filterable sequence ----------
@@ -693,12 +737,12 @@
   // ---------- views & global events ----------
   function showView(v) {
     document.querySelectorAll('.views button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
-    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', build: '#viewBuild', bids: '#viewBids', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
+    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', build: '#viewBuild', workorders: '#viewWo', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
     if (v === 'world') World.overview();
     if (v === 'handover') renderHandover(true);
     if (v === 'procedures') renderProcedures();
     if (v === 'build') renderBuild();
-    if (v === 'bids') renderBids();
+    if (v === 'workorders') renderWorkOrders();
     localStorage.setItem('mow_view', v);
   }
   document.querySelectorAll('.views button').forEach(b => b.onclick = () => showView(b.dataset.view));

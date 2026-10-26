@@ -574,6 +574,56 @@ const UPDATES = [
       label: 'Manual: bid request → collect bids → decide once all are in → enter the work order; both gates approved in the purchasing Teams channel',
       source: 'manual', actor: 'brittany', external_id: 'update-bid-flow-2026-10-25' });
   } },
+  { key: 'park-bids-human-trigger-2026-10-26', apply(db) {
+    const ts = nowIso();
+    // Brittany, 2026-10-26: park the bid half. How a bid gets requested and compared varies too much by trade
+    // to automate before there is a bid process on paper and an agent of its own. Nothing is deleted — the
+    // tables, endpoints, view and workflow stay, switched off, so the work is there when the process exists.
+    db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('bid_flow', 'parked')").run();
+
+    upsert(db, 'tasks', { id: 'tr-bid-requests', board: 'next', proposed: 1, automated: 0, documented: 0,
+      title: 'Request bids for a line item (PARKED — needs its own process first)',
+      blocker: 'Parked 2026-10-26. Requesting and comparing bids is too varied between trades to automate yet: some line items go to one vendor, some to three, and what counts as comparable differs by trade. It needs a written bid process and its own agent before any of this runs.',
+      waiting_on: 'A written bid process — who gets asked for what, how many bids per trade, and what makes two bids comparable',
+      next_action: 'Park it. Pick this back up after the purchasing procedures are up to date, starting from how bids are actually requested today.',
+      verification_result: 'Built and tested in this app (bid request, bid collection, the all-in rule, the overdue chase) but switched off and never run against a real bid.',
+      updated_at: ts });
+
+    // The work order is now started by a person, not by a bid landing.
+    upsert(db, 'tasks', { id: 'tr-wo-entry-from-bid', title: 'Create a work order in the database (asked for by a person)',
+      documented: 1, automated: 0, verified: 0, board: 'working', proposed: 0,
+      trigger: 'A person asks for it. Somebody has an approved bid in hand and tells the agent to create the work order. Nothing else starts one — the agent does not watch for bids and does not decide a work order is due.',
+      inputs: 'The vendor, the job, the amount and what the work is. The bid itself where there is one. For a vendor priced per square foot, the square footage (Registry → Vendors shows which vendors those are).',
+      steps: '1. A person asks for a work order: in the app (Work orders → Create), or by telling the agent in Teams.\n2. The agent fills in the work-order fields from the bid and the vendor record, and flags anything missing — a per-square-foot vendor with no square footage cannot be entered.\n3. The agent shows exactly what it will enter and asks the person to check it.\n4. The person confirms, or rejects with a reason. Over the budget line it goes to Jim [J 10/12].\n5. On confirmation the agent enters the work order in db.mcvaugh.com and reports the number back. Entering it is what emails the subcontractor to say it is approved [M-chat 10/24].',
+      approval_rules: 'A person starts it and a person confirms it before anything is entered. Over the budget line, Jim confirms. The agent never starts a work order, never prices one and never accepts work.',
+      automation_approach: 'The person asks; the ChatGPT skill reads the bid and fills the fields; the app holds the confirmation; n8n enters it and reports the number. Deterministic checks stay out of the model: the vendor\'s pricing basis, the square-footage rule, and the budget line.',
+      blocker: null,
+      waiting_on: 'Brittany (purchasing Teams channel webhook, if the ask should also work from Teams)',
+      next_action: 'Run one real Johnston waterproofing bid through it from the app, end to end, and check the work order that comes out.',
+      verification_result: 'Drafting is proven by hand for Johnston Waterproofing only (2026-10-21). The ask → confirm → enter loop works in this app but has not been run against the real database.',
+      missing_info: 'Which vendors besides Johnston have been reviewed for work-order entry — every other vendor is still needs_review.',
+      updated_at: ts });
+
+    upsert(db, 'agents', { id: 'agent-purchasing', setup_stage: 'documented', enabled: 0, proposed: 1,
+      purpose: 'Create a work order in the database when a person asks for one: fill in the fields from the bid and the vendor record, show them for checking, and enter it once confirmed. Also order deadlines and late deliveries. It never starts a work order by itself.',
+      approach_note: 'AI reads the bid document. Everything else is deterministic and kept out of the model: the vendor\'s pricing basis, the square-footage rule, the budget line, and the confirmation gate. Requesting and comparing bids is parked until there is a process for it.',
+      human_authority: 'A person asks for the work order and a person confirms what will be entered. Over the budget line that is Jim. The agent cannot start, price, award or accept work.',
+      initial_output: 'A filled-in work order waiting to be checked, with anything missing flagged.',
+      n8n_workflow_id: 'mow-wo-approval', updated_at: ts });
+
+    upsert(db, 'integrations', { id: 'teams', name: 'Microsoft Teams — purchasing channel (confirmations)',
+      notes: 'Work-order confirmations go to the purchasing channel. Because a channel is not a person, whoever confirms picks their name and it is recorded as self-declared. Needs TEAMS_WEBHOOK_URL and MOW_PUBLIC_URL. The bid-request workflow is parked and should stay switched off in n8n.',
+      last_checked: ts });
+
+    upsert(db, 'decisions', { id: 'dec-park-bid-flow', date: '2026-10-26',
+      title: 'Park the automated bid request and comparison; a person starts every work order',
+      reason: 'How a bid is requested and compared is too varied between trades to automate before the process exists on paper. Some line items go to one vendor and some to three, and what makes two bids comparable differs by trade. Automating the ask first would have encoded guesses. The trigger for a work order is now a person asking for one. The bid tables, endpoints, view and workflow are kept switched off so none of the work is lost, and the flag in meta turns them back on when a bid process and its own agent exist.',
+      decided_by: 'Brittany', status: 'accepted', source: 'Brittany 2026-10-26', created_at: ts });
+
+    addEvent(db, { entity_type: 'agent', entity_id: 'agent-purchasing', kind: 'setup', status: 'info',
+      label: 'Manual: bid request/comparison parked; a work order is now started by a person asking for one',
+      source: 'manual', actor: 'brittany', external_id: 'update-park-bids-2026-10-26' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

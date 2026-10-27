@@ -139,12 +139,13 @@ function stateFor(role) {
   const bid_requests = db.prepare('SELECT * FROM bid_requests ORDER BY requested_at DESC LIMIT 200').all()
     .map(r => ({ ...r, vendors: JSON.parse(r.vendors || '[]'), bids: db.prepare('SELECT * FROM bids WHERE bid_request_id = ? ORDER BY amount_value IS NULL, amount_value').all(r.id)
       .map(b => sens ? b : { ...b, amount: b.amount ? '(restricted)' : null, amount_value: null, restricted: true }) }));
-    const bid_flow = db.prepare("SELECT value FROM meta WHERE key = 'bid_flow'").get()?.value || 'parked';
+    const wo_specifics = db.prepare('SELECT * FROM wo_specifics ORDER BY vendor_name, job_name').all();
+  const bid_flow = db.prepare("SELECT value FROM meta WHERE key = 'bid_flow'").get()?.value || 'parked';
   const import_files = can.write(role) ? db.prepare('SELECT * FROM import_files ORDER BY imported_at DESC LIMIT 500').all() : [];
   const import_dir = db.prepare("SELECT value FROM meta WHERE key = 'import_dir'").get()?.value || process.env.MOW_IMPORT_DIR || null;
   const mapping = { headings: imports.headingMap(db), aliases: imports.aliasMap(db), hubs: imports.hubMap(db) };
   return { role, permissions: { write: can.write(role), sensitive: sens, integrationConfig: can.integrationConfig(role), audit: can.audit(role) },
-    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, build_steps, approvals, bid_requests, bid_flow, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
+    departments, people, agents, tasks, archived_count, homes, documents, handover_items, vendors, build_steps, approvals, bid_requests, bid_flow, wo_specifics, decisions, checkpoint, checkpoints, events, integrations, ai_configs, audit, demo, import_files, import_dir, mapping,
     server: { now: dbm.nowIso(), db_path: can.integrationConfig(role) ? dbm.DB_PATH : undefined, stale_minutes: STALE_MINUTES, n8n_secret_set: !!N8N_SECRET, n8n_url: N8N_URL, opshub_path: can.integrationConfig(role) ? (OPSHUB_PATH || null) : undefined } };
 }
 
@@ -744,6 +745,73 @@ async function api(req, res, url, p, role) {
       channel: b.channel || 'app', source: 'manual', external_id: 'wo:' + crypto.randomUUID() });
     dbm.audit(db, role, 'work_order_requested', 'approval', a.id, a.subject);
     return send(res, 200, { ok: true, id: a.id, url: approvalLink(a), needs_sqft: needsSqft });
+  }
+  // Paste a procedure exactly as it is written in ChatGPT. Nothing has to be formatted first:
+  // what can be recognised is filed, the rest is kept verbatim, and the original text is attached.
+  if (p === '/api/procedures/paste' && m === 'POST') {
+    const b = await readJson(req);
+    const text = String(b.text || '').trim();
+    if (text.length < 20) return send(res, 400, { error: 'paste the procedure text' });
+    const parsed = imports.parseSkill(text);
+    const title = String(b.title || parsed.title || '').trim() || 'Untitled procedure';
+    const id = b.id || 'sop-' + dbm.slug(title).slice(0, 48);
+    const existed = db.prepare('SELECT id, steps FROM tasks WHERE id = ?').get(id);
+    const ts = dbm.nowIso();
+    const { vendors, homes } = imports.mentionsIn(db, text);
+    const src = b.source || 'ChatGPT skill, pasted by ' + role;
+    dbm.upsert(db, 'tasks', { id, title, department_id: b.department_id || 'purchasing',
+      owner_id: b.owner_id || 'brittany', backup_id: b.backup_id || null,
+      trigger: parsed.trigger || null, inputs: parsed.inputs || null,
+      steps: parsed.steps.map((x, i) => `${i + 1}. ${x}`).join('\n') || null,
+      approval_rules: parsed.approval_rules || null, evidence: parsed.evidence || null,
+      missing_info: parsed.notes || null, documented: parsed.steps.length ? 1 : 0, automated: 0, verified: 0,
+      board: b.board || 'working', proposed: 0, agent_id: b.agent_id || null,
+      source: src, supersedes: b.supersedes || undefined, updated_at: ts });
+    // the skill text itself, kept word for word so a successor can rebuild the skill
+    const docId = 'doc-' + id;
+    dbm.upsert(db, 'documents', { id: docId, title: `${title} — skill text as written`, kind: 'procedure',
+      kind_reason: 'the ChatGPT skill this procedure was written from', sensitive: 0, task_id: id,
+      summary: `Pasted ${ts.slice(0, 10)}. ${parsed.steps.length} steps recognised${vendors.length ? `; mentions ${vendors.length} vendor${vendors.length === 1 ? '' : 's'}` : ''}.`,
+      content: text, size: text.length, source: src, imported_at: ts, underlying_status: 'extracted' });
+    const t = db.prepare('SELECT doc_ids FROM tasks WHERE id = ?').get(id);
+    const ids = JSON.parse(t.doc_ids || '[]'); if (!ids.includes(docId)) dbm.upsert(db, 'tasks', { id, doc_ids: [...ids, docId] });
+    dbm.addEvent(db, { entity_type: 'task', entity_id: id, kind: 'setup', status: 'info',
+      label: `${existed ? 'Updated' : 'Added'} from a pasted ChatGPT skill: ${title}`, source: 'import', actor: role,
+      external_id: `paste:${id}:${ts}` });
+    dbm.audit(db, role, existed ? 'procedure_updated' : 'procedure_added', 'task', id, title);
+    scheduleOpsHubWrite('pasted procedure');
+    return send(res, 200, { ok: true, id, doc_id: docId, updated: !!existed,
+      parsed: { title, trigger: parsed.trigger, inputs: parsed.inputs, steps: parsed.steps, approval_rules: parsed.approval_rules, notes: parsed.notes },
+      vendors: vendors.map(v => ({ id: v, name: (db.prepare('SELECT vendor, trade FROM vendors WHERE id = ?').get(v) || {}).vendor })),
+      homes: homes.map(h => ({ id: h, address: (db.prepare('SELECT address FROM homes WHERE id = ?').get(h) || {}).address })) });
+  }
+
+  // Paste the running log of per-vendor / per-job specifics. Re-pasting updates rows rather than piling up.
+  if (p === '/api/specifics/paste' && m === 'POST') {
+    const b = await readJson(req);
+    const rows = imports.parseSpecificsLog(b.text || '');
+    if (!rows.length) return send(res, 400, { error: 'nothing recognised', detail: 'A table with vendor / job / detail columns, or lines like "Johnston Waterproofing — standard pricing".' });
+    const ts = dbm.nowIso(); const out = []; let matched = 0;
+    for (const r of rows) {
+      const v = r.vendor && (db.prepare('SELECT id, vendor FROM vendors WHERE LOWER(vendor) = LOWER(?) OR LOWER(trade) = LOWER(?)').get(r.vendor, r.vendor)
+        || db.prepare("SELECT id, vendor FROM vendors WHERE LOWER(vendor) LIKE LOWER(?)").get('%' + r.vendor + '%'));
+      const h = r.job && (db.prepare('SELECT id, address FROM homes WHERE LOWER(address) = LOWER(?)').get(r.job)
+        || db.prepare("SELECT id, address FROM homes WHERE LOWER(address) LIKE LOWER(?)").get('%' + r.job + '%'));
+      if (v || h) matched++;
+      const scope = v && h ? 'vendor_job' : h ? 'job' : 'vendor';
+      const id = 'ws-' + dbm.slug([v ? v.id : r.vendor, h ? h.id : r.job].filter(Boolean).join('-')).slice(0, 52);
+      dbm.upsert(db, 'wo_specifics', { id, vendor_id: v ? v.id : null, vendor_name: r.vendor || null,
+        home_id: h ? h.id : null, job_name: r.job || null, detail: r.detail || '', scope,
+        task_id: b.task_id || null, source: b.source || 'ChatGPT running log, pasted by ' + role,
+        noted_on: r.updated || null, updated_at: ts });
+      // a vendor-wide note is also what a work order for that vendor must carry
+      if (v && !h && r.detail) dbm.upsert(db, 'vendors', { id: v.id, wo_instructions: r.detail, wo_review: 'reviewed' });
+      out.push({ id, vendor: v ? v.vendor : r.vendor, job: h ? h.address : r.job || null, detail: r.detail, matched: !!(v || h) });
+    }
+    dbm.addEvent(db, { entity_type: 'integration', entity_id: 'manual', kind: 'import', status: 'info',
+      label: `Running log pasted: ${rows.length} specifics (${matched} matched a vendor or job on file)`, source: 'import', actor: role, external_id: `speclog:${ts}` });
+    dbm.audit(db, role, 'specifics_pasted', 'wo_specifics', null, `${rows.length} rows`);
+    return send(res, 200, { ok: true, count: rows.length, matched, rows: out });
   }
   if (p === '/api/import/backup' && m === 'POST') { if (role !== 'admin') return send(res, 403, { error: 'admin only' }); dbm.importBackup(db, await readJson(req)); dbm.audit(db, role, 'import_backup'); return send(res, 200, { ok: true }); }
 

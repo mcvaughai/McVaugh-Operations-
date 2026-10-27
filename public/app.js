@@ -199,7 +199,7 @@
 
   // ---------- Procedures: old (SOP / handoff) vs new (confirmed in meetings), linked by "supersedes" ----------
   let procFilter = localStorage.getItem('mow_procfilter') || 'both';
-  const isNew = t => t.id.startsWith('tr-');
+  const isNew = t => t.id.startsWith('tr-') || t.id.startsWith('sop-');
   const isOld = t => t.id.startsWith('hub-') || t.id.startsWith('proc-') || t.id.startsWith('obs-');
   function renderProcedures() {
     const v = $('#viewProcedures'); if (v.hidden) return;
@@ -244,8 +244,10 @@
       body = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="col"><h3>New (confirmed) <span>${news.length}</span></h3>${paired.map(t => card(t, 'new')).join('')}<h4>New with no old counterpart</h4>${news.filter(t => !JSON.parse(t.supersedes || '[]').length).map(t => card(t, 'new')).join('') || '<p class="empty">—</p>'}</div>
         <div class="col"><h3>Old (SOP / handoff) <span>${olds.length}</span></h3>${paired.map(t => JSON.parse(t.supersedes).map(id => byId[id] ? card(byId[id], 'old') : '').join('')).join('')}<h4>Old with no confirmed replacement</h4>${olds.filter(t => !pairedOld.has(t.id)).map(t => card(t, 'old')).join('') || '<p class="empty">—</p>'}</div></div>`;
     }
-    v.innerHTML = `<div class="world-toolbar"><b>Procedures</b><span class="views">${[['todo', 'Needs work'], ['new', 'New'], ['old', 'Old'], ['both', 'Both']].map(([k, l]) => `<button class="${procFilter === k ? 'active' : ''}" data-procfilter="${k}">${l}</button>`).join('')}</span><span class="hint">Needs work = what is missing, worst first. New = confirmed in a meeting transcript (tr-). Old = hub SOP (2004–2022) or handoff placeholder. "Supersedes" links a new procedure to the old one it replaces; edit a task to change it.</span></div><div style="overflow:auto;flex:1">${body}</div>`;
+    v.innerHTML = `<div class="world-toolbar"><b>Procedures</b>${S.permissions.write ? '<button class="primary small" id="pasteProc">+ Paste a procedure</button><button class="small" id="pasteLog">Paste the running log</button>' : ''}<span class="views">${[['todo', 'Needs work'], ['new', 'New'], ['old', 'Old'], ['both', 'Both']].map(([k, l]) => `<button class="${procFilter === k ? 'active' : ''}" data-procfilter="${k}">${l}</button>`).join('')}</span><span class="hint">Needs work = what is missing, worst first. New = confirmed in a meeting transcript (tr-). Old = hub SOP (2004–2022) or handoff placeholder. "Supersedes" links a new procedure to the old one it replaces; edit a task to change it.</span></div><div style="overflow:auto;flex:1">${body}</div>`;
     v.querySelectorAll('[data-procfilter]').forEach(b => b.onclick = () => { procFilter = b.dataset.procfilter; localStorage.setItem('mow_procfilter', procFilter); renderProcedures(); });
+    const pp = $('#pasteProc'); if (pp) pp.onclick = () => pasteModal('procedure');
+    const pl = $('#pasteLog'); if (pl) pl.onclick = () => pasteModal('log');
   }
 
   // ---------- pending approvals: shown in every view, because they block real work ----------
@@ -358,6 +360,46 @@
           ${brs.length ? `<small class="src">${brs.length} bid request${brs.length === 1 ? '' : 's'} recorded before it was parked; the data is kept.</small>` : ''}</div>` : ''}
       </div>`;
     const b = $('#woNew'); if (b) b.onclick = woModal;
+  }
+
+  // ---------- paste a procedure / the running log ----------
+  function pasteModal(mode) {
+    const m = $('#modal'), c = $('#modalCard'); c.classList.add('wide');
+    const proc = mode !== 'log';
+    c.innerHTML = `<h2>${proc ? 'Paste a procedure' : 'Paste the running log'}</h2>
+      <p class="src">${proc
+        ? 'Paste the skill exactly as it is written in ChatGPT — headings, bullets, whatever it looks like. Nothing needs reformatting. What can be recognised is filed; the rest is kept word for word and the original text is attached to the procedure. Pasting the same procedure again updates it.'
+        : 'Paste the table of per-vendor and per-job specifics. A markdown table, a spreadsheet paste, or lines like <code>Johnston Waterproofing — standard pricing, no square footage</code>. Re-pasting updates the rows rather than piling up duplicates. A vendor-wide note also becomes that vendor&rsquo;s work-order instruction.'}</p>
+      <form id="mform">
+        ${proc ? `<label class="field"><span>Owner</span><select id="pOwner">${S.people.map(p => `<option value="${esc(p.id)}"${p.id === 'brittany' ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>` : ''}
+        <label class="field"><span>${proc ? 'Procedure text' : 'The log'}</span><textarea id="pText" rows="16" required placeholder="${proc ? '# Enter a work order from an approved bid\n\n## When to use\n…\n\n## Steps\n1. …' : 'Vendor | Job | Detail | Updated'}"></textarea></label>
+        <div class="actions"><button type="submit" class="primary">${proc ? 'Add it' : 'Update the log'}</button><button type="button" id="mcancel">Cancel</button></div></form>
+      <div id="pResult"></div>`;
+    m.hidden = false; $('#mcancel').onclick = () => { m.hidden = true; c.classList.remove('wide'); };
+    $('#mform').onsubmit = async e => {
+      e.preventDefault();
+      const text = $('#pText').value;
+      const r = proc ? await api('POST', '/api/procedures/paste', { text, owner_id: $('#pOwner').value })
+                     : await api('POST', '/api/specifics/paste', { text });
+      if (proc) {
+        const p = r.parsed;
+        $('#pResult').innerHTML = `<div class="pasted"><b>${r.updated ? 'Updated' : 'Added'}: ${esc(p.title)}</b>
+          <p class="src">Check what it picked up, then open the procedure to fix anything.</p>
+          <dl>${[['Trigger', p.trigger], ['Inputs', p.inputs], ['Approval', p.approval_rules]].filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+          <b>${p.steps.length} step${p.steps.length === 1 ? '' : 's'}</b><ol>${p.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+          ${p.notes ? `<b>Kept as notes</b><p class="src">${esc(p.notes)}</p>` : ''}
+          ${r.vendors.length ? `<p class="src">Mentions: ${r.vendors.map(v => esc(v.name)).join(', ')}</p>` : ''}
+          ${r.homes.length ? `<p class="src">Jobs: ${r.homes.map(h => esc(h.address)).join(', ')}</p>` : ''}
+          <p><a href="#" data-open="task:${esc(r.id)}" id="pOpen">Open the procedure</a></p></div>`;
+        $('#pOpen').onclick = () => { m.hidden = true; c.classList.remove('wide'); };
+      } else {
+        $('#pResult').innerHTML = `<div class="pasted"><b>${r.count} row${r.count === 1 ? '' : 's'}, ${r.matched} matched a vendor or job on file</b>
+          <table class="br-bids"><tbody>${r.rows.map(x => `<tr class="${x.matched ? '' : 'awaited'}"><td>${esc(x.vendor || '—')}</td><td>${esc(x.job || 'all jobs')}</td><td>${esc(x.detail)}</td><td>${x.matched ? '' : chip('not on file', 'amber')}</td></tr>`).join('')}</tbody></table>
+          ${r.matched < r.count ? '<p class="src">Rows that matched nothing are kept, but add the vendor in Registry so they attach.</p>' : ''}</div>`;
+      }
+      $('#pText').value = '';
+      HO_dirty = true; refresh();
+    };
   }
 
   // ---------- Build view: Maria's "How to build a house" as an ordered, filterable sequence ----------
@@ -622,6 +664,18 @@
   $('#addBtn').onclick = () => modal('Add', [{ key: 'kind', label: 'What do you want to add?', type: 'select', options: [['task', 'Task / procedure'], ['person', 'Person'], ['agent', 'Agent (proposed function)'], ['home', 'Home / job'], ['decision', 'Decision']] }], {}, async v => setTimeout(() => editEntity(v.kind, null), 0));
 
   // ---------- detail panel ----------
+  // The running log, shown where it is used: on the vendor and on the job.
+  function specificsFor({ vendor_id, home_id }) {
+    const rows = (S.wo_specifics || []).filter(x => (vendor_id && x.vendor_id === vendor_id) || (home_id && x.home_id === home_id));
+    if (!rows.length) return '';
+    const home = id => S.homes.find(h => h.id === id);
+    const vend = id => S.vendors.find(v => v.id === id);
+    return rows.map(x => `<div class="doc-card"><div class="ico">!</div><div><b>${esc(x.detail)}</b><br>
+      <span class="src">${x.scope === 'vendor' ? 'every job'
+        : x.scope === 'job' ? 'this job, any vendor'
+        : esc(vend(x.vendor_id)?.vendor || x.vendor_name || '') + ' on ' + esc(home(x.home_id)?.address || x.job_name || 'this job')}
+      ${x.noted_on ? ' · noted ' + esc(x.noted_on) : ''} · ${esc(x.source || '')}</span></div></div>`).join('');
+  }
   function openDetail(type, id, focusWorld = true) {
     const w = S.permissions.write;
     const obj = { vendor: () => S.vendors.find(v => v.id === id), handover: () => S.handover_items.find(h => h.id === id), document: () => S.documents.find(d => d.id === id), person: () => person(id), agent: () => agent(id), department: () => dept(id), home: () => S.homes.find(h => h.id === id), task: () => S.tasks.find(t => t.id === id), decision: () => S.decisions.find(d => d.id === id), integration: () => S.integrations.find(i => i.id === id), ai: () => S.ai_configs.find(a => a.id === id), system: () => null }[type]?.();
@@ -684,7 +738,9 @@
         ${section('Linked agent', obj.agent_id ? `<a href="#" data-open="agent:${obj.agent_id}">${esc(agent(obj.agent_id)?.name || obj.agent_id)}</a>` : '')}
         ${section('Source', esc(obj.source))}${obj.reviewed_at ? section('Reviewed', fmt(obj.reviewed_at) + ' by ' + esc(obj.reviewed_by) + (obj.review_note ? ' — ' + esc(obj.review_note) : '')) : ''}`;
     } else if (type === 'home') {
+      const jobSpec = specificsFor({ home_id: obj.id });
       body = `${chip('Active: ' + obj.active, obj.active === 'active' ? 'ok' : obj.active === 'inactive' ? 'gray' : 'amber')} ${chip(obj.kind, 'gray')} ${obj.pilot ? chip('★ Pilot home', 'amber') : ''}
+        ${jobSpec ? section('Specifics from the running log', jobSpec) : ''}
         ${section('MCH Job ID', obj.job_id ? `<code>${esc(obj.job_id)}</code> · <a href="http://db.mcvaugh.com/buildconnect/NewStuff/budgetform.html?ID=${esc(obj.job_id)}" target="_blank" rel="noopener">budget form</a> · <a href="http://db.mcvaugh.com/buildconnect/NewStuff/wotracking.html?archive=0&perfID=${esc(obj.job_id)}&subconid=0&filterchange=1" target="_blank" rel="noopener">work orders</a> (live McVaugh database; needs your login)` : '—')}
         ${w ? `<h4>Status</h4><div class="milestones">${[['unknown', 'Unknown'], ['active', 'Active'], ['inactive', 'Inactive']].map(([k, l]) => `<button class="${obj.active === k ? 'on' : ''}" data-set="active:${k}">${l}</button>`).join('')}<button class="${obj.pilot ? 'on' : ''}" data-toggle="pilot">★ Pilot</button></div>` : ''}
         ${section('Stage', esc(obj.stage))}${section('Permits', esc(obj.permits))}${section('Trades', esc(obj.trades))}${section('Open issues', esc(obj.issues))}${obj.next_milestone ? `<div class="next-action"><b>Next milestone</b><br>${esc(obj.next_milestone)}</div>` : ''}${section('Status source', esc(obj.status_cite))}${section('Current activity', runtimeChip(obj.runtime))}${section('Notes', esc(obj.notes))}
@@ -697,7 +753,12 @@
     } else if (type === 'vendor') {
       body = `${section('Current vendor', esc(obj.vendor || '—'))}${section('Current rate', obj.restricted ? chip('restricted', 'red') : esc(obj.rate || '—'))}
         ${section('Who to call', obj.restricted ? chip('restricted', 'red') : (JSON.parse(obj.contacts || '[]').map(c => `<div class="doc-card"><div class="ico">☎</div><div><b>${esc(c.name || '—')}</b><br><span class="src">${esc(c.info)}</span>${c.note ? `<br>${esc(c.note)}` : ''}</div></div>`).join('') || '<span class="empty">none listed</span>'))}
-        ${section('Documents to provide for bidding', (obj.docs_needed || '').split('\n').filter(Boolean).map(d => `<li>${esc(d)}</li>`).join('') ? `<ul style="margin:4px 0 0 18px">${(obj.docs_needed || '').split('\n').filter(Boolean).map(d => `<li>${esc(d)}</li>`).join('')}</ul>` : '')}${section('Notes / lead times', esc(obj.notes))}${section('Source', esc(obj.source) + ' · ' + fmt(obj.imported_at))}`;
+        ${section('Documents to provide for bidding', (obj.docs_needed || '').split('\n').filter(Boolean).map(d => `<li>${esc(d)}</li>`).join('') ? `<ul style="margin:4px 0 0 18px">${(obj.docs_needed || '').split('\n').filter(Boolean).map(d => `<li>${esc(d)}</li>`).join('')}</ul>` : '')}${section('Notes / lead times', esc(obj.notes))}
+        ${section('Work orders for this vendor', [obj.pricing_basis ? chip(({ per_sqft: 'priced per square foot', fixed: 'fixed price', per_bid: 'priced per bid' })[obj.pricing_basis] || obj.pricing_basis, obj.pricing_basis === 'per_sqft' ? 'amber' : 'gray') : '',
+          obj.wo_review ? chip(({ reusable: 'reviewed — reusable', needs_review: 'not reviewed yet', reviewed: 'reviewed' })[obj.wo_review] || obj.wo_review, obj.wo_review === 'needs_review' ? 'amber' : 'ok') : '',
+          obj.wo_instructions ? `<p>${esc(obj.wo_instructions)}</p>` : ''].filter(Boolean).join(' '))}
+        ${section('Specifics from the running log', specificsFor({ vendor_id: obj.id }) || '<span class="empty">nothing logged for this vendor</span>')}
+        ${section('Source', esc(obj.source) + ' · ' + fmt(obj.imported_at))}`;
     } else if (type === 'handover') {
       const taskIds = JSON.parse(obj.task_ids || '[]'), docIds = JSON.parse(obj.doc_ids || '[]');
       const linkedTasks = taskIds.map(id => S.tasks.find(t => t.id === id)).filter(Boolean);

@@ -253,3 +253,12 @@ a.bvendor { color: var(--brand-dark); text-decoration: none; border-bottom: 1px 
 .ap-opts label:hover { background: #f6f9ff; }
 .ap-opts .num { margin-left: auto; font-variant-numeric: tabular-nums; }
 .ap-opts small { color: var(--muted); }
+
+/* ---------- pasted procedure / running log result ---------- */
+.pasted { margin-top: 14px; padding: 12px 14px; background: #f3f8f5; border: 1px solid #bfe0d2; border-radius: var(--radius); font-size: 13px; }
+.pasted dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0; }
+.pasted dt { color: var(--muted); } .pasted dd { margin: 0; }
+.pasted ol { margin: 6px 0 0; padding-left: 20px; } .pasted ol li { margin: 2px 0; }
+.pasted table { margin-top: 8px; width: 100%; }
+.pasted p { margin: 6px 0 0; }
+#modalCard.wide textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }

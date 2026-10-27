@@ -493,6 +493,78 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
       assert.ok(JSON.parse(s.tasks.find(x => x.id === t).doc_ids || '[]').includes('doc-maria-bid-process-answer'), t + ' cites her answer');
     assert.ok(s.decisions.some(x => x.id === 'dec-bid-rule' && /due date/i.test(x.reason)));
   });
+  await check('a pasted ChatGPT skill becomes a procedure, keeps its text, and reaches the ops hub', async () => {
+    const skill = `# Enter a Work Order from an Approved Bid\n\n## When to use\nA subcontractor has sent an approved bid and it needs to go into the MCH database.\n\n## You will need\n- The bid PDF\n- The job address\n\n## Steps\n1. Confirm the bid is within the budget line.\n2. Open the database and start a new work order.\n3. Enter vendor, job, cost code, description and amount.\n4. For per-square-foot vendors enter the square footage.\n5. Save. Johnston Waterproofing gets an email saying it is approved.\n\n## Approval\nBrittany or Ernesto confirms before saving. Over budget goes to Jim.\n\n## Notes\nJohnston Waterproofing is standard pricing, no square footage needed.`;
+    const r = await call('POST', '/api/procedures/paste', { text: skill });
+    assert.equal(r.status, 200); assert.equal(r.body.updated, false);
+    const p = r.body.parsed;
+    assert.equal(p.title, 'Enter a Work Order from an Approved Bid');
+    assert.match(p.trigger, /subcontractor has sent an approved bid/);
+    assert.equal(p.steps.length, 5);
+    assert.match(p.approval_rules, /Over budget goes to Jim/);
+    assert.ok(r.body.vendors.some(v => /Johnston/i.test(v.name || '')), 'the vendor it names is linked');
+    assert.deepEqual(r.body.vendors.map(v => v.id), ['vendor-waterproofing-and-overlay'],
+      'only the vendor actually named: a substring test would also match the roofer inside "waterproofing"');
+    assert.match(p.inputs, /bid PDF\n/, 'listed inputs stay one per line');
+    const s = (await call('GET', '/api/state')).body;
+    const t = s.tasks.find(x => x.id === r.body.id);
+    assert.equal(t.documented, 1); assert.equal(t.owner_id, 'brittany'); assert.equal(t.board, 'working');
+    assert.match(t.steps, /^1\. Confirm the bid/);
+    assert.match(t.missing_info, /standard pricing/, 'anything it could not place is kept, not dropped');
+    const d = s.documents.find(x => x.id === r.body.doc_id);
+    assert.equal(d.content, skill, 'the skill text is kept word for word so it can be rebuilt');
+    assert.ok(JSON.parse(t.doc_ids || '[]').includes(r.body.doc_id));
+    // it shows up in the regenerated ops hub as a current process
+    const html = (await call('GET', '/api/export/opshub')).body;
+    const hub = require(path.join(__dirname, '..', 'server', 'imports.js')).parseOpsHub(html);
+    const proc = hub.processes.find(x => x.id === r.body.id);
+    assert.ok(proc, 'the pasted procedure reaches the MCH ops page');
+    assert.equal(proc.status, 'current'); assert.equal(proc.steps.length, 5);
+  });
+  await check('pasting the same procedure again updates it instead of making a second one', async () => {
+    const before = (await call('GET', '/api/state')).body.tasks.length;
+    const r = await call('POST', '/api/procedures/paste', { text: `# Enter a Work Order from an Approved Bid\n\n## Steps\n1. Only one step now.` });
+    assert.equal(r.body.updated, true);
+    const s = (await call('GET', '/api/state')).body;
+    assert.equal(s.tasks.length, before, 'no duplicate procedure');
+    assert.match(s.tasks.find(t => t.id === r.body.id).steps, /Only one step now/);
+  });
+  await check('a plain skill with no headings still yields steps', async () => {
+    const r = await call('POST', '/api/procedures/paste', { text: 'Back charge a subcontractor\n\n1. Photograph the damage.\n2. Get a repair price.\n3. Tell the sub in writing before deducting.\n4. Enter the back charge against their next draw.' });
+    assert.equal(r.body.parsed.title, 'Back charge a subcontractor');
+    assert.equal(r.body.parsed.steps.length, 4);
+  });
+  await check('the running log lands on the vendors it names and becomes their work-order instruction', async () => {
+    const log = `| Vendor | Job | Detail | Updated |\n|---|---|---|---|\n| Johnston Waterproofing | | standard pricing, reusable, no square footage | 10/21 |\n| Dependable Home Builders | | work order needs total covered square footage | 10/26 |\nNot A Real Vendor Ltd — something special`;
+    const r = await call('POST', '/api/specifics/paste', { text: log });
+    assert.equal(r.status, 200); assert.equal(r.body.count, 3); assert.equal(r.body.matched, 2);
+    const s = (await call('GET', '/api/state')).body;
+    const jw = s.vendors.find(v => /johnston/i.test(v.vendor || ''));
+    assert.match(jw.wo_instructions, /no square footage/, 'a vendor-wide note becomes the work-order instruction');
+    assert.equal(jw.wo_review, 'reviewed');
+    assert.ok(s.wo_specifics.some(x => x.vendor_id === jw.id && x.scope === 'vendor' && x.noted_on === '10/21'));
+    assert.ok(s.wo_specifics.some(x => !x.vendor_id && /Not A Real Vendor/.test(x.vendor_name)), 'an unmatched row is kept, not dropped');
+    // re-pasting updates rather than duplicating
+    const again = await call('POST', '/api/specifics/paste', { text: `Johnston Waterproofing — standard pricing, now also does overlays` });
+    assert.equal(again.body.count, 1);
+    const s2 = (await call('GET', '/api/state')).body;
+    assert.equal(s2.wo_specifics.filter(x => x.vendor_id === jw.id).length, 1, 'one row per vendor, updated in place');
+    assert.match(s2.wo_specifics.find(x => x.vendor_id === jw.id).detail, /overlays/);
+  });
+  await check('a per-job specific is kept against that job, separately from the vendor-wide one', async () => {
+    const r = await call('POST', '/api/specifics/paste', { text: `Vendor\tJob\tDetail\nDependable Home Builders\t${(await call('GET', '/api/state')).body.homes.find(h => h.active === 'active').address}\tbalcony framing is excluded on this one` });
+    assert.equal(r.body.matched, 1);
+    const row = (await call('GET', '/api/state')).body.wo_specifics.find(x => /balcony framing/.test(x.detail));
+    assert.equal(row.scope, 'vendor_job'); assert.ok(row.home_id && row.vendor_id);
+  });
+  await check('pasting a procedure needs write access and an actual paste', async () => {
+    const thin = await call('POST', '/api/procedures/paste', { text: 'too short' });
+    assert.equal(thin.status, 400);
+    const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.viewer });
+    const denied = await call('POST', '/api/procedures/paste', { text: 'x'.repeat(40) });
+    assert.equal(denied.status, 403);
+    cookie = admin;
+  });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('export contains everything', async () => { const x = (await call('GET', '/api/export')).body; assert.equal(x.format, 'mcvaugh-operations-world/1'); assert.ok(x.tasks.length > 0 && x.events.length > 0 && x.checkpoints.length > 0); });
   await stop(); await start();

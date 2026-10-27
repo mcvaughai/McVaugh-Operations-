@@ -620,6 +620,113 @@ function importBuildSequence(db, buf, source) {
   return { steps: n, holds: steps.filter(s => s.kind !== 'step').length, gaps: steps.filter(s => s.gap).length, credentials: steps.filter(s => s.credential).length };
 }
 
+// ---------- pasted procedures (the ChatGPT skills Brittany writes, one per process) ----------
+// Deliberately forgiving: she pastes the skill exactly as it is in ChatGPT and this works out what is what.
+// Anything it cannot place is kept verbatim in `notes` and in the attached document, so nothing is lost.
+const SKILL_SECTIONS = [
+  ['trigger', /^(trigger|when to use|use (this )?when|when this runs|purpose|goal|objective)\b/i],
+  ['inputs', /^(inputs?|you\s*('?ll|will)\s*need|what you need|what.s needed|requirements?|prerequisites?|data needed)\b/i],
+  ['steps', /^(steps?|instructions?|process|procedure|how to|workflow|what to do)\b/i],
+  ['approval_rules', /^(approvals?|approval rules?|authority|who approves|sign.?off|guardrails?|rules?|never|do not)\b/i],
+  ['evidence', /^(output|result|evidence|done when|definition of done|deliverable)\b/i],
+  ['notes', /^(notes?|exceptions?|special cases?|gotchas?|watch out|examples?)\b/i],
+];
+const headingOf = line => {
+  const t = line.trim();
+  if (!t) return null;
+  // "## Steps", "**Steps**", "STEPS", "Steps:" — all heading shapes people actually use
+  let m = t.match(/^#{1,6}\s*(.+?)\s*:?\s*$/) || t.match(/^\*\*(.+?)\*\*\s*:?\s*$/)
+    || (/^[A-Z][A-Za-z '/&-]{2,40}:\s*$/.test(t) && [null, t.replace(/:\s*$/, '')])
+    || (/^[A-Z][A-Z '/&-]{2,40}$/.test(t) && [null, t]);
+  if (!m) return null;
+  const label = String(m[1] || '').trim();
+  for (const [key, re] of SKILL_SECTIONS) if (re.test(label)) return { key, label };
+  return { key: null, label };
+};
+const stripBullet = l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim();
+
+function parseSkill(text) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  const out = { title: null, trigger: '', inputs: '', steps: [], approval_rules: '', evidence: '', notes: [] };
+  let cur = null, seenAny = false;
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const h = headingOf(line);
+    if (h) {
+      // the first heading before any section is the title, unless it names a section
+      if (!out.title && !h.key && !seenAny) { out.title = h.label; continue; }
+      if (h.key) { cur = h.key; seenAny = true; continue; }
+      cur = 'notes'; out.notes.push(h.label + ':'); seenAny = true; continue;
+    }
+    if (!line.trim()) continue;
+    if (!out.title && !cur) { out.title = line.replace(/^#+\s*/, '').trim().slice(0, 160); continue; }
+    if (!cur) { out.notes.push(line.trim()); continue; }
+    if (cur === 'steps') out.steps.push(stripBullet(line));
+    else if (cur === 'notes') out.notes.push(line.trim());
+    else out[cur] = [out[cur], stripBullet(line)].filter(Boolean).join(cur === 'inputs' ? '\n' : ' ');
+  }
+  // No "Steps" heading anywhere: treat a run of numbered or bulleted lines as the steps.
+  if (!out.steps.length) {
+    const listed = lines.filter(l => /^\s*(?:[-*•]|\d+[.)])\s+\S/.test(l)).map(stripBullet);
+    if (listed.length >= 2) out.steps = listed;
+  }
+  return { ...out, steps: out.steps.filter(Boolean), notes: out.notes.join('\n') };
+}
+
+// Which vendors and jobs a pasted procedure mentions, so it files itself against them.
+function mentionsIn(db, text) {
+  const hay = ' ' + String(text || '').toLowerCase().replace(/\s+/g, ' ') + ' ';
+  // Whole words only: a plain substring test matches "roofing" inside "waterproofing".
+  const says = n => {
+    const s = String(n || '').toLowerCase().trim();
+    if (s.length <= 3) return false;
+    return new RegExp('(^|[^a-z0-9])' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)').test(hay);
+  };
+  const vendors = db.prepare('SELECT id, vendor, trade FROM vendors').all()
+    .filter(v => [v.vendor, v.trade].some(says))
+    .map(v => v.id);
+  const homes = db.prepare('SELECT id, address FROM homes').all()
+    .filter(h => { const a = String(h.address || '').toLowerCase(); const num = a.match(/^\d{3,6}/); return a.length > 6 && (hay.includes(a) || (num && hay.includes(num[0] + ' ') && hay.includes(a.split(' ')[1] || '~'))); })
+    .map(h => h.id);
+  return { vendors: [...new Set(vendors)], homes: [...new Set(homes)] };
+}
+
+// ---------- the running log: "what is special about this vendor / this job" ----------
+// Accepts a markdown table, a TSV/CSV paste, or "Vendor — detail" lines. Column names are matched loosely
+// because the log lives in a chat and its headings move around.
+const LOG_COLS = [
+  ['vendor', /^(vendor|sub|subcontractor|company|trade)$/i],
+  ['job', /^(job|address|house|property|site|lot)$/i],
+  ['detail', /^(detail|details|note|notes|special|instruction|instructions|what|requirement|requirements)$/i],
+  ['updated', /^(updated|date|as of|last updated|changed)$/i],
+];
+function parseSpecificsLog(text) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n').map(l => l.trim()).filter(Boolean);
+  const split = l => l.includes('|') ? l.replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+    : l.includes('\t') ? l.split('\t').map(c => c.trim()) : null;
+  const rows = [];
+  let cols = null;
+  for (const l of lines) {
+    if (/^\|?[\s:|-]+\|?$/.test(l) && l.includes('-')) continue;      // markdown separator row
+    const cells = split(l);
+    if (cells && cells.length >= 2) {
+      if (!cols) {
+        const mapped = cells.map(c => (LOG_COLS.find(([, re]) => re.test(c)) || [null])[0]);
+        if (mapped.filter(Boolean).length >= 2) { cols = mapped; continue; }
+        cols = ['vendor', 'detail', 'job', 'updated'].slice(0, cells.length);   // no header: assume this order
+      }
+      const row = {};
+      cells.forEach((c, i) => { if (cols[i] && c) row[cols[i]] = c; });
+      if (row.vendor || row.job) rows.push(row);
+      continue;
+    }
+    // "Johnston Waterproofing — standard pricing, no square footage needed"
+    const m = l.match(/^(.{2,60}?)\s*[—–:-]\s+(.{4,})$/);
+    if (m) rows.push({ vendor: m[1].trim(), detail: m[2].trim() });
+  }
+  return rows;
+}
+
 // ---------- regenerate the old MCH Operations Hub from the world's current data ----------
 // Keeps the hub's own UI (seed/mch-ops-hub.template.html) and replaces its data constants, so the old dashboard
 // stays in step with the world: SOPs (old + confirmed new, with supersedes), current-team responsibilities, cross-offs.
@@ -635,7 +742,7 @@ function regenerateOpsHub(db, templateHtml) {
     const t = tasks.find(x => x.id === 'hub-' + bp.id); const by = tasks.filter(x => JSON.parse(x.supersedes || '[]').includes('hub-' + bp.id));
     processes.push({ ...bp, status: by.length ? 'superseded' : 'legacy', supersededBy: by.map(x => x.id), reviewed: t?.step_review ? 'reviewed against meetings' : 'not reviewed', ...(t && t.steps && steps(t).length ? { steps: steps(t) } : {}) });
   }
-  for (const t of tasks.filter(x => x.id.startsWith('tr-'))) {
+  for (const t of tasks.filter(x => x.id.startsWith('tr-') || x.id.startsWith('sop-'))) {
     processes.push({ id: t.id, name: t.title, owner: ownerRole(t.owner_id), date: (t.source || '').replace(/\s*\(transcript\)/, ''), category: 'Current (confirmed)', description: t.trigger ? 'Trigger: ' + t.trigger : (t.verification_result || ''), steps: steps(t), participants: [ownerRole(t.owner_id), ...(t.backup_id ? [ownerRole(t.backup_id)] : [])], status: 'current', supersedes: JSON.parse(t.supersedes || '[]').map(id => id.replace(/^hub-/, '')), missing: t.missing_info || '' });
   }
   const team = base.team.map(bt => {
@@ -731,4 +838,4 @@ function pagesMarkdown(state) {
   return L.filter(x => x !== undefined).join('\n');
 }
 
-module.exports = { redactCredentials, parseBuildSequence, importBuildSequence, describeOfficeFile, importOfficeFile, parseSowWorkbook, importSow, regenerateOpsHub, xlsxSheets, xlsxText, parseOpsHub, importOpsHub, parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };
+module.exports = { parseSkill, parseSpecificsLog, mentionsIn, redactCredentials, parseBuildSequence, importBuildSequence, describeOfficeFile, importOfficeFile, parseSowWorkbook, importSow, regenerateOpsHub, xlsxSheets, xlsxText, parseOpsHub, importOpsHub, parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };

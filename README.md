@@ -36,7 +36,7 @@ Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node
 * **Start here, Brittany** — current step, last completed, one recommended next action, waiting on whom, decisions needed, mini Next/Working/Waiting/Done board, last checkpoint. *Save checkpoint* writes a new dated checkpoint; history is kept.
 * **Review** — the Stage 2 queue (people show their org-chart title, absorbed legacy roles and the responsibility list from the old ops hub): unverified people, then PROPOSED tasks, one at a time, with duplicate suggestions and merge/reject/verify. Decisions are stamped and survive re-imports.
 * **Handover** — succession view for a departing person (Maria): what only she does, documented vs in her head, who else can do it today, what to capture before she leaves, sorted no-backup first; her procedures with step-by-step reviews and flow charts; each active job's status; a generated next-meeting agenda.
-* **Procedures** — old SOPs vs the procedures confirmed in meetings, paired by *supersedes*. **Needs work** lists what is missing from each one, worst first: no steps written down, owner leaving with nobody named, no owner, never confirmed in a meeting.
+* **Procedures** — old SOPs vs the procedures confirmed in meetings, paired by *supersedes*. **Needs work** lists what is missing from each one, worst first: no steps written down, owner leaving with nobody named, no owner, never confirmed in a meeting. **Paste a procedure** takes a ChatGPT skill exactly as written and files it; **Paste the running log** takes the per-vendor and per-job specifics.
 * **Build** — Maria's "How to build a house" as 105 ordered steps from lot stake to the final city inspections, grouped into six phases, each with the responsible party (linked to its vendor record), the inspections to schedule, the hold points ("do not pour until…"), and the steps McVaugh does itself. Filter by *MCH does it*, *Inspections*, or *Needs a decision*. Logins that were typed into the source sheet are **not** stored: the step says a login is needed and names the system, and the original file is restricted.
 * **Board / Registry** — everything editable without the 3D view; Registry includes Vendors by trade (from the SOW Excel) with each vendor's pricing basis and what a work order for them must contain.
 * **Integrations** — each shown as disconnected / connected / failing; three import options (Obsidian `.md` from the browser, CSV from the browser, and **Option 3: bulk-import a folder on this computer** with a dry-run preview and skip-unchanged re-import); backup export/restore; handbook export for ChatGPT Pages.
@@ -69,6 +69,16 @@ Runs `test/acceptance.js`: spawns a server on a temp folder and checks persisten
 5. Drop a QuickBooks CSV export into `C:\McVaugh\qb-exports` (the folder in `MOW_QB_EXPORT_DIR`) — the app notices the file, hands it to n8n, and the Accounting reconciliation agent turns amber (*waiting for approval*) with the file name.
 
 n8n 2.x needs **Node.js 24**; the setup script installs n8n 1.x instead if you have an older Node, but Node 24 is the better choice (the world runs on it too).
+
+### Getting procedures in from ChatGPT
+
+Writing a skill per process in ChatGPT is fine; leaving them only there is the problem, because a skill in someone's account is not something a successor inherits. Two paste boxes on the **Procedures** tab bring them across.
+
+**Paste a procedure** — paste the skill exactly as ChatGPT has it. No reformatting. It reads the usual headings (*when to use*, *you'll need*, *steps*, *approval*, *notes*) in any of the shapes people write them: markdown headings, bold lines, ALL CAPS, or `Steps:`. With no headings at all, a run of numbered or bulleted lines becomes the steps. Anything it cannot place is kept as notes, and the original text is attached to the procedure word for word so the skill can be rebuilt from it. It links the vendors and jobs the text names. Pasting the same procedure again updates it rather than making a second copy, and it appears on the regenerated MCH ops page as a current process.
+
+**Paste the running log** — the per-vendor and per-job specifics. A markdown table, a spreadsheet paste, or lines like `Johnston Waterproofing — standard pricing, no square footage`. Column names are matched loosely because the headings in a chat move around. A vendor-wide note also becomes that vendor's work-order instruction and marks them reviewed. Rows show on the vendor record and on the job, so the detail is where the work happens rather than in a chat thread. Re-pasting updates rows in place.
+
+Rows naming a vendor or job that is not on file are kept and flagged, so nothing is silently dropped.
 
 ### The purchasing agent: work orders
 

@@ -32,7 +32,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(homes.length >= 2); JOB = homes[0].id; JOB2 = homes[1].id;
     assert.match(JOB, /^job-/);
   });
-  await check('seeded confirmed people and proposed agents', async () => { const s = (await call('GET', '/api/state')).body; assert.equal(s.people.length, 10, 'Lonnie joined as Maria\'s successor on 3 November'); assert.equal(s.people.find(p => p.id === 'ernesto').reports_to, 'maria'); assert.equal(s.people.find(p => p.id === 'brittany').title, 'Accounting Assistant'); assert.equal(s.agents.length, 14); assert.ok(s.agents.every(a => a.proposed === 1)); assert.ok(s.tasks.filter(t => t.proposed).length >= 13); });
+  await check('seeded confirmed people and proposed agents', async () => { const s = (await call('GET', '/api/state')).body; assert.equal(s.people.length, 10, 'Lonnie joined as Maria\'s successor on 3 November'); assert.equal(s.people.find(p => p.id === 'ernesto').reports_to, 'maria'); assert.equal(s.people.find(p => p.id === 'brittany').title, 'Accounting Assistant'); assert.equal(s.agents.length, 15, 'vendor compliance agent added 4 November'); assert.ok(s.agents.every(a => a.proposed === 1)); assert.ok(s.tasks.filter(t => t.proposed).length >= 13); });
   await check('new task persists', async () => { const r = await call('POST', '/api/tasks', { title: 'Acceptance task', owner_id: 'maria', board: 'next' }); assert.equal(r.status, 200); assert.equal(r.body.id, 'acceptance-task'); });
   await check('setup milestone changes visual state', async () => { await call('POST', '/api/agents/agent-budget-exceptions', { setup_stage: 'ready' }); const s = (await call('GET', '/api/state')).body; const a = s.agents.find(a => a.id === 'agent-budget-exceptions'); assert.equal(a.setup_stage, 'ready'); assert.equal(a.runtime.status, 'idle', 'ready-but-idle'); assert.ok(s.events.some(e => e.entity_id === 'agent-budget-exceptions' && e.kind === 'setup' && e.source === 'manual')); });
   await check('documented/automated/verified are distinct', async () => { await call('POST', '/api/tasks/acceptance-task', { documented: 1 }); let t = (await call('GET', '/api/state')).body.tasks.find(t => t.id === 'acceptance-task'); assert.deepEqual([t.documented, t.automated, t.verified], [1, 0, 0]); });
@@ -639,9 +639,12 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(rules.length >= 8);
     assert.match(rules.find(r => /Autumn/.test(r.vendor_name)).detail, /60\/30\/10/);
     assert.match(rules.find(r => /Johnston/.test(r.vendor_name)).detail, /409\.0/);
-    // a conflict is raised, not quietly merged
-    const clash = s.wo_specifics.find(x => x.id === 'ws-rule-plumbing-conflict');
-    assert.ok(clash); assert.match(clash.detail, /CONFLICT/); assert.match(clash.detail, /Reece Plumbing/); assert.match(clash.detail, /GT Plumbing/);
+    // the clash turned out to be two real plumbing vendors, so it was resolved rather than left flagged
+    assert.ok(!s.wo_specifics.some(x => x.id === 'ws-rule-plumbing-conflict'), 'the conflict row is cleared once answered');
+    const plumbers = s.vendors.filter(v => v.trade === 'PLUMBING').map(v => v.vendor).sort();
+    assert.deepEqual(plumbers, ['GT Plumbing', 'Reece Plumbing'], 'both are current plumbing vendors');
+    assert.match(s.wo_specifics.find(x => x.id === 'ws-rule-reece').detail, /601/);
+    assert.match(s.wo_specifics.find(x => x.id === 'ws-rule-plumbing-two-vendors').detail, /not interchangeable/);
     // seven SOPs named in the hub but whose steps are not here yet
     const waiting = s.tasks.filter(t => t.id.startsWith('sop-') && !t.steps);
     assert.equal(waiting.length, 7);
@@ -667,7 +670,70 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.equal((await call('GET', '/api/state')).body.insurance.find(x => /Synergy/i.test(x.vendor)).standing, 'ok');
     assert.equal((await call('POST', '/api/insurance/paste', { text: 'nothing here' })).status, 400);
   });
+  await check('a GL expiry inside 60 days raises the renewal once, and approving releases the four updates', async () => {
+    const soon = new Date(Date.now() + 45 * 864e5).toISOString().slice(0, 10);
+    const far = new Date(Date.now() + 320 * 864e5).toISOString().slice(0, 10);
+    await call('POST', '/api/insurance/paste', { text: `Reece Plumbing\t${soon}` });
+    let s = (await call('GET', '/api/state')).body;
+    const ap = s.approvals.find(a => a.kind === 'insurance_renewal' && /Reece/.test(a.subject));
+    assert.ok(ap, 'the warning raises the renewal by itself');
+    assert.match(ap.question, /expires in 4[0-9] days/);
+    assert.match(ap.question, /Nothing is written anywhere until then/);
+    assert.equal(ap.requested_from, 'james');
+    assert.match(ap.draft, /Then update/, 'the card names all four places');
+    assert.equal(s.agents.find(a => a.id === 'agent-vendor-compliance').runtime.status, 'waiting');
+    // raised once per renewal cycle, not every sweep
+    await call('POST', '/api/insurance/sweep', {});
+    await call('POST', '/api/insurance/sweep', {});
+    s = (await call('GET', '/api/state')).body;
+    assert.equal(s.approvals.filter(a => a.kind === 'insurance_renewal' && /Reece/.test(a.subject)).length, 1, 'asked once, not every sweep');
+    // n8n cannot write anything before a person approves
+    const H = { Cookie: '', 'X-MOW-Secret': 's3cret' };
+    const early = await call('POST', '/api/webhooks/insurance/updated', { approval_id: ap.id, updated: ['GL register spreadsheet'] }, H);
+    assert.equal(early.status, 409, `nothing is written on an unapproved renewal (got ${early.status}: ${JSON.stringify(early.body)})`);
+    await call('POST', `/api/approvals/${ap.id}/approve`, { note: 'certificate checked against the PDF' });
+    const queue = (await call('GET', '/api/webhooks/work', null, H)).body.update_insurance;
+    assert.ok(queue.some(q => q.id === ap.id), 'only now is it queued for the four updates');
+    assert.equal(queue.find(q => q.id === ap.id).targets.length, 4);
+    // a half-finished update is reported as such, not as success
+    const partial = await call('POST', '/api/webhooks/insurance/updated', { approval_id: ap.id, updated: ['GL register spreadsheet', 'Certificate folder'], gl_expiry: far }, H);
+    assert.equal(partial.status, 200);
+    assert.equal(partial.body.still_missing.length, 2);
+    s = (await call('GET', '/api/state')).body;
+    assert.ok(s.events.some(e => /updated 2 of 4/.test(e.label) && e.status === 'failed'), 'a partial update shows as failed, not finished');
+    assert.equal(s.insurance.find(x => /Reece/i.test(x.vendor)).gl_expiry, far, 'the new expiry is recorded');
+  });
+  await check('the insurance renewal is recorded as an automation with one human gate, not as a consolidation', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const t = s.tasks.find(x => x.id === 'sop-update-gl-insurance');
+    assert.match(t.missing_info, /has to appear in all four places/, 'four systems is by design, not a defect');
+    assert.match(t.automation_approach, /legacy \.xls/); assert.match(t.automation_approach, /blue text is not proof/);
+    const ag = s.agents.find(a => a.id === 'agent-vendor-compliance');
+    assert.equal(ag.enabled, 0); assert.match(ag.human_authority, /checks the extracted dates against the certificate/);
+    assert.ok(s.decisions.some(d => d.id === 'dec-insurance-four-places' && d.status === 'accepted'));
+    const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'mow-gl-insurance.json'), 'utf8'));
+    assert.equal(wf.active, false);
+    assert.ok(JSON.stringify(wf).includes('/api/webhooks/insurance/updated'));
+  });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
+  await check('every write route sits behind the session and write check', async () => {
+    // A route accidentally placed above the session gate would answer a signed-out caller. This catches that.
+    const admin = cookie;
+    const routes = [['/api/work-orders/request', { vendor_id: 'vendor-plumbing' }], ['/api/procedures/paste', { text: 'x'.repeat(40) }],
+      ['/api/specifics/paste', { text: 'Some Vendor — a detail' }], ['/api/insurance/paste', { text: 'Some Vendor 1/1/2030' }],
+      ['/api/insurance/sweep', {}], ['/api/bids/sweep', {}], ['/api/events', { entity_type: 'task', entity_id: 'x' }]];
+    cookie = '';
+    for (const [r, body] of routes) {
+      const out = await call('POST', r, body);
+      assert.equal(out.status, 401, `${r} must require a session, got ${out.status}`);
+    }
+    await call('POST', '/api/login', { passphrase: creds.viewer });
+    for (const [r, body] of routes) {
+      const out = await call('POST', r, body);
+      assert.ok(out.status === 403, `${r} must refuse a read-only role, got ${out.status}`);
+    }
+    cookie = admin;
+  });
   await check('export contains everything', async () => { const x = (await call('GET', '/api/export')).body; assert.equal(x.format, 'mcvaugh-operations-world/1'); assert.ok(x.tasks.length > 0 && x.events.length > 0 && x.checkpoints.length > 0); });
   await stop(); await start();
   await check('everything survives a server restart', async () => { const s = (await call('GET', '/api/state')).body; assert.ok(s.tasks.find(t => t.id === 'acceptance-task')); assert.equal(s.checkpoint.next_action, 'Verify Maria'); assert.equal(s.agents.find(a => a.id === 'agent-trade-commitments').runtime.status, 'failed'); assert.equal(s.agents.find(a => a.id === 'agent-budget-exceptions').setup_stage, 'ready'); });

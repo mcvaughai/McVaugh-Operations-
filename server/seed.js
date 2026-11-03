@@ -802,6 +802,62 @@ const UPDATES = [
       label: 'Manual: Lonnie added as incoming Construction/Permitting Lead, taking Maria\'s construction work (last day 6 November)',
       source: 'manual', actor: 'brittany', external_id: 'hub-session-2026-11-03' });
   } },
+  { key: 'insurance-automation-2026-11-04', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Brittany, 2026-11-04';
+
+    // Not a conflict after all: Reece and GT are both plumbing vendors. Reece gets its own record.
+    upsert(db, 'vendors', { id: 'vendor-plumbing-reece', trade: 'PLUMBING', vendor: 'Reece Plumbing', contacts: JSON.stringify([]),
+      pricing_basis: 'per_bid', wo_review: 'reviewed',
+      wo_instructions: 'Cost code 601. Split the valves and the trims onto separate lines. The purchase order is emailed to the vendor.',
+      notes: 'One of two plumbing vendors; GT Plumbing is the other. Confirmed by Brittany 2026-11-04.', source: SRC, imported_at: ts, updated_at: ts });
+    upsert(db, 'vendors', { id: 'vendor-plumbing', notes: [db.prepare('SELECT notes FROM vendors WHERE id = ?').get('vendor-plumbing')?.notes, 'One of two plumbing vendors; Reece Plumbing (cost code 601) is the other [Brittany 11/04].'].filter(Boolean).join(' ') });
+    db.prepare("DELETE FROM wo_specifics WHERE id = 'ws-rule-plumbing-conflict'").run();
+    upsert(db, 'wo_specifics', { id: 'ws-rule-reece', vendor_id: 'vendor-plumbing-reece', vendor_name: 'Reece Plumbing',
+      detail: 'Cost code 601. Split the valves and the trims onto separate lines. The purchase order is emailed to the vendor.',
+      scope: 'vendor', task_id: 'tr-wo-entry-from-bid', source: SRC, noted_on: '2026-11-04', updated_at: ts });
+    upsert(db, 'wo_specifics', { id: 'ws-rule-plumbing-two-vendors', vendor_id: 'vendor-plumbing', vendor_name: 'PLUMBING — two vendors',
+      detail: 'There are two plumbing vendors and both are current: GT Plumbing, and Reece Plumbing at cost code 601. Check which one the bid is from before applying a work-order rule; they are not interchangeable.',
+      scope: 'vendor', task_id: 'tr-wo-entry-from-bid', source: SRC, noted_on: '2026-11-04', updated_at: ts });
+
+    // The GL insurance renewal is meant to become an automated task. Four places is by design, not a defect:
+    // each has its own users. What was missing is that updating them is manual and nothing warns beforehand.
+    upsert(db, 'agents', { id: 'agent-vendor-compliance', name: 'Vendor compliance (GL insurance)', department_id: 'purchasing',
+      purpose: 'Watch every vendor\'s general liability expiry, raise the renewal before it lapses, and once a human has checked the certificate, make the same change in all four places it has to appear.',
+      setup_stage: 'documented', approach: 'mixed',
+      approach_note: 'AI reads the certificate PDF, which is the only part that needs it. Everything else is deterministic: the countdown to expiry, matching the vendor, writing the register row, filing and archiving the PDF, the BuildConnect field, and the handoff to Kenneth.',
+      human_authority: 'One gate, and it is the right one: a person checks the extracted dates against the certificate before anything is written. Insurance is what McVaugh relies on if a sub damages something, so a wrong date written into four systems is worse than no date. Kenneth still does QuickBooks himself.',
+      initial_output: 'A renewal raised 60 days out, then 30, then overdue; and after approval, the four updates with a report of which ones went through.',
+      enabled: 0, paused: 0, proposed: 1, n8n_workflow_id: 'mow-gl-insurance', updated_at: ts });
+
+    upsert(db, 'tasks', { id: 'sop-update-gl-insurance', agent_id: 'agent-vendor-compliance', owner_id: 'james', backup_id: 'kenneth',
+      trigger: 'The world raises it when a vendor\'s GL cover is 60 days from expiry, again at 30, and again once it has lapsed. A certificate arriving early also starts it.',
+      // Correcting the earlier reading: the duplication is deliberate.
+      missing_info: 'Nothing missing about where the date goes. The expiry has to appear in all four places because different people work in different ones: the register is what purchasing reads, the certificate folder is the evidence, BuildConnect is what the field and the database see, and QuickBooks is what accounting pays against. What is missing is the automation: today all four are updated by hand, one at a time.',
+      automation_approach: 'n8n workflow mow-gl-insurance. The world watches the expiry dates and raises the renewal. A person checks the dates on the certificate against the PDF and approves — that is the only gate. The agent then makes the same change in all four places and reports which ones went through, so a half-finished update is visible instead of silent. The two hard parts are the register (a legacy .xls with three tabs, hidden rows and formulas, so it must be driven through real Excel rather than rewritten) and BuildConnect (a frameset whose save needs the parent frame, where blue text is not proof of a save and the stored date has to be read back).',
+      verification_result: 'Written down and proven by hand. The warning and the approval gate are built and working in this app; the four writes are not automated yet.',
+      next_action: 'Paste the register so every vendor has an expiry date, then let the 60-day warning raise the first renewal and walk it with James by hand once before automating any of it.',
+      evidence: 'All four updated for the same vendor and expiry, with the register re-read after saving and the BuildConnect date re-opened and confirmed.', updated_at: ts });
+
+    upsert(db, 'ai_configs', { id: 'ai-gl-certificate-read', agent_id: 'agent-vendor-compliance',
+      purpose: 'Read a renewal certificate and pull out the insured vendor, the GL effective and expiry dates, and the workers comp expiry',
+      needs_ai: 'yes, for the certificate only', provider: 'ChatGPT Business (existing seat) — the Update GL Insurance skill',
+      model: 'as configured in the skill (not an API call)',
+      why: 'Certificates are scanned PDFs with inconsistent layouts, and the insured vendor has to be told apart from the certificate holder, which is always McVaugh. Nothing else here needs a model: the countdown, the vendor match and all four writes are rules.',
+      expected_cost: '$0 beyond the existing ChatGPT Business seat',
+      approval: 'A person compares the extracted dates against the certificate before anything is written. The agent never writes on its own reading.',
+      eval_examples: 'To build before this runs unattended: one certificate where McVaugh is the holder and the vendor is the named insured, one with GL and workers comp on the same page with different dates, one scanned at an angle, and one where the issue date could be mistaken for the expiry.',
+      fallback: 'Type the dates in by hand from the PDF; the four updates and the approval gate are unchanged.', updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-insurance-four-places', date: '2026-11-04',
+      title: 'The GL expiry stays in all four systems; the fix is automating the update, not consolidating',
+      reason: 'Suggested picking one book of record and treating the rest as copies. Brittany: all four are used by different people, so all four have to be right. Consolidating would just move the problem onto whoever lost their system. The renewal is instead becoming an automated task: the world warns before expiry, a person checks the certificate once, and the agent makes the same change in all four and reports which ones went through.',
+      decided_by: 'Brittany', status: 'accepted', source: SRC, created_at: ts });
+
+    addEvent(db, { entity_type: 'agent', entity_id: 'agent-vendor-compliance', kind: 'setup', status: 'info',
+      label: 'Manual: vendor compliance agent defined — warn at 60/30/expired, one human check of the certificate, then update all four systems',
+      source: 'manual', actor: 'brittany', external_id: 'insurance-automation-2026-11-04' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

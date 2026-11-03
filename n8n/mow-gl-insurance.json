@@ -1,0 +1,32 @@
+{
+  "id": "mowglinsurance1",
+  "name": "MOW — GL insurance renewal: after approval, update all four systems",
+  "nodes": [
+    { "parameters": { "rule": { "interval": [ { "field": "hours", "hoursInterval": 1 } ] } }, "id": "g1", "name": "Every hour", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [0, 0] },
+
+    { "parameters": { "url": "={{ $env.MOW_URL }}/api/webhooks/work", "sendHeaders": true, "headerParameters": { "parameters": [ { "name": "X-MOW-Secret", "value": "={{ $env.MOW_N8N_SECRET }}" } ] }, "options": {} }, "id": "g2", "name": "Anything approved and waiting?", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [220, 0] },
+
+    { "parameters": { "jsCode": "// Only renewals a person has already approved reach this point. The world will not list one otherwise.\nreturn ($input.first().json.update_insurance || []).map(a => ({ json: a }));" }, "id": "g3", "name": "One item per approved renewal", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [440, 0] },
+
+    { "parameters": { "jsCode": "// 1 of 4 — the register. A legacy .xls with three tabs, hidden rows and formulas: drive real Excel, do not\n// rewrite the file. Back it up first, update only the expiry cell on the active row, save, then read it back.\n// Replace this node with the Excel/PowerShell step that does it on the machine holding the L: drive.\nreturn [{ json: { ...$json, did: 'GL register spreadsheet', ok: false, note: 'not wired up yet' } }];" }, "id": "g4", "name": "1. Register row", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [660, -120] },
+
+    { "parameters": { "jsCode": "// 2 of 4 — file the new certificate in the vendor folder, move the superseded one into Archive without\n// overwriting, and verify the copy by hash.\nreturn [{ json: { ...$json, did: 'Certificate folder', ok: false, note: 'not wired up yet' } }];" }, "id": "g5", "name": "2. Certificate folder", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [660, -40] },
+
+    { "parameters": { "jsCode": "// 3 of 4 — BuildConnect. The record is in the mainframe and the save needs the parent php frame. Press\n// Enter; blue text is not proof it saved. Re-open the contact and read the stored date back before claiming\n// success. Leave every other field alone.\nreturn [{ json: { ...$json, did: 'BuildConnect contact record', ok: false, note: 'not wired up yet' } }];" }, "id": "g6", "name": "3. BuildConnect", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [660, 40] },
+
+    { "parameters": { "method": "POST", "url": "={{ $env.TEAMS_WEBHOOK_URL }}", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ type: 'message', text: 'GL insurance renewed for ' + ($json.vendor || '') + '. Certificate attached in the vendor folder. Please update QuickBooks.' }) }}", "options": {} }, "id": "g7", "name": "4. Tell Kenneth (QuickBooks stays his)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [660, 120] },
+
+    { "parameters": { "method": "POST", "url": "={{ $env.MOW_URL }}/api/webhooks/insurance/updated", "sendHeaders": true, "headerParameters": { "parameters": [ { "name": "X-MOW-Secret", "value": "={{ $env.MOW_N8N_SECRET }}" } ] }, "sendBody": true, "specifyBody": "json", "jsonBody": "={{ JSON.stringify({ approval_id: $json.id, gl_expiry: $json.new_gl_expiry, updated: $items().map(i => i.json.did).filter(Boolean) }) }}", "options": {} }, "id": "g8", "name": "Report which of the four went through", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [900, 0] }
+  ],
+  "connections": {
+    "Every hour": { "main": [ [ { "node": "Anything approved and waiting?", "type": "main", "index": 0 } ] ] },
+    "Anything approved and waiting?": { "main": [ [ { "node": "One item per approved renewal", "type": "main", "index": 0 } ] ] },
+    "One item per approved renewal": { "main": [ [ { "node": "1. Register row", "type": "main", "index": 0 }, { "node": "2. Certificate folder", "type": "main", "index": 0 }, { "node": "3. BuildConnect", "type": "main", "index": 0 }, { "node": "4. Tell Kenneth (QuickBooks stays his)", "type": "main", "index": 0 } ] ] },
+    "1. Register row": { "main": [ [ { "node": "Report which of the four went through", "type": "main", "index": 0 } ] ] },
+    "2. Certificate folder": { "main": [ [ { "node": "Report which of the four went through", "type": "main", "index": 0 } ] ] },
+    "3. BuildConnect": { "main": [ [ { "node": "Report which of the four went through", "type": "main", "index": 0 } ] ] },
+    "4. Tell Kenneth (QuickBooks stays his)": { "main": [ [ { "node": "Report which of the four went through", "type": "main", "index": 0 } ] ] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

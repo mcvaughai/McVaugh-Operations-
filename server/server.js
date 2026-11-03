@@ -411,6 +411,32 @@ function applyApprovalOutcome(a, approved) {
   }
 }
 
+// ---------- GL insurance renewals: the warning that starts the work ----------
+// Four systems hold the expiry on purpose — the register, the certificate folder, BuildConnect and
+// QuickBooks each have their own users. The problem was never the duplication; it was that updating them is
+// manual and nothing said a certificate was about to lapse. This raises the renewal, once per cycle.
+const INSURANCE_TARGETS = ['GL register spreadsheet', 'Certificate folder (file new, archive old)', 'BuildConnect contact record', 'QuickBooks (Kenneth)'];
+function sweepInsurance() {
+  const today = new Date().toISOString().slice(0, 10);
+  const days = d => Math.round((new Date(d + 'T00:00:00Z') - new Date(today + 'T00:00:00Z')) / 864e5);
+  for (const v of db.prepare("SELECT * FROM vendors WHERE gl_expiry IS NOT NULL").all()) {
+    const d = days(v.gl_expiry);
+    if (d > 60) continue;
+    // One ask per vendor per expiry date, so a renewal is raised once and not every five minutes.
+    const ext = `insurance:${v.id}:${v.gl_expiry}`;
+    if (db.prepare('SELECT 1 FROM approvals WHERE external_id = ?').get(ext)) continue;
+    const urgency = d < 0 ? `expired ${-d} day${d === -1 ? '' : 's'} ago` : `expires in ${d} day${d === 1 ? '' : 's'}`;
+    newApproval({ agent_id: 'agent-vendor-compliance', task_id: 'sop-update-gl-insurance', kind: 'insurance_renewal',
+      subject: `GL insurance — ${v.vendor || v.trade} ${urgency}`,
+      question: `${v.vendor || v.trade}'s general liability cover ${urgency} (${v.gl_expiry}). Chase the certificate, then check the dates on it against the PDF. Approving says the renewal is in hand and correct, and releases the four updates below. Nothing is written anywhere until then.`,
+      draft: JSON.stringify({ Vendor: v.vendor || v.trade, Trade: v.trade, 'GL expires': v.gl_expiry,
+        'Workers comp': v.wc_expiry || '(not on file)', 'Then update': INSURANCE_TARGETS.join(' · ') }),
+      vendor_id: v.id, requested_from: 'james', due_by: v.gl_expiry, channel: 'app', source: 'manual', external_id: ext });
+    dbm.addEvent(db, { entity_type: 'agent', entity_id: 'agent-vendor-compliance', kind: 'run', status: 'waiting_approval',
+      source: 'manual', actor: 'app', label: `GL insurance ${urgency}: ${v.vendor || v.trade}`, external_id: ext + ':raised' });
+  }
+}
+
 // ---------- succession: "if this person were gone tomorrow, what stops?" ----------
 const BACKUP_NONE = v => !v || /^(none|nobody|n\/a|-)?\s*$/i.test(v) || /nobody assigned|nobody else/i.test(v);
 function handoverView(pid, role) {
@@ -487,6 +513,7 @@ function scheduleOpsHubWrite(reason) {
 
 // ---------- router ----------
 setInterval(() => { try { sweepOverdueBids(); } catch (e) { console.error('bid sweep', e.message); } }, 5 * 60 * 1000).unref();
+setInterval(() => { try { sweepInsurance(); } catch (e) { console.error('insurance sweep', e.message); } }, 60 * 60 * 1000).unref();
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -696,9 +723,29 @@ async function api(req, res, url, p, role) {
         ...db.prepare("SELECT * FROM approvals WHERE kind = 'work_order' AND status = 'approved' AND bid_request_id IS NULL AND wo_ref IS NULL").all()
           .map(a => ({ ...a, token: undefined, from: 'request' })),
       ],
+      update_insurance: db.prepare("SELECT * FROM approvals WHERE kind = 'insurance_renewal' AND status = 'approved' AND wo_ref IS NULL").all()
+        .map(a => ({ ...a, token: undefined, targets: INSURANCE_TARGETS, vendor: (db.prepare('SELECT vendor, trade FROM vendors WHERE id = ?').get(a.vendor_id || '') || {}).vendor })),
     });
   }
 
+  // n8n reports back which of the four systems it updated, and the new expiry date.
+  if (p === '/api/webhooks/insurance/updated' && m === 'POST') {
+    if (!secretOk(req, url)) return send(res, 401, { error: 'bad secret' });
+    const b = await readJson(req);
+    const a = db.prepare("SELECT * FROM approvals WHERE id = ? AND kind = 'insurance_renewal'").get(b.approval_id || '');
+    if (!a) return send(res, 404, { error: 'no such insurance renewal' });
+    if (a.status !== 'approved') return send(res, 409, { error: 'that renewal was not approved, so nothing may be written' });
+    const done = Array.isArray(b.updated) ? b.updated : [];
+    const missing = INSURANCE_TARGETS.filter(t => !done.some(d => String(d).toLowerCase().includes(t.split(' ')[0].toLowerCase())));
+    if (b.gl_expiry) dbm.upsert(db, 'vendors', { id: a.vendor_id, gl_expiry: b.gl_expiry, wc_expiry: b.wc_expiry || undefined, insurance_updated: dbm.nowIso() });
+    dbm.upsert(db, 'approvals', { id: a.id, wo_ref: done.join(' · ') || null, entered_at: dbm.nowIso(), entered_by: b.entered_by || 'n8n' });
+    dbm.addEvent(db, { entity_type: 'agent', entity_id: 'agent-vendor-compliance', kind: 'run',
+      status: missing.length ? 'failed' : 'finished', source: 'n8n', actor: 'n8n',
+      label: missing.length ? `${a.subject}: updated ${done.length} of 4 — still to do: ${missing.join(', ')}`
+        : `${a.subject}: all four updated${b.gl_expiry ? ', now expires ' + b.gl_expiry : ''}`,
+      external_id: `insurdone:${a.id}` });
+    return send(res, 200, { ok: true, updated: done, still_missing: missing });
+  }
   // --- everything else needs a session ---
   if (!role) return send(res, 401, { error: 'login required' });
 
@@ -738,6 +785,7 @@ async function api(req, res, url, p, role) {
   }
   // Run the overdue check now (it also runs on a timer).
   if (p === '/api/bids/sweep' && m === 'POST') { sweepOverdueBids(); return send(res, 200, { ok: true }); }
+  if (p === '/api/insurance/sweep' && m === 'POST') { sweepInsurance(); return send(res, 200, { ok: true }); }
   // A person asks the agent to create a work order. This is the only way one starts: the agent never
   // decides on its own that a work order is due. The person names the vendor, job and amount (or points at
   // the bid), the agent fills the rest in, and it is confirmed before anything is entered — because
@@ -849,6 +897,7 @@ async function api(req, res, url, p, role) {
     dbm.addEvent(db, { entity_type: 'integration', entity_id: 'manual', kind: 'import', status: 'info',
       label: `GL register pasted: ${rows.length} vendors (${matched} matched)`, source: 'import', actor: role, external_id: `insur:${ts}` });
     dbm.audit(db, role, 'insurance_pasted', 'vendors', null, `${rows.length} rows`);
+    sweepInsurance();   // anything already inside 60 days should be raised straight away
     return send(res, 200, { ok: true, count: rows.length, matched, rows: out });
   }
   if (p === '/api/import/backup' && m === 'POST') { if (role !== 'admin') return send(res, 403, { error: 'admin only' }); dbm.importBackup(db, await readJson(req)); dbm.audit(db, role, 'import_backup'); return send(res, 200, { ok: true }); }

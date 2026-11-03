@@ -296,11 +296,17 @@
           <p class="ap-q">${esc(a.question)}</p>
           ${facts.length ? `<dl class="ap-facts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
           ${a.evidence ? `<small class="src">From: ${esc(a.evidence)}</small>` : ''}
-          <small class="src">Nothing has been sent to the subcontractor. Approving is what sends it.</small>
+          <small class="src">${a.kind === 'insurance_renewal' ? 'Nothing is written in any of the four systems until you approve.'
+            : a.kind === 'bid_request' ? 'Nothing has gone out to any vendor. Approving is what sends the request.'
+            : a.kind === 'bid_chase' ? 'Nothing has been entered.'
+            : 'Nothing has been sent to the subcontractor. Approving is what sends it.'}</small>
         </div>
         ${opts.length > 1 ? `<fieldset class="ap-opts"><legend>Pick one</legend>${opts.map(o => `<label><input type="radio" name="opt-${esc(a.id)}" value="${esc(o.id)}"> <b>${esc(o.label)}</b>${o.amount ? ` <span class="num">${esc(o.amount)}</span>` : ''}${o.note ? `<small>${esc(o.note)}</small>` : ''}</label>`).join('')}</fieldset>` : ''}
         <div class="ap-actions">${a.can_decide
-          ? `<button class="primary small" data-apdo="approve">${opts.length > 1 ? 'Approve the one I picked' : a.kind === 'bid_request' ? 'Approve and send the request' : 'Approve and enter the work order'}</button><button class="small ghost" data-apdo="reject">${a.kind === 'bid_chase' ? 'Cancel the line item' : 'Reject'}</button>`
+          ? `<button class="primary small" data-apdo="approve">${opts.length > 1 ? 'Approve the one I picked'
+            : a.kind === 'bid_request' ? 'Approve and send the request'
+            : a.kind === 'insurance_renewal' ? 'Approve and update all four'
+            : a.kind === 'bid_chase' ? 'Go ahead' : 'Approve and enter the work order'}</button><button class="small ghost" data-apdo="reject">${a.kind === 'bid_chase' ? 'Cancel the line item' : 'Reject'}</button>`
           : `<small class="src">Only accounting or admin can approve this.</small>`}</div>
       </div>`;
     }).join('');
@@ -312,6 +318,7 @@
       if (d === 'approve' && o.length > 1 && !chosen) { toast('Pick which one you are approving'); return; }
       const what = a.kind === 'bid_request' ? 'This sends the bid request to those vendors.'
         : a.kind === 'bid_chase' ? 'This cancels the line item.'
+        : a.kind === 'insurance_renewal' ? 'This releases the four updates: the register, the certificate folder, BuildConnect and the handoff to Kenneth.'
         : 'This enters the work order, which emails the subcontractor to say it is approved.';
       if (d === 'approve' && !confirm(`Approve "${a.subject}"?\n\n${what}`)) return;
       const note = d === 'reject' ? prompt('Why? (recorded, so the next person knows what to do)', '') : null;
@@ -429,12 +436,20 @@
   const INS = { expired: ['Expired', 'red'], expiring: ['Expires within 30 days', 'red'], soon: ['Expires within 60 days', 'amber'], ok: ['Current', 'ok'], unknown: ['No date on file', 'gray'] };
   function renderInsurance() {
     const v = $('#viewInsurance'); if (v.hidden) return;
-    const rows = S.insurance || [];
+    // One company can hold several trade rows on one policy; show it once with its trades listed.
+    const byCompany = new Map();
+    for (const r of (S.insurance || [])) {
+      const key = (r.vendor || r.trade || r.id).toLowerCase();
+      const seen = byCompany.get(key);
+      if (seen) { seen.trades.push(r.trade); continue; }
+      byCompany.set(key, { ...r, trades: [r.trade] });
+    }
+    const rows = [...byCompany.values()];
     const bad = rows.filter(r => r.standing === 'expired' || r.standing === 'expiring');
     const soon = rows.filter(r => r.standing === 'soon');
     const when = r => r.days === null ? '—' : r.days < 0 ? `${-r.days} day${r.days === -1 ? '' : 's'} ago` : `in ${r.days} day${r.days === 1 ? '' : 's'}`;
     const table = list => `<div class="table-wrap"><table><thead><tr><th>Vendor</th><th>Trade</th><th>GL expires</th><th>Workers comp</th><th>Standing</th></tr></thead><tbody>
-      ${list.map(r => `<tr class="${r.standing}"><td><a href="#" data-open="vendor:${esc(r.id)}">${esc(r.vendor || r.trade)}</a></td><td><small>${esc(r.trade)}</small></td>
+      ${list.map(r => `<tr class="${r.standing}"><td><a href="#" data-open="vendor:${esc(r.id)}">${esc(r.vendor || r.trade)}</a></td><td><small>${esc(r.trades.join(', '))}</small></td>
         <td>${esc(r.gl_expiry || '—')}<small class="src">${esc(when(r))}</small></td><td>${esc(r.wc_expiry || '—')}</td>
         <td>${chip(INS[r.standing][0], INS[r.standing][1])}</td></tr>`).join('')}</tbody></table></div>`;
     v.innerHTML = `<div class="world-toolbar"><b>GL insurance</b>

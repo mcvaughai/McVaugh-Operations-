@@ -861,8 +861,10 @@ async function api(req, res, url, p, role) {
     if (!rows.length) return send(res, 400, { error: 'nothing recognised', detail: 'A table with vendor / job / detail columns, or lines like "Johnston Waterproofing — standard pricing".' });
     const ts = dbm.nowIso(); const out = []; let matched = 0;
     for (const r of rows) {
-      const v = r.vendor && (db.prepare('SELECT id, vendor FROM vendors WHERE LOWER(vendor) = LOWER(?) OR LOWER(trade) = LOWER(?)').get(r.vendor, r.vendor)
-        || db.prepare("SELECT id, vendor FROM vendors WHERE LOWER(vendor) LIKE LOWER(?)").get('%' + r.vendor + '%'));
+      // Same matcher the insurance paste uses: a log says "Johnston Waterproofing LLC" where the SOW says
+      // "Johnston Waterproofing", and one company can hold several trade rows that share the rule.
+      const vrows = r.vendor ? imports.matchVendorRows(db, r.vendor) : [];
+      const v = vrows[0] || null;
       const h = r.job && (db.prepare('SELECT id, address FROM homes WHERE LOWER(address) = LOWER(?)').get(r.job)
         || db.prepare("SELECT id, address FROM homes WHERE LOWER(address) LIKE LOWER(?)").get('%' + r.job + '%'));
       if (v || h) matched++;
@@ -872,9 +874,9 @@ async function api(req, res, url, p, role) {
         home_id: h ? h.id : null, job_name: r.job || null, detail: r.detail || '', scope,
         task_id: b.task_id || null, source: b.source || 'ChatGPT running log, pasted by ' + role,
         noted_on: r.updated || null, updated_at: ts });
-      // a vendor-wide note is also what a work order for that vendor must carry
-      if (v && !h && r.detail) dbm.upsert(db, 'vendors', { id: v.id, wo_instructions: r.detail, wo_review: 'reviewed' });
-      out.push({ id, vendor: v ? v.vendor : r.vendor, job: h ? h.address : r.job || null, detail: r.detail, matched: !!(v || h) });
+      // a vendor-wide note is also what a work order for that vendor must carry, on every trade row it holds
+      if (v && !h && r.detail) for (const row of vrows) dbm.upsert(db, 'vendors', { id: row.id, wo_instructions: r.detail, wo_review: 'reviewed' });
+      out.push({ id, vendor: v ? v.vendor : r.vendor, trades: vrows.map(x => x.trade), job: h ? h.address : r.job || null, detail: r.detail, matched: !!(v || h) });
     }
     dbm.addEvent(db, { entity_type: 'integration', entity_id: 'manual', kind: 'import', status: 'info',
       label: `Running log pasted: ${rows.length} specifics (${matched} matched a vendor or job on file)`, source: 'import', actor: role, external_id: `speclog:${ts}` });

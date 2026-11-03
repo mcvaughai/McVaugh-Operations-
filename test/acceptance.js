@@ -634,16 +634,19 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.match(lonnie.notes, /Full name and email still needed/);
     assert.match(s.people.find(p => p.id === 'maria').notes, /last day 6 November 2026/, 'corrected from the earlier "before Nov 9"');
     assert.ok(s.tasks.filter(t => t.backup_id === 'lonnie').length >= 10, 'Maria\'s construction work has a backup at last');
-    // the eight vendor rules, with their cost codes
-    const rules = s.wo_specifics.filter(x => x.id.startsWith('ws-rule-'));
-    assert.ok(rules.length >= 8);
-    assert.match(rules.find(r => /Autumn/.test(r.vendor_name)).detail, /60\/30\/10/);
-    assert.match(rules.find(r => /Johnston/.test(r.vendor_name)).detail, /409\.0/);
+    // The hub's short rules were replaced by the fuller running log on 4 November; the codes survive.
+    const byVendor = n => s.wo_specifics.find(x => new RegExp(n, 'i').test(x.vendor_name || ''));
+    assert.match(byVendor('Autumn').detail, /60%\/30%\/10%/);
+    // Johnston's row is rewritten by the running-log test above, so assert the codes where they are stable.
+    assert.match(s.documents.find(d => d.id === 'doc-running-log-2026-11-03').content, /code 409/);
+    assert.equal(s.vendors.find(v => v.id === 'vendor-lowes').vendor, 'Lowes Home Centers, Inc.',
+      'Lowes was in the rules but had no vendor record for them to attach to');
+    assert.ok(s.wo_specifics.some(x => x.id === 'ws-rule-hoa-all'), 'the HOA-wide rule has no single vendor, so it stays');
     // the clash turned out to be two real plumbing vendors, so it was resolved rather than left flagged
     assert.ok(!s.wo_specifics.some(x => x.id === 'ws-rule-plumbing-conflict'), 'the conflict row is cleared once answered');
     const plumbers = s.vendors.filter(v => v.trade === 'PLUMBING').map(v => v.vendor).sort();
     assert.deepEqual(plumbers, ['GT Plumbing', 'Reece Plumbing'], 'both are current plumbing vendors');
-    assert.match(s.wo_specifics.find(x => x.id === 'ws-rule-reece').detail, /601/);
+    assert.match(s.wo_specifics.find(x => x.vendor_id === 'vendor-plumbing-reece').detail, /601/);
     assert.match(s.wo_specifics.find(x => x.id === 'ws-rule-plumbing-two-vendors').detail, /not interchangeable/);
     // seven SOPs named in the hub but whose steps are not here yet
     const waiting = s.tasks.filter(t => t.id.startsWith('sop-') && !t.steps);

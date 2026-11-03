@@ -2,7 +2,7 @@
 // CONFIRMED facts are marked confirmed/approved; everything else is PROPOSED and awaits review.
 // Seeding only runs when the database is empty, so edits made in the app are never overwritten.
 'use strict';
-const { upsert, addEvent, nowIso } = require('./db');
+const { upsert, addEvent, nowIso, slug } = require('./db');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -857,6 +857,39 @@ const UPDATES = [
     addEvent(db, { entity_type: 'agent', entity_id: 'agent-vendor-compliance', kind: 'setup', status: 'info',
       label: 'Manual: vendor compliance agent defined — warn at 60/30/expired, one human check of the certificate, then update all four systems',
       source: 'manual', actor: 'brittany', external_id: 'insurance-automation-2026-11-04' });
+  } },
+  { key: 'running-log-2026-11-04', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Running log of vendor specifics (Brittany), pasted 2026-11-04';
+    // Lowe's is in the log and in the hub's vendor rules but was never a vendor record, so the rule had
+    // nowhere to attach. It is a supplier rather than a trade sub, which is why it was missed.
+    upsert(db, 'vendors', { id: 'vendor-lowes', trade: 'MATERIALS — LOWES', vendor: 'Lowes Home Centers, Inc.',
+      contacts: JSON.stringify([]), pricing_basis: 'per_bid', wo_review: 'reviewed',
+      notes: 'Supplier, not a trade subcontractor. Receipts become purchase orders against the job.', source: SRC, imported_at: ts, updated_at: ts });
+
+    // The log itself, stored so the detail survives outside the chat it was written in.
+    const text = fs.readFileSync(path.join(__dirname, '..', 'seed', 'skills', 'running-log-2026-11-03.txt'), 'utf8');
+    upsert(db, 'documents', { id: 'doc-running-log-2026-11-03', title: 'Running log — vendor work-order specifics (3 November)',
+      kind: 'reference', kind_reason: 'the per-vendor detail Brittany keeps as she works', sensitive: 0, task_id: 'tr-wo-entry-from-bid',
+      summary: 'Seven vendors with what a work order for each of them has to carry: cost codes, draw splits, how square footage is handled, where the source file goes and who gets told. Several entries deliberately say that a recorded precedent is not current pricing.',
+      content: text, size: text.length, source: SRC, imported_at: ts, underlying_status: 'extracted' });
+
+    const { parseSpecificsLog, matchVendorRows } = require('./imports');
+    for (const r of parseSpecificsLog(text)) {
+      const rows = matchVendorRows(db, r.vendor);
+      const v = rows[0];
+      const id = 'ws-' + slug(v ? v.id : r.vendor).slice(0, 52);
+      upsert(db, 'wo_specifics', { id, vendor_id: v ? v.id : null, vendor_name: r.vendor, detail: r.detail || '',
+        scope: 'vendor', task_id: 'tr-wo-entry-from-bid', source: SRC, noted_on: r.updated || '2026-11-03', updated_at: ts });
+      for (const row of rows) upsert(db, 'vendors', { id: row.id, wo_instructions: r.detail, wo_review: 'reviewed' });
+    }
+    // The earlier, shorter versions of these rules came from the hub summary; the log supersedes them.
+    for (const old of ['ws-rule-johnston', 'ws-rule-autumn', 'ws-rule-hh-fence', 'ws-rule-synergy', 'ws-rule-electrical-works', 'ws-rule-reece', 'ws-rule-lowes'])
+      db.prepare('DELETE FROM wo_specifics WHERE id = ?').run(old);
+
+    addEvent(db, { entity_type: 'task', entity_id: 'tr-wo-entry-from-bid', kind: 'import', status: 'info',
+      label: 'Running log pasted: 7 vendors with their work-order specifics; Lowes added as a supplier record',
+      source: 'import', actor: 'brittany', external_id: 'running-log-2026-11-04' });
   } },
 ];
 function applyUpdates(db) {

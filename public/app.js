@@ -424,10 +424,11 @@
         $('#pOpen').onclick = () => { m.hidden = true; c.classList.remove('wide'); };
       } else {
         $('#pResult').innerHTML = `<div class="pasted"><b>${r.count} row${r.count === 1 ? '' : 's'}, ${r.matched} matched a vendor or job on file</b>
-          <table class="br-bids"><tbody>${r.rows.map(x => `<tr class="${x.matched ? '' : 'awaited'}"><td>${esc(x.vendor || '—')}</td><td>${esc(x.job || 'all jobs')}</td><td>${esc(x.detail)}</td><td>${x.matched ? '' : chip('not on file', 'amber')}</td></tr>`).join('')}</tbody></table>
+          <table class="br-bids"><tbody>${r.rows.map(x => `<tr class="${x.matched ? '' : 'awaited'}"><td>${esc(x.vendor || '—')}${x.trades && x.trades.length > 1 ? `<small class="src">${esc(x.trades.join(', '))}</small>` : ''}</td><td>${esc(x.job || 'all jobs')}</td><td>${esc(x.detail)}</td><td>${x.matched ? chip('matched', 'ok') : chip('not on file', 'amber')}</td></tr>`).join('')}</tbody></table>
           ${r.matched < r.count ? '<p class="src">Rows that matched nothing are kept, but add the vendor in Registry so they attach.</p>' : ''}</div>`;
       }
       $('#pText').value = '';
+      $('#pResult').scrollIntoView({ behavior: 'smooth', block: 'start' });
       HO_dirty = true; refresh();
     };
   }
@@ -481,7 +482,7 @@
       const r = await api('POST', '/api/insurance/paste', { text: $('#iText').value });
       $('#iResult').innerHTML = `<div class="pasted"><b>${r.count} vendor${r.count === 1 ? '' : 's'}, ${r.matched} matched one on file</b>
         <table class="br-bids"><tbody>${r.rows.map(x => `<tr class="${x.matched ? '' : 'awaited'}"><td>${esc(x.vendor)}</td><td>${esc(x.gl_expiry || '—')}</td><td>${esc(x.wc_expiry || '')}</td><td>${x.matched ? '' : chip('not on file', 'amber')}</td></tr>`).join('')}</tbody></table></div>`;
-      $('#iText').value = ''; refresh(); };
+      $('#iText').value = ''; $('#iResult').scrollIntoView({ behavior: 'smooth', block: 'start' }); refresh(); };
   }
 
   // ---------- Build view: Maria's "How to build a house" as an ordered, filterable sequence ----------

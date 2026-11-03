@@ -756,6 +756,60 @@ function parseSpecificsLog(text) {
   return rows;
 }
 
+// ---------- insurance expiry: one list that can actually warn ----------
+// The register spreadsheet stays the book of record. These dates are a mirror of it, kept here only so that
+// something can say "this lapses in nine days" instead of nobody finding out until a sub is turned away.
+const DATE_RE = /\b(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2,8}\.?\s+\d{1,2},?\s+\d{4})\b/g;
+function parseDate(v) {
+  const t = String(v || '').trim(); if (!t) return null;
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+  if (m) { let [, a, b, y] = m; y = y.length === 2 ? '20' + y : y; return `${y}-${String(a).padStart(2, '0')}-${String(b).padStart(2, '0')}`; }
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+// A pasted register: vendor name plus one or two dates per line, in a table or as plain lines.
+function parseInsuranceRows(text) {
+  const out = [];
+  for (const raw of String(text || '').replace(/\r/g, '').split('\n')) {
+    const line = raw.trim();
+    if (!line || /^\|?[\s:|-]+\|?$/.test(line)) continue;
+    const cells = line.includes('|') ? line.replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+      : line.includes('\t') ? line.split('\t').map(c => c.trim()) : null;
+    let name, dates;
+    if (cells && cells.length >= 2) {
+      name = cells[0];
+      dates = cells.slice(1).map(parseDate).filter(Boolean);
+    } else {
+      const found = [...line.matchAll(DATE_RE)].map(m => m[0]);
+      if (!found.length) continue;
+      name = line.slice(0, line.indexOf(found[0])).replace(/[-–—:,\s]+$/, '').trim();
+      dates = found.map(parseDate).filter(Boolean);
+    }
+    if (!name || /^(vendor|sub|subcontractor|company|name|trade)$/i.test(name) || !dates.length) continue;
+    out.push({ vendor: name, gl_expiry: dates[0], wc_expiry: dates[1] || null });
+  }
+  return out;
+}
+
+// Vendor names differ between systems: the register says "Synergy Roofing", the SOW says "Synergy Roof
+// Systems". Compare the company core, with the generic trade and suffix words removed. One company can hold
+// several trade rows (Synergy covers roofing, shingle and coping) and they share one policy, so all match.
+const VENDOR_NOISE = /\b(roofing|roof|systems?|plumbing|electric(al)?|concrete|insulation|drywall|fence|masonry|painting|stucco|glass|waterproofing|surfaces|mechanical|services?|company|contractors?|builders?|supply|inc|llc|lp|ltd|co|the|and|of)\b/gi;
+const vendorCore = n => String(n || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(VENDOR_NOISE, ' ').replace(/\s+/g, ' ').trim();
+function matchVendorRows(db, name) {
+  const all = db.prepare('SELECT id, vendor, trade FROM vendors').all();
+  const exact = all.filter(v => String(v.vendor || '').toLowerCase() === String(name || '').toLowerCase());
+  if (exact.length) return exact;
+  const core = vendorCore(name);
+  if (!core) return [];
+  const byCore = all.filter(v => { const c = vendorCore(v.vendor); return c && (c === core || c.startsWith(core + ' ') || core.startsWith(c + ' ')); });
+  if (byCore.length) return byCore;
+  const byTrade = all.filter(v => String(v.trade || '').toLowerCase() === String(name || '').toLowerCase());
+  return byTrade;
+}
+
 // ---------- regenerate the old MCH Operations Hub from the world's current data ----------
 // Keeps the hub's own UI (seed/mch-ops-hub.template.html) and replaces its data constants, so the old dashboard
 // stays in step with the world: SOPs (old + confirmed new, with supersedes), current-team responsibilities, cross-offs.
@@ -867,4 +921,4 @@ function pagesMarkdown(state) {
   return L.filter(x => x !== undefined).join('\n');
 }
 
-module.exports = { parseSkill, parseSpecificsLog, mentionsIn, redactCredentials, parseBuildSequence, importBuildSequence, describeOfficeFile, importOfficeFile, parseSowWorkbook, importSow, regenerateOpsHub, xlsxSheets, xlsxText, parseOpsHub, importOpsHub, parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };
+module.exports = { matchVendorRows, vendorCore, parseInsuranceRows, parseDate, parseSkill, parseSpecificsLog, mentionsIn, redactCredentials, parseBuildSequence, importBuildSequence, describeOfficeFile, importOfficeFile, parseSowWorkbook, importSow, regenerateOpsHub, xlsxSheets, xlsxText, parseOpsHub, importOpsHub, parseIndexCard, followLink, docxText, htmlText, hubMap, classifyNote, normalizeDept, importMarkdown, importCsv, importFolder, parseNote, parseCsvFile, parseCsv, duplicateCandidates, mergeTasks, pagesMarkdown, DEFAULT_HEADINGS, DEFAULT_ALIASES, headingMap, aliasMap };

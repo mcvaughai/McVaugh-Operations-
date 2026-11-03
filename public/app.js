@@ -51,7 +51,7 @@
     $('#demoToggle').checked = S.demo; $('#demoBanner').hidden = !S.demo;
     $('#addBtn').hidden = !S.permissions.write;
     $('#stagePill').textContent = 'Stage: ' + (S.checkpoint?.stage || 'gather');
-    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderWorkOrders(); renderApprovals(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
+    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderWorkOrders(); renderInsurance(); renderApprovals(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
     const fs = $('#focusSelect'); const cur = fs.value;
     fs.innerHTML = '<option value="">Focus department…</option>' + S.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('') + '<option value="neighborhood">Active jobs</option><option value="snapshot">Job list snapshot</option>';
     fs.value = cur;
@@ -401,6 +401,50 @@
       $('#pText').value = '';
       HO_dirty = true; refresh();
     };
+  }
+
+  // ---------- GL insurance: the one list that warns ----------
+  const INS = { expired: ['Expired', 'red'], expiring: ['Expires within 30 days', 'red'], soon: ['Expires within 60 days', 'amber'], ok: ['Current', 'ok'], unknown: ['No date on file', 'gray'] };
+  function renderInsurance() {
+    const v = $('#viewInsurance'); if (v.hidden) return;
+    const rows = S.insurance || [];
+    const bad = rows.filter(r => r.standing === 'expired' || r.standing === 'expiring');
+    const soon = rows.filter(r => r.standing === 'soon');
+    const when = r => r.days === null ? '—' : r.days < 0 ? `${-r.days} day${r.days === -1 ? '' : 's'} ago` : `in ${r.days} day${r.days === 1 ? '' : 's'}`;
+    const table = list => `<div class="table-wrap"><table><thead><tr><th>Vendor</th><th>Trade</th><th>GL expires</th><th>Workers comp</th><th>Standing</th></tr></thead><tbody>
+      ${list.map(r => `<tr class="${r.standing}"><td><a href="#" data-open="vendor:${esc(r.id)}">${esc(r.vendor || r.trade)}</a></td><td><small>${esc(r.trade)}</small></td>
+        <td>${esc(r.gl_expiry || '—')}<small class="src">${esc(when(r))}</small></td><td>${esc(r.wc_expiry || '—')}</td>
+        <td>${chip(INS[r.standing][0], INS[r.standing][1])}</td></tr>`).join('')}</tbody></table></div>`;
+    v.innerHTML = `<div class="world-toolbar"><b>GL insurance</b>
+      ${S.permissions.write ? '<button class="primary small" id="pasteIns">Paste the register</button>' : ''}
+      <span class="hint">The register spreadsheet stays the book of record. These dates mirror it so something can tell you a certificate is about to lapse, which is the one thing none of the four systems do.</span></div>
+      <div class="bscroll">
+        <div class="bstats">
+          <div class="${bad.length ? 'red' : ''}"><b>${bad.length}</b><span>expired or expiring within 30 days</span></div>
+          <div class="${soon.length ? 'amber' : ''}"><b>${soon.length}</b><span>expiring within 60 days</span></div>
+          <div><b>${rows.filter(r => r.standing === 'ok').length}</b><span>current</span></div>
+          <div class="${S.insurance_unknown ? 'amber' : ''}"><b>${S.insurance_unknown ?? 0}</b><span>vendors with no date on file</span></div>
+        </div>
+        ${bad.length ? `<h3>Needs attention now <span class="chip red">${bad.length}</span></h3>${table(bad)}` : ''}
+        ${soon.length ? `<h3 style="margin-top:16px">Coming up <span class="chip amber">${soon.length}</span></h3>${table(soon)}` : ''}
+        ${rows.length ? `<h3 style="margin-top:16px">All dates on file <span class="chip gray">${rows.length}</span></h3>${table(rows)}`
+          : `<p class="empty">No expiry dates yet. Open the register, copy the vendor and expiry columns, and press <b>Paste the register</b>. Re-paste after each renewal and this stays current.</p>`}
+        ${S.insurance_unknown ? `<p class="src">${S.insurance_unknown} vendors on file have no GL date here yet, so they are not being watched. Paste the rest of the register to cover them.</p>` : ''}
+      </div>`;
+    const b = $('#pasteIns'); if (b) b.onclick = () => insModal();
+  }
+  function insModal() {
+    const m = $('#modal'), c = $('#modalCard'); c.classList.add('wide');
+    c.innerHTML = `<h2>Paste the GL register</h2>
+      <p class="src">Open the register, select the vendor column and the expiry column (workers comp too if you have it), and paste. A markdown table, a spreadsheet paste, or lines like <code>Johnston Waterproofing 11/1/2027</code> all work. Re-pasting updates the dates. This does not change the spreadsheet; it only mirrors it so lapses can be flagged.</p>
+      <form id="mform"><label class="field"><span>Vendor and expiry columns</span><textarea id="iText" rows="14" required placeholder="Johnston Waterproofing	11/1/2027	3/15/2027"></textarea></label>
+        <div class="actions"><button type="submit" class="primary">Update the dates</button><button type="button" id="mcancel">Cancel</button></div></form><div id="iResult"></div>`;
+    m.hidden = false; $('#mcancel').onclick = () => { m.hidden = true; c.classList.remove('wide'); };
+    $('#mform').onsubmit = async e => { e.preventDefault();
+      const r = await api('POST', '/api/insurance/paste', { text: $('#iText').value });
+      $('#iResult').innerHTML = `<div class="pasted"><b>${r.count} vendor${r.count === 1 ? '' : 's'}, ${r.matched} matched one on file</b>
+        <table class="br-bids"><tbody>${r.rows.map(x => `<tr class="${x.matched ? '' : 'awaited'}"><td>${esc(x.vendor)}</td><td>${esc(x.gl_expiry || '—')}</td><td>${esc(x.wc_expiry || '')}</td><td>${x.matched ? '' : chip('not on file', 'amber')}</td></tr>`).join('')}</tbody></table></div>`;
+      $('#iText').value = ''; refresh(); };
   }
 
   // ---------- Build view: Maria's "How to build a house" as an ordered, filterable sequence ----------
@@ -803,12 +847,13 @@
   // ---------- views & global events ----------
   function showView(v) {
     document.querySelectorAll('.views button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
-    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', build: '#viewBuild', workorders: '#viewWo', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
+    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', build: '#viewBuild', workorders: '#viewWo', insurance: '#viewInsurance', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
     if (v === 'world') World.overview();
     if (v === 'handover') renderHandover(true);
     if (v === 'procedures') renderProcedures();
     if (v === 'build') renderBuild();
     if (v === 'workorders') renderWorkOrders();
+    if (v === 'insurance') renderInsurance();
     localStorage.setItem('mow_view', v);
   }
   document.querySelectorAll('.views button').forEach(b => b.onclick = () => showView(b.dataset.view));

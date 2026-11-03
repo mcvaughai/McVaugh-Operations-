@@ -268,3 +268,8 @@ a.bvendor { color: var(--brand-dark); text-decoration: none; border-bottom: 1px 
 .stepline { padding: 2px 0 2px 20px; text-indent: -20px; }
 .stepphase { font-weight: 600; margin: 10px 0 2px; color: var(--ink); }
 .stepphase:first-child { margin-top: 0; }
+#viewInsurance { display: flex; flex-direction: column; min-height: 0; }
+#viewInsurance h3 { margin: 14px 0 8px; font-size: 14px; }
+#viewInsurance tr.expired td, #viewInsurance tr.expiring td { background: #fdeeee; }
+#viewInsurance tr.soon td { background: #fff8e6; }
+#viewInsurance td .src { display: block; }

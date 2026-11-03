@@ -24,7 +24,7 @@ Optional environment variables:
 | `MOW_DATA_DIR` | Where the sqlite file and credentials live (default `./data`) — point it at a backed-up drive |
 | `MOW_N8N_SECRET` | Shared secret n8n must send in `X-MOW-Secret`; webhook refuses everything until set |
 | `MOW_IMPORT_DIR` | Default folder for Option 3 bulk import (e.g. your Obsidian vault) |
-| `MOW_OPSHUB_PATH` | Path of the old `mch-ops-hub.html`; when set, the file is rewritten from the world's data after every change |
+| `MOW_OPSHUB_PATH` | Path of the old `mch-ops-hub.html`; when set, the file is rewritten from the world's data after every change. A file that this app did not generate is **never** overwritten, and the previous version is kept as `.bak` |
 | `MOW_PUBLIC_URL` | The address Teams links should point at (default `http://localhost:<port>`); set this before turning on the work-order approval workflow |
 | `MOW_MCHDB_URL` | Page used for the read-only reachability check (default `http://db.mcvaugh.com/buildconnect/NewStuff/wotracking.html`) |
 
@@ -41,6 +41,7 @@ Windows example: `set MOW_DATA_DIR=L:\AI Tools Shared\mcvaugh-world-data && node
 * **Board / Registry** — everything editable without the 3D view; Registry includes Vendors by trade (from the SOW Excel) with each vendor's pricing basis and what a work order for them must contain.
 * **Integrations** — each shown as disconnected / connected / failing; three import options (Obsidian `.md` from the browser, CSV from the browser, and **Option 3: bulk-import a folder on this computer** with a dry-run preview and skip-unchanged re-import); backup export/restore; handbook export for ChatGPT Pages.
 * **Work orders** — *Create a work order* when you have an approved bid in hand. The agent fills in the fields from the bid and the vendor record, flags anything missing (a per-square-foot vendor with no square footage cannot be entered), and enters it only once a person confirms. The agent never starts one. Requesting and comparing bids is **parked** — see below.
+* **Insurance** — every vendor's GL and workers-comp expiry, worst first, with expired and expiring-within-30-days called out. Paste the register columns to update it. The spreadsheet stays the book of record; this mirrors it so something can warn you before a certificate lapses.
 * **Approvals** — when an agent drafts something that commits money, a bar appears above every view with the drafted fields and the question put to the human. Only accounting/admin can decide; the decision is recorded with who, when, how, and any note. The same request also goes out as a Teams message with a link to a one-page approve/reject form.
 * **AI config** — per-agent purpose, needs-AI?, provider/model, why, cost, approval, eval examples, fallback.
 * **History** — all activity events with their source tag (MANUAL / N8N / IMPORT / DEMO), checkpoint history, audit (admin).

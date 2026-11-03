@@ -244,7 +244,10 @@ const MIGRATIONS = [
   ['approvals', 'wo_ref', 'TEXT'],           // the work-order number, once a person's request has been entered
   ['approvals', 'entered_at', 'TEXT'],
   ['approvals', 'entered_by', 'TEXT'],
-  ['approvals', 'requested_by', 'TEXT'],     // who asked for the work order (a person asks; the agent never starts one)         // reusable | needs_review | reviewed         // JSON array: old procedure ids this (new) procedure replaces or absorbs
+  ['approvals', 'requested_by', 'TEXT'],
+  ['vendors', 'gl_expiry', 'TEXT'],            // general liability expiry, mirrored from the register so something can warn
+  ['vendors', 'wc_expiry', 'TEXT'],            // workers comp expiry
+  ['vendors', 'insurance_updated', 'TEXT'],     // who asked for the work order (a person asks; the agent never starts one)         // reusable | needs_review | reviewed         // JSON array: old procedure ids this (new) procedure replaces or absorbs
 ];
 function migrate(db) {
   for (const [table, column, type] of MIGRATIONS) {
@@ -263,7 +266,7 @@ const TABLES = {
   decisions: ['id','date','title','reason','decided_by','status','source','created_at'],
   integrations: ['id','name','kind','status','last_checked','last_message','last_import_at','config','notes'],
   documents: ['id','title','path','kind','kind_reason','sensitive','task_id','department_id','summary','size','source','imported_at','updated_at','underlying_path','underlying_status','content','hubs','entities','meeting_date','attendees','cite_key','file_path','mime'],
-  vendors: ['id','trade','vendor','contacts','rate','docs_needed','notes','source','imported_at','updated_at','pricing_basis','wo_instructions','wo_review'],
+  vendors: ['id','trade','vendor','contacts','rate','docs_needed','notes','source','imported_at','updated_at','pricing_basis','wo_instructions','wo_review','gl_expiry','wc_expiry','insurance_updated'],
   approvals: ['id','agent_id','task_id','kind','subject','vendor_id','home_id','amount','question','draft','evidence','released','status','requested_from','channel','channel_ref','token','requested_at','decided_at','decided_by','decided_via','decision_note','source','external_id','options','chosen','bid_request_id','identity','due_by','wo_ref','entered_at','entered_by','requested_by'],
   wo_specifics: ['id','vendor_id','vendor_name','home_id','job_name','detail','scope','task_id','source','noted_on','updated_at'],
   bid_requests: ['id','line_item','cost_code','home_id','build_step_id','scope','docs_provided','vendors','expected','sole_source','sole_source_reason','due_by','status','awarded_bid_id','requested_by','requested_at','sent_at','closed_at','notes','source','updated_at'],

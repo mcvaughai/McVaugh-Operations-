@@ -687,6 +687,121 @@ const UPDATES = [
       label: `Added from a pasted ChatGPT skill: Update GL Insurance (${p.step_count} steps)`,
       source: 'import', actor: 'brittany', external_id: 'paste-gl-insurance-2026-11-03' });
   } },
+  { key: 'hub-session-2026-11-03', apply(db) {
+    const ts = nowIso();
+    // Brittany's 2026-11-03 working session on the MCH Operations Hub, recorded from her session summary.
+    // The hub was edited directly in that session; this app's store did not know any of it. Facts below are
+    // taken from the summary. Where it gives counts rather than the items themselves, the count is recorded
+    // as a claim with its source, and the items are not invented.
+    const SRC = 'MCH Operations Hub session summary, 2026-11-03 (Brittany)';
+
+    upsert(db, 'documents', { id: 'doc-hub-session-2026-11-03', title: 'Ops hub working session — 3 November 2026', kind: 'reference',
+      kind_reason: 'Brittany\'s summary of a session that changed the hub directly', sensitive: 0, meeting_date: '2026-11-03', cite_key: 'HUB 11/03',
+      summary: 'Hub went from 25 SOPs to 33 (3 archived as legacy), 8 to 9 people (Lonnie added, Maria marked departing), and gained 8 vendor rules, 10 historical WO/PO records, and new UI (ROCC and N/A toggles, roles-covered modal, vendor-rules and history panels). Maria\'s 54 responsibilities were redlined; purchasing work was split across Maria, James and Ernesto.',
+      source: SRC, imported_at: ts, underlying_status: 'summary_only' });
+
+    // --- Lonnie: Maria's successor on construction and permitting. This is the biggest change here.
+    upsert(db, 'people', { id: 'lonnie', name: 'Lonnie', full_name: null, title: 'Construction / Permitting Lead (incoming)',
+      role_summary: 'Incoming; takes on Maria\'s construction and permitting work. Started around 3 November 2026.',
+      departments: ['construction', 'permits'], confirmed: 0, review_status: 'not_reviewed',
+      notes: 'INCOMING — absorbing Maria\'s construction responsibilities [HUB 11/03]. Full name and email still needed. Nothing has been verified with Lonnie directly yet.',
+      reports_to: 'jim', source: SRC, created_at: ts, updated_at: ts });
+
+    upsert(db, 'people', { id: 'maria',
+      notes: 'LEAVING — last day 6 November 2026, transitioning to Lonnie [HUB 11/03]. This supersedes the earlier "before Nov 9" reading of the 10/20 call. Succession pass in progress; see the Handover tab.',
+      updated_at: ts });
+
+    // Maria's items now have somewhere to go. Only the construction/permitting ones; purchasing went elsewhere.
+    const toLonnie = db.prepare("SELECT id, backup_id, department_id FROM tasks WHERE owner_id = 'maria' AND archived = 0 AND department_id IN ('construction','permits')").all();
+    for (const t of toLonnie) if (!t.backup_id) upsert(db, 'tasks', { id: t.id, backup_id: 'lonnie', updated_at: ts });
+
+    // --- The eight vendor rules, with the cost codes the hub now carries.
+    const RULES = [
+      ['johnston', 'Johnston Waterproofing', '409.0', 'Price each scope separately on the work order and leave the general square-footage field blank.'],
+      ['autumn', 'Autumn HVAC', '610', 'Draws split 60/30/10. Pricing is equipment-based, so the equipment has to be identified on the order.'],
+      ['hh-fence', 'H&H Fence (HOA)', '940.0', 'HOA work routes through ROCVTA, not the job. Maintenance scope.'],
+      ['synergy', 'Synergy Roofing', '400', 'Draws split 30/50/20.'],
+      ['electrical-works', 'Electrical Works', '620', 'Changes go through construction change orders.'],
+      ['reece', 'Reece Plumbing', '601', 'Split the valves and the trims onto separate lines. The purchase order is emailed to the vendor.'],
+      ['lowes', 'Lowes', '996', 'Routed by CUSTOMER CODE. Mind the difference between Complete and Received.'],
+      ['hoa-all', 'All HOA work', 'trade-specific', 'HOA work goes through ROCVTA via Teresa, whatever the trade.'],
+    ];
+    for (const [slug, name, code, rule] of RULES) {
+      const v = db.prepare('SELECT id, vendor FROM vendors WHERE LOWER(vendor) LIKE LOWER(?)').get('%' + name.split(' ')[0] + '%');
+      const detail = `Cost code ${code}. ${rule}`;
+      upsert(db, 'wo_specifics', { id: 'ws-rule-' + slug, vendor_id: v ? v.id : null, vendor_name: name, detail,
+        scope: 'vendor', task_id: 'tr-wo-entry-from-bid', source: SRC, noted_on: '2026-11-03', updated_at: ts });
+      if (v) upsert(db, 'vendors', { id: v.id, wo_instructions: detail, wo_review: 'reviewed' });
+    }
+    // Flagged rather than merged: the hub names Reece Plumbing; the SOW on file says GT Plumbing for PLUMBING.
+    upsert(db, 'wo_specifics', { id: 'ws-rule-plumbing-conflict', vendor_id: 'vendor-plumbing', vendor_name: 'PLUMBING — which vendor?',
+      detail: 'CONFLICT: the hub\'s vendor rules name Reece Plumbing (cost code 601); the SOW on file names GT Plumbing for the PLUMBING trade. Both may be true (different scopes or a change of vendor) but the work-order rule cannot be applied until someone says which. Ask Brittany or Ernesto.',
+      scope: 'vendor', task_id: 'tr-wo-entry-from-bid', source: SRC, noted_on: '2026-11-03', updated_at: ts });
+
+    // --- The eight SOPs the hub gained. Only the GL insurance one has its text here; the rest are named only.
+    const SOPS = [
+      ['sop-pur-01-wo-entry-buildconnect', 'Work Order Entry in BuildConnect (SOP-PUR-01)', 'purchasing', 'ChatGPT skill export'],
+      ['sop-pur-02-material-po-entry', 'Material PO Entry (SOP-PUR-02)', 'purchasing', 'drafted from review notes'],
+      ['sop-pur-03-lowes-receipt-po', 'Lowe\'s Receipt PO Entry and Handoff (SOP-PUR-03)', 'purchasing', 'ChatGPT skill export, confirmed 26 October'],
+      ['sop-fin-01-cash-flow-rollover', 'Weekly Cash Flow Statement Rollover (SOP-FIN-01)', 'accounting', 'ChatGPT skill export'],
+      ['sop-fin-02-draw-schedule-bank', 'Draw Schedule Update and Bank Request (SOP-FIN-02)', 'accounting', 'ChatGPT skill export'],
+      ['sop-start-house-buildconnect', 'Start House in BuildConnect Database', 'construction', 'ChatGPT skill export'],
+      ['sop-permitting-ipermits-projectdox', 'Permitting Process — iPermits / ProjectDox (current)', 'permits', 'new, from review notes'],
+    ];
+    for (const [id, title, dept, origin] of SOPS) upsert(db, 'tasks', { id, title, department_id: dept,
+      owner_id: dept === 'accounting' ? 'brittany' : 'brittany', backup_id: null, proposed: 0, documented: 0, automated: 0, verified: 0, board: 'next',
+      trigger: null, steps: null,
+      missing_info: `Named in the hub on 3 November (${origin}) but its steps are not in this app. Paste the skill text in on the Procedures tab and this fills itself in.`,
+      next_action: 'Paste the skill text (Procedures → Paste a procedure).', source: SRC, updated_at: ts });
+    // The one that is already here in full.
+    upsert(db, 'tasks', { id: 'sop-update-gl-insurance', title: 'Vendor GL Insurance Certificate Renewal', updated_at: ts });
+
+    // --- The three legacy SOPs the hub archived. All three already had confirmed replacements here.
+    for (const id of ['hub-permitting', 'hub-new_work_order', 'hub-work_order_ap']) {
+      const t = db.prepare('SELECT review_note FROM tasks WHERE id = ?').get(id); if (!t) continue;
+      upsert(db, 'tasks', { id, review_note: [t.review_note, 'Archived as legacy in the hub on 3 November 2026 [HUB 11/03]. Kept here, not deleted: the supersedes links are what show which procedure replaced it.'].filter(Boolean).join('\n'), updated_at: ts });
+    }
+    upsert(db, 'tasks', { id: 'sop-permitting-ipermits-projectdox', supersedes: ['hub-permitting'] });
+    upsert(db, 'tasks', { id: 'sop-pur-01-wo-entry-buildconnect', supersedes: ['hub-new_work_order'] });
+
+    // --- Who picked up what. Counts are from the summary; the items themselves are in the hub, not here.
+    for (const [pid, note] of [
+      ['james', 'Grew from 13 to 32 responsibilities on 3 November [HUB 11/03]: six purchasing items (bid collection, WO/PO entry, subcontractor management), two sales items, five construction items from Maria\'s redline, plus GL insurance processing, subcontractor packets, the purchasing inbox, W-9 and contractor liability insurance upkeep, and ownership of the Purchasing Manual.'],
+      ['kenneth', 'Gained two on 3 November [HUB 11/03]: invoice and backcharge review (from Maria), and updating GL insurance in QuickBooks.'],
+      ['brittany', 'Gained five on 3 November [HUB 11/03]: cash report rollover, draw schedule updates, draw request drafts, starting houses in the database, and running the GL insurance renewal skill.'],
+      ['ernesto', 'Cut back on 3 November [HUB 11/03] to the 25 items in the Purchasing Manager job description. Twenty-eight responsibilities were added from that JD earlier in the same session, then the list was reduced to the JD items only. Still to review for what actually applies.'],
+    ]) { const p = db.prepare('SELECT notes FROM people WHERE id = ?').get(pid); if (p) upsert(db, 'people', { id: pid, notes: [p.notes, note].filter(Boolean).join('\n'), updated_at: ts }); }
+
+    // --- What the session left open.
+    for (const [id, title, reason] of [
+      ['dec-purchasing-split-lonnie-james', 'How purchasing work splits between Lonnie and James', 'Fourteen purchasing items moved to Maria and six to James in the 3 November redistribution. Maria leaves on the 6th, so her fourteen need an owner. Lonnie is taking construction and permitting; James already has six. Nobody has said which of the fourteen go where.'],
+      ['dec-change-order-na-review', 'Which change-order steps are genuinely no longer done', 'Twenty of Maria\'s items were marked N/A in the redline and are hidden behind a toggle. The change-order ones need checking with her before she goes, because "not done any more" and "not done by Maria any more" are different things.'],
+    ]) upsert(db, 'decisions', { id, date: '2026-11-03', title, reason, decided_by: 'open', status: 'open', source: SRC, created_at: ts });
+
+    db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run(ts, 'map',
+        'Hub session 11/03 recorded here: Lonnie added, Maria last day 6 November, 8 vendor rules, 7 SOPs named but not yet pasted in.',
+        'MCH ops hub session 3 November: 33 SOPs, vendor rules, historical WO/PO records, ROCC and N/A toggles.',
+        'Paste the 7 named SOP skill texts in (Procedures → Paste a procedure) so the steps live here too, starting with the two purchasing ones.',
+        'Lonnie (full name and email); whoever decides how Maria\'s 14 purchasing items split between Lonnie and James',
+        'Purchasing split between Lonnie and James; which change-order steps are really N/A; Reece vs GT Plumbing for the plumbing work-order rule',
+        'Recorded from Brittany\'s hub session summary. The hub itself was edited directly in that session; this app did not write those changes and will no longer overwrite a hub it did not generate.', 'brittany');
+
+    // Brittany, 2026-11-03: James owns vendor insurance tracking. This closes the question left open on 11/03.
+    upsert(db, 'decisions', { id: 'dec-insurance-owner', status: 'accepted', decided_by: 'Brittany',
+      reason: 'Decided 3 November: James owns it. He had already done one renewal with Maria walking him through it on 10/17, and the hub session moved GL insurance processing, W-9 upkeep and contractor liability insurance maintenance to him. Kenneth stays the QuickBooks end of it, which is where the certificate is handed off. The renewal procedure is written down, so what was missing was the owner, and now it is not.' });
+    upsert(db, 'tasks', { id: 'sop-update-gl-insurance', owner_id: 'james', backup_id: 'kenneth',
+      next_action: 'Walk one real renewal with James before Maria leaves on 6 November.',
+      waiting_on: null, updated_at: ts });
+    { const h = db.prepare('SELECT * FROM handover_items WHERE id = ?').get('ho-vendor-insurance');
+      if (h) upsert(db, 'handover_items', { id: 'ho-vendor-insurance', backup: 'James (owns it from 3 November); Kenneth updates QuickBooks', risk: 'low', status: 'reassigned',
+        why: 'Owner settled on 3 November: James. The renewal procedure is written down step by step. What is still missing is not a person but a warning: the expiry date sits in the register, the certificate folder, BuildConnect and QuickBooks, and nothing tells anyone a certificate is about to lapse.',
+        capture: 'Walk one real renewal with James before 6 November. Then fix the tracking so a lapse is noticed before it happens, not after.', updated_at: ts }); }
+
+    addEvent(db, { entity_type: 'person', entity_id: 'lonnie', kind: 'setup', status: 'info',
+      label: 'Manual: Lonnie added as incoming Construction/Permitting Lead, taking Maria\'s construction work (last day 6 November)',
+      source: 'manual', actor: 'brittany', external_id: 'hub-session-2026-11-03' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

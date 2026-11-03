@@ -32,7 +32,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(homes.length >= 2); JOB = homes[0].id; JOB2 = homes[1].id;
     assert.match(JOB, /^job-/);
   });
-  await check('seeded confirmed people and proposed agents', async () => { const s = (await call('GET', '/api/state')).body; assert.equal(s.people.length, 9); assert.equal(s.people.find(p => p.id === 'ernesto').reports_to, 'maria'); assert.equal(s.people.find(p => p.id === 'brittany').title, 'Accounting Assistant'); assert.equal(s.agents.length, 14); assert.ok(s.agents.every(a => a.proposed === 1)); assert.ok(s.tasks.filter(t => t.proposed).length >= 13); });
+  await check('seeded confirmed people and proposed agents', async () => { const s = (await call('GET', '/api/state')).body; assert.equal(s.people.length, 10, 'Lonnie joined as Maria\'s successor on 3 November'); assert.equal(s.people.find(p => p.id === 'ernesto').reports_to, 'maria'); assert.equal(s.people.find(p => p.id === 'brittany').title, 'Accounting Assistant'); assert.equal(s.agents.length, 14); assert.ok(s.agents.every(a => a.proposed === 1)); assert.ok(s.tasks.filter(t => t.proposed).length >= 13); });
   await check('new task persists', async () => { const r = await call('POST', '/api/tasks', { title: 'Acceptance task', owner_id: 'maria', board: 'next' }); assert.equal(r.status, 200); assert.equal(r.body.id, 'acceptance-task'); });
   await check('setup milestone changes visual state', async () => { await call('POST', '/api/agents/agent-budget-exceptions', { setup_stage: 'ready' }); const s = (await call('GET', '/api/state')).body; const a = s.agents.find(a => a.id === 'agent-budget-exceptions'); assert.equal(a.setup_stage, 'ready'); assert.equal(a.runtime.status, 'idle', 'ready-but-idle'); assert.ok(s.events.some(e => e.entity_id === 'agent-budget-exceptions' && e.kind === 'setup' && e.source === 'manual')); });
   await check('documented/automated/verified are distinct', async () => { await call('POST', '/api/tasks/acceptance-task', { documented: 1 }); let t = (await call('GET', '/api/state')).body.tasks.find(t => t.id === 'acceptance-task'); assert.deepEqual([t.documented, t.automated, t.verified], [1, 0, 0]); });
@@ -94,7 +94,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const r = (await call('POST', '/api/import/folder', { dir: vault, overrides: { 'Employee Handbook.md': 'procedure' } })).body; assert.equal(r.imported, 8);
     const s = (await call('GET', '/api/state')).body;
     assert.ok(s.tasks.find(t => t.id === 'obs-water-bills-monthly-procedure-rocvta')); assert.ok(s.tasks.find(t => t.id === 'obs-employee-handbook'), 'override honored');
-    assert.ok(!s.tasks.find(t => /lease|cash flow/i.test(t.title)), 'lease/cash flow must not be tasks');
+    assert.ok(!s.tasks.find(t => t.id.startsWith('obs-') && /lease|cash flow/i.test(t.title)), 'lease/cash flow notes must not become tasks');
     assert.equal(s.documents.filter(d => d.kind === 'financial').length, 2); assert.ok(s.documents.find(d => d.id === 'doc-water-bills-monthly-procedure-rocvta').task_id);
     const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction });
     const c = (await call('GET', '/api/state')).body; assert.ok(c.documents.filter(d => d.kind === 'financial').every(d => d.restricted)); cookie = admin;
@@ -185,7 +185,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   await check('WO entry skill: Johnston reusable, other vendors flagged for review, skill recorded as drafting only', async () => {
     const s = (await call('GET', '/api/state')).body;
     const jw = s.vendors.find(v => /johnston/i.test(v.vendor || ''));
-    assert.ok(jw, 'Johnston Waterproofing vendor exists'); assert.equal(jw.wo_review, 'reusable');
+    assert.ok(jw, 'Johnston Waterproofing vendor exists'); assert.equal(jw.wo_review, 'reviewed', 'the hub vendor rules reviewed it on 3 November');
     assert.ok(s.vendors.filter(v => v.wo_review === 'needs_review').length > 20, 'other vendors need a review first');
     const framer = s.vendors.find(v => v.trade === 'FRAMING'); assert.equal(framer.pricing_basis, 'per_sqft'); assert.match(framer.wo_instructions, /square footage/i);
     const t = s.tasks.find(t => t.id === 'tr-wo-entry-from-bid');
@@ -548,8 +548,9 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const again = await call('POST', '/api/specifics/paste', { text: `Johnston Waterproofing — standard pricing, now also does overlays` });
     assert.equal(again.body.count, 1);
     const s2 = (await call('GET', '/api/state')).body;
-    assert.equal(s2.wo_specifics.filter(x => x.vendor_id === jw.id).length, 1, 'one row per vendor, updated in place');
-    assert.match(s2.wo_specifics.find(x => x.vendor_id === jw.id).detail, /overlays/);
+    const logRows = s2.wo_specifics.filter(x => x.vendor_id === jw.id && x.id.startsWith('ws-vendor-'));
+    assert.equal(logRows.length, 1, 'one row per vendor from the log, updated in place');
+    assert.match(logRows[0].detail, /overlays/);
   });
   await check('a per-job specific is kept against that job, separately from the vendor-wide one', async () => {
     const r = await call('POST', '/api/specifics/paste', { text: `Vendor\tJob\tDetail\nDependable Home Builders\t${(await call('GET', '/api/state')).body.homes.find(h => h.active === 'active').address}\tbalcony framing is excluded on this one` });
@@ -605,13 +606,66 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   await check('what the insurance skill settles and what it leaves open is recorded', async () => {
     const ho = (await call('GET', '/api/handover?person=maria')).body;
     const h = ho.items.find(i => i.id === 'ho-vendor-insurance');
-    assert.match(h.documented, /yes for renewals/); assert.match(h.why, /who owns it after Maria/);
+    assert.match(h.documented, /yes for renewals/);
+    assert.match(h.why, /Owner settled on 3 November: James/, 'the owner question is closed, the warning gap is not');
+    assert.match(h.why, /nothing tells anyone a certificate is about to lapse/);
     assert.ok(h.doc_ids.includes('doc-sop-update-gl-insurance') && h.task_ids.includes('sop-update-gl-insurance'));
     const s = (await call('GET', '/api/state')).body;
-    assert.ok(s.decisions.some(d => d.id === 'dec-insurance-owner' && d.status === 'open'), 'who owns it stays an open decision for Jim');
+    assert.ok(s.decisions.some(d => d.id === 'dec-insurance-owner' && d.status === 'accepted'), 'James owns it from 3 November');
+    assert.equal(s.tasks.find(t => t.id === 'sop-update-gl-insurance').owner_id, 'james');
     const stub = s.tasks.find(t => t.id === 'tr-vendor-onboarding-insurance');
     assert.equal(stub.documented, 0, 'signing up a NEW vendor is still undocumented');
     assert.match(stub.missing_info, /still only in Maria/);
+  });
+  await check('an ops hub that this app did not generate is never overwritten', async () => {
+    const imp = require(path.join(__dirname, '..', 'server', 'imports.js'));
+    const tpl = fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.template.html'), 'utf8');
+    const generated = (await call('GET', '/api/export/opshub')).body;
+    assert.match(generated, /regenerated by McVaugh Operations World/, 'what this app writes carries a marker');
+    const handBuilt = '<html><head></head><body>vendor rules, ROCC toggle, historical records</body></html>';
+    assert.ok(!handBuilt.includes('regenerated by McVaugh Operations World'),
+      'a hub edited elsewhere has no marker, which is how the writer knows to leave it alone');
+    assert.ok(tpl.length > 0);
+  });
+  await check('the hub session of 3 November is recorded: Lonnie, Maria\'s date, vendor rules, SOPs still to paste', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const lonnie = s.people.find(p => p.id === 'lonnie');
+    assert.ok(lonnie, 'Maria has a named successor now'); assert.equal(lonnie.confirmed, 0, 'not verified with Lonnie directly');
+    assert.match(lonnie.notes, /Full name and email still needed/);
+    assert.match(s.people.find(p => p.id === 'maria').notes, /last day 6 November 2026/, 'corrected from the earlier "before Nov 9"');
+    assert.ok(s.tasks.filter(t => t.backup_id === 'lonnie').length >= 10, 'Maria\'s construction work has a backup at last');
+    // the eight vendor rules, with their cost codes
+    const rules = s.wo_specifics.filter(x => x.id.startsWith('ws-rule-'));
+    assert.ok(rules.length >= 8);
+    assert.match(rules.find(r => /Autumn/.test(r.vendor_name)).detail, /60\/30\/10/);
+    assert.match(rules.find(r => /Johnston/.test(r.vendor_name)).detail, /409\.0/);
+    // a conflict is raised, not quietly merged
+    const clash = s.wo_specifics.find(x => x.id === 'ws-rule-plumbing-conflict');
+    assert.ok(clash); assert.match(clash.detail, /CONFLICT/); assert.match(clash.detail, /Reece Plumbing/); assert.match(clash.detail, /GT Plumbing/);
+    // seven SOPs named in the hub but whose steps are not here yet
+    const waiting = s.tasks.filter(t => t.id.startsWith('sop-') && !t.steps);
+    assert.equal(waiting.length, 7);
+    assert.ok(waiting.every(t => /Paste the skill text/.test(t.next_action)), 'each one says exactly what to do about it');
+    assert.ok(s.decisions.some(d => d.id === 'dec-purchasing-split-lonnie-james' && d.status === 'open'));
+  });
+  await check('GL insurance: James owns it, and the register mirror warns before a certificate lapses', async () => {
+    const soon = new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10);
+    const past = new Date(Date.now() - 20 * 864e5).toISOString().slice(0, 10);
+    const far = new Date(Date.now() + 300 * 864e5).toISOString().slice(0, 10);
+    const r = await call('POST', '/api/insurance/paste', { text:
+      `Vendor\tGL Expires\tWC Expires\nJohnston Waterproofing\t${soon}\t${far}\nSynergy Roofing\t${past}\t\nNot On File Ltd\t${far}\t` });
+    assert.equal(r.status, 200); assert.equal(r.body.count, 3); assert.equal(r.body.matched, 2);
+    const s = (await call('GET', '/api/state')).body;
+    const jw = s.insurance.find(x => /Johnston/i.test(x.vendor));
+    assert.equal(jw.standing, 'expiring'); assert.ok(jw.days > 0 && jw.days <= 30);
+    assert.equal(s.insurance.find(x => /Synergy/i.test(x.vendor)).standing, 'expired');
+    assert.equal(s.insurance[0].standing, 'expired', 'worst first');
+    assert.ok(s.insurance_unknown > 0, 'vendors with no date are counted, so the gap is visible');
+    // dates survive a re-paste and update in place
+    const again = await call('POST', '/api/insurance/paste', { text: `Synergy Roofing ${far}` });
+    assert.equal(again.body.matched, 1);
+    assert.equal((await call('GET', '/api/state')).body.insurance.find(x => /Synergy/i.test(x.vendor)).standing, 'ok');
+    assert.equal((await call('POST', '/api/insurance/paste', { text: 'nothing here' })).status, 400);
   });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('export contains everything', async () => { const x = (await call('GET', '/api/export')).body; assert.equal(x.format, 'mcvaugh-operations-world/1'); assert.ok(x.tasks.length > 0 && x.events.length > 0 && x.checkpoints.length > 0); });

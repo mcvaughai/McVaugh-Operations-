@@ -891,6 +891,78 @@ const UPDATES = [
       label: 'Running log pasted: 7 vendors with their work-order specifics; Lowes added as a supplier record',
       source: 'import', actor: 'brittany', external_id: 'running-log-2026-11-04' });
   } },
+  { key: 'hub-sop-steps-2026-11-04', apply(db) {
+    const ts = nowIso();
+    const SRC = 'MCH Operations Hub export, 3 November 2026';
+    const { parseOpsHub } = require('./imports');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub-2026-11-03.html'), 'utf8');
+    const hub = parseOpsHub(html);
+    const proc = id => hub.processes.find(p => p.id === id);
+    const numbered = p => (p.steps || []).map((s, i) => `${i + 1}. ${String(s).trim()}`).join('\n');
+
+    // The seven the hub had and this app only knew by name. Owners are taken from what the 3 November
+    // session recorded, not guessed: WO/PO entry went to James, the cash and draw work and starting a house
+    // went to Brittany, and permitting goes to Lonnie as Maria's successor on construction and permits.
+    const MAP = [
+      ['sop-pur-01-wo-entry-buildconnect', 'wo_entry_buildconnect', 'james', 'ernesto'],
+      ['sop-pur-02-material-po-entry', 'material_po_entry', 'james', 'ernesto'],
+      ['sop-pur-03-lowes-receipt-po', 'lowes_po_buildconnect', 'james', 'kenneth'],
+      ['sop-fin-01-cash-flow-rollover', 'cash_report_weekly', 'brittany', 'kenneth'],
+      ['sop-fin-02-draw-schedule-bank', 'draw_schedule_update', 'brittany', 'kenneth'],
+      ['sop-start-house-buildconnect', 'start_house_database', 'brittany', 'lonnie'],
+      ['sop-permitting-ipermits-projectdox', 'permitting_current', 'lonnie', 'brittany'],
+    ];
+    let filled = 0;
+    for (const [taskId, hubId, owner, backup] of MAP) {
+      const p = proc(hubId); if (!p) continue;
+      upsert(db, 'tasks', { id: taskId, title: p.name, owner_id: owner, backup_id: backup,
+        steps: numbered(p), documented: (p.steps || []).length ? 1 : 0,
+        trigger: p.description || null, missing_info: null,
+        next_action: 'Walk it once with the person who now owns it, then mark it verified.',
+        source: SRC, updated_at: ts });
+      upsert(db, 'documents', { id: 'doc-' + taskId, title: p.name + ' — as written in the hub', kind: 'procedure',
+        kind_reason: 'the SOP text from the 3 November hub export', sensitive: 0, task_id: taskId,
+        summary: `${(p.steps || []).length} steps. ${String(p.description || '').slice(0, 300)}`,
+        content: [p.name, '', p.description || '', '', ...(p.steps || []).map((s, i) => `${i + 1}. ${s}`)].join('\n'),
+        source: SRC, imported_at: ts, underlying_status: 'extracted' });
+      const t = db.prepare('SELECT doc_ids FROM tasks WHERE id = ?').get(taskId);
+      const ids = JSON.parse(t.doc_ids || '[]'); if (!ids.includes('doc-' + taskId)) upsert(db, 'tasks', { id: taskId, doc_ids: [...ids, 'doc-' + taskId] });
+      filled++;
+    }
+
+    // The hub also carries a 21-step rendering of the GL insurance renewal. Kept beside the skill text
+    // rather than replacing it, because the skill is what the agent runs and the two have drifted.
+    const gl = proc('gl_insurance_update');
+    if (gl) {
+      upsert(db, 'documents', { id: 'doc-hub-gl-insurance-steps', title: 'Vendor GL Insurance Certificate Renewal — hub version (21 steps)',
+        kind: 'procedure', kind_reason: 'the hub rendering of the same process; longer than the skill text', sensitive: 0,
+        task_id: 'sop-update-gl-insurance',
+        summary: 'The hub writes this renewal as 21 numbered steps; the ChatGPT skill writes it as 14 across five phases. Same process, two versions. Reconcile before either is automated.',
+        content: [gl.name, '', gl.description || '', '', ...(gl.steps || []).map((s, i) => `${i + 1}. ${s}`)].join('\n'),
+        source: SRC, imported_at: ts, underlying_status: 'extracted' });
+      const t = db.prepare('SELECT doc_ids, missing_info FROM tasks WHERE id = ?').get('sop-update-gl-insurance');
+      upsert(db, 'tasks', { id: 'sop-update-gl-insurance', doc_ids: [...new Set([...JSON.parse(t.doc_ids || '[]'), 'doc-hub-gl-insurance-steps'])],
+        missing_info: [t.missing_info, 'The hub writes this as 21 steps and the ChatGPT skill as 14 across five phases. Pick one before automating, so the agent and the people are following the same thing.'].filter(Boolean).join(' ') });
+    }
+
+    // Full names the hub carries and this app did not.
+    for (const m of (hub.team || [])) {
+      const pid = m.id === 'purchasing' ? 'ernesto' : m.id;
+      const person = db.prepare('SELECT id, full_name FROM people WHERE id = ?').get(pid); if (!person) continue;
+      const full = String(m.name || '').trim();
+      if (full && !/\[/.test(full) && full !== person.full_name) upsert(db, 'people', { id: pid, full_name: full, updated_at: ts });
+    }
+    upsert(db, 'people', { id: 'lonnie', notes: 'INCOMING — Construction / Permitting Lead, taking Maria\'s construction and permitting work [HUB 11/03]. The hub still shows "Lonnie [Update Last Name]": the surname and email are the outstanding piece. 53 responsibilities already assigned to him there.', updated_at: ts });
+
+    upsert(db, 'documents', { id: 'doc-ops-hub-2026-11-03', title: 'MCH Operations Hub — export of 3 November 2026', kind: 'dashboard',
+      kind_reason: 'the hub as it stood after Brittany\'s 3 November session', sensitive: 0,
+      summary: `33 SOPs (all with steps), 9 people, 16 legacy roles. Source of the seven SOPs this app had only by name, and of everyone's full names.`,
+      path: 'mch-ops-hub-2026-11-03.html', source: SRC, imported_at: ts, underlying_status: 'extracted' });
+
+    addEvent(db, { entity_type: 'integration', entity_id: 'dashboard', kind: 'import', status: 'info',
+      label: `Hub export read: ${filled} SOPs filled in with their steps, owners assigned from the 3 November session`,
+      source: 'import', actor: 'brittany', external_id: 'hub-sop-steps-2026-11-04' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

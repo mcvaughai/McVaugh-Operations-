@@ -631,7 +631,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const s = (await call('GET', '/api/state')).body;
     const lonnie = s.people.find(p => p.id === 'lonnie');
     assert.ok(lonnie, 'Maria has a named successor now'); assert.equal(lonnie.confirmed, 0, 'not verified with Lonnie directly');
-    assert.match(lonnie.notes, /Full name and email still needed/);
+    assert.match(lonnie.notes, /surname and email are the outstanding piece/, 'still the one gap on Lonnie');
     assert.match(s.people.find(p => p.id === 'maria').notes, /last day 6 November 2026/, 'corrected from the earlier "before Nov 9"');
     assert.ok(s.tasks.filter(t => t.backup_id === 'lonnie').length >= 10, 'Maria\'s construction work has a backup at last');
     // The hub's short rules were replaced by the fuller running log on 4 November; the codes survive.
@@ -648,10 +648,16 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.deepEqual(plumbers, ['GT Plumbing', 'Reece Plumbing'], 'both are current plumbing vendors');
     assert.match(s.wo_specifics.find(x => x.vendor_id === 'vendor-plumbing-reece').detail, /601/);
     assert.match(s.wo_specifics.find(x => x.id === 'ws-rule-plumbing-two-vendors').detail, /not interchangeable/);
-    // seven SOPs named in the hub but whose steps are not here yet
-    const waiting = s.tasks.filter(t => t.id.startsWith('sop-') && !t.steps);
-    assert.equal(waiting.length, 7);
-    assert.ok(waiting.every(t => /Paste the skill text/.test(t.next_action)), 'each one says exactly what to do about it');
+    // the seven the hub named now carry their steps, read out of the hub export
+    assert.equal(s.tasks.filter(t => t.id.startsWith('sop-') && !t.steps).length, 0, 'none left waiting for a paste');
+    const wo = s.tasks.find(t => t.id === 'sop-pur-01-wo-entry-buildconnect');
+    assert.equal(wo.documented, 1); assert.match(wo.steps, /^1\. Read the source estimate/);
+    assert.equal(wo.owner_id, 'james', 'the 3 November session moved WO/PO entry to James');
+    assert.equal(s.tasks.find(t => t.id === 'sop-permitting-ipermits-projectdox').owner_id, 'lonnie');
+    assert.equal(s.tasks.find(t => t.id === 'sop-fin-01-cash-flow-rollover').owner_id, 'brittany');
+    assert.ok(s.documents.some(d => d.id === 'doc-hub-gl-insurance-steps'), 'the hub\'s longer GL version is kept beside the skill, not merged over it');
+    assert.match(s.tasks.find(t => t.id === 'sop-update-gl-insurance').missing_info, /21 steps and the ChatGPT skill as 14/);
+    assert.equal(s.people.find(p => p.id === 'maria').full_name, 'Maria Abney', 'full names came from the hub');
     assert.ok(s.decisions.some(d => d.id === 'dec-purchasing-split-lonnie-james' && d.status === 'open'));
   });
   await check('GL insurance: James owns it, and the register mirror warns before a certificate lapses', async () => {

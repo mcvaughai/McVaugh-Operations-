@@ -762,16 +762,16 @@ async function api(req, res, url, p, role) {
     dbm.upsert(db, 'tasks', { id, title, department_id: b.department_id || 'purchasing',
       owner_id: b.owner_id || 'brittany', backup_id: b.backup_id || null,
       trigger: parsed.trigger || null, inputs: parsed.inputs || null,
-      steps: parsed.steps.map((x, i) => `${i + 1}. ${x}`).join('\n') || null,
+      steps: parsed.steps.join('\n') || null,
       approval_rules: parsed.approval_rules || null, evidence: parsed.evidence || null,
-      missing_info: parsed.notes || null, documented: parsed.steps.length ? 1 : 0, automated: 0, verified: 0,
+      missing_info: parsed.notes || null, documented: parsed.step_count ? 1 : 0, automated: 0, verified: 0,
       board: b.board || 'working', proposed: 0, agent_id: b.agent_id || null,
       source: src, supersedes: b.supersedes || undefined, updated_at: ts });
     // the skill text itself, kept word for word so a successor can rebuild the skill
     const docId = 'doc-' + id;
     dbm.upsert(db, 'documents', { id: docId, title: `${title} — skill text as written`, kind: 'procedure',
       kind_reason: 'the ChatGPT skill this procedure was written from', sensitive: 0, task_id: id,
-      summary: `Pasted ${ts.slice(0, 10)}. ${parsed.steps.length} steps recognised${vendors.length ? `; mentions ${vendors.length} vendor${vendors.length === 1 ? '' : 's'}` : ''}.`,
+      summary: `${parsed.subtitle ? parsed.subtitle + '. ' : ''}Pasted ${ts.slice(0, 10)}. ${parsed.step_count} steps recognised${vendors.length ? `; mentions ${vendors.length} vendor${vendors.length === 1 ? '' : 's'}` : ''}.`,
       content: text, size: text.length, source: src, imported_at: ts, underlying_status: 'extracted' });
     const t = db.prepare('SELECT doc_ids FROM tasks WHERE id = ?').get(id);
     const ids = JSON.parse(t.doc_ids || '[]'); if (!ids.includes(docId)) dbm.upsert(db, 'tasks', { id, doc_ids: [...ids, docId] });
@@ -781,7 +781,7 @@ async function api(req, res, url, p, role) {
     dbm.audit(db, role, existed ? 'procedure_updated' : 'procedure_added', 'task', id, title);
     scheduleOpsHubWrite('pasted procedure');
     return send(res, 200, { ok: true, id, doc_id: docId, updated: !!existed,
-      parsed: { title, trigger: parsed.trigger, inputs: parsed.inputs, steps: parsed.steps, approval_rules: parsed.approval_rules, notes: parsed.notes },
+      parsed: { title, subtitle: parsed.subtitle, trigger: parsed.trigger, inputs: parsed.inputs, steps: parsed.steps, step_count: parsed.step_count, approval_rules: parsed.approval_rules, notes: parsed.notes },
       vendors: vendors.map(v => ({ id: v, name: (db.prepare('SELECT vendor, trade FROM vendors WHERE id = ?').get(v) || {}).vendor })),
       homes: homes.map(h => ({ id: h, address: (db.prepare('SELECT address FROM homes WHERE id = ?').get(h) || {}).address })) });
   }

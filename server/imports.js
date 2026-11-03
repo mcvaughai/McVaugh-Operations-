@@ -625,12 +625,24 @@ function importBuildSequence(db, buf, source) {
 // Anything it cannot place is kept verbatim in `notes` and in the attached document, so nothing is lost.
 const SKILL_SECTIONS = [
   ['trigger', /^(trigger|when to use|use (this )?when|when this runs|purpose|goal|objective)\b/i],
-  ['inputs', /^(inputs?|you\s*('?ll|will)\s*need|what you need|what.s needed|requirements?|prerequisites?|data needed)\b/i],
+  ['inputs', /^(inputs?|you\s*('?ll|will)\s*need|what you need|what.s needed|requirements?|prerequisites?|data needed|(authoritative )?(locations?|files? and systems?|systems? of record))\b/i],
   ['steps', /^(steps?|instructions?|process|procedure|how to|workflow|what to do)\b/i],
   ['approval_rules', /^(approvals?|approval rules?|authority|who approves|sign.?off|guardrails?|rules?|never|do not)\b/i],
-  ['evidence', /^(output|result|evidence|done when|definition of done|deliverable)\b/i],
+  ['evidence', /^(output|result|evidence|done when|definition of done|deliverable|report)\b/i],
   ['notes', /^(notes?|exceptions?|special cases?|gotchas?|watch out|examples?)\b/i],
 ];
+// Lines the ChatGPT skills dialog puts around the text. They are the app's furniture, not the procedure.
+const CHROME = [/^skills?$/i, /^installed$/i, /^close dialog$/i, /^extend chatgpt\b/i,
+  /^see .+ and \d+ more$/i, /^edit$/i, /^new skill$/i, /^copy$/i, /^\s*$/];
+function deChrome(lines) {
+  let out = lines.filter(l => !CHROME.some(re => re.test(l.trim())));
+  // The dialog renders <description>, then <name>, then the literal word "Skill". Use that to find the name.
+  const skillAt = lines.findIndex(l => /^skill$/i.test(l.trim()));
+  const name = skillAt > 0 ? lines.slice(0, skillAt).filter(l => l.trim() && !CHROME.some(re => re.test(l.trim()))).pop() : null;
+  // the description is repeated above and below the name; keep one
+  const seen = new Set(); out = out.filter(l => { const k = l.trim(); if (!k) return true; if (seen.has(k)) return false; seen.add(k); return true; });
+  return { lines: out, name: name ? name.trim() : null };
+}
 const headingOf = line => {
   const t = line.trim();
   if (!t) return null;
@@ -644,33 +656,50 @@ const headingOf = line => {
   return { key: null, label };
 };
 const stripBullet = l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim();
-
+// A heading with no markdown and no colon: short, title-like, and not a sentence.
+const looksLikeHeading = (line, next) => {
+  const t = line.trim();
+  if (!t || t.length > 70 || /^[-*•]|^\d+[.)]/.test(t)) return false;
+  if (!/^[A-Z]/.test(t) || /[.,;?]$/.test(t)) return false;
+  if (t.split(/\s+/).length > 8) return false;
+  return !!(next && next.trim());
+};
 function parseSkill(text) {
-  const lines = String(text || '').replace(/\r/g, '').split('\n');
-  const out = { title: null, trigger: '', inputs: '', steps: [], approval_rules: '', evidence: '', notes: [] };
-  let cur = null, seenAny = false;
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    const h = headingOf(line);
-    if (h) {
-      // the first heading before any section is the title, unless it names a section
-      if (!out.title && !h.key && !seenAny) { out.title = h.label; continue; }
-      if (h.key) { cur = h.key; seenAny = true; continue; }
-      cur = 'notes'; out.notes.push(h.label + ':'); seenAny = true; continue;
-    }
+  const raw = String(text || '').replace(/\r/g, '').split('\n');
+  const { lines, name } = deChrome(raw);
+  const out = { title: name || null, subtitle: null, trigger: '', inputs: '', steps: [], approval_rules: '', evidence: '', notes: [] };
+  let cur = null, started = false, preamble = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd();
     if (!line.trim()) continue;
-    if (!out.title && !cur) { out.title = line.replace(/^#+\s*/, '').trim().slice(0, 160); continue; }
-    if (!cur) { out.notes.push(line.trim()); continue; }
-    if (cur === 'steps') out.steps.push(stripBullet(line));
+    let h = headingOf(line);
+    if (!h && looksLikeHeading(line, lines[i + 1])) h = { key: (SKILL_SECTIONS.find(([, re]) => re.test(line.trim())) || [null])[0], label: line.trim() };
+    if (h) {
+      if (!out.title && !h.key) { out.title = h.label; continue; }
+      if (h.label && out.title && h.label === out.title) continue;
+      if (h.key) { cur = h.key; started = true; continue; }
+      // In a dialog paste the line under the name is the skill's one-line description, not a phase.
+      if (name && !started && !out.steps.length && !preamble.length) { out.subtitle = h.label; continue; }
+      // An unrecognised heading names a phase of the procedure: keep it in the steps, in place.
+      cur = 'steps'; started = true; out.steps.push({ phase: h.label }); continue;
+    }
+    if (!out.title) { out.title = line.replace(/^#+\s*/, '').trim().slice(0, 160); continue; }
+    if (!started) { preamble.push(line.trim()); continue; }
+    if (cur === 'steps') out.steps.push({ text: stripBullet(line) });
     else if (cur === 'notes') out.notes.push(line.trim());
     else out[cur] = [out[cur], stripBullet(line)].filter(Boolean).join(cur === 'inputs' ? '\n' : ' ');
   }
-  // No "Steps" heading anywhere: treat a run of numbered or bulleted lines as the steps.
+  // Text before the first heading says what the procedure is for.
+  if (preamble.length) out.trigger = [out.trigger, preamble.join(' ')].filter(Boolean).join(' ');
   if (!out.steps.length) {
-    const listed = lines.filter(l => /^\s*(?:[-*•]|\d+[.)])\s+\S/.test(l)).map(stripBullet);
+    const listed = lines.filter(l => /^\s*(?:[-*•]|\d+[.)])\s+\S/.test(l)).map(l => ({ text: stripBullet(l) }));
     if (listed.length >= 2) out.steps = listed;
   }
-  return { ...out, steps: out.steps.filter(Boolean), notes: out.notes.join('\n') };
+  // Render steps as numbered lines, with phase headings kept in place and not numbered.
+  let n = 0;
+  const stepLines = out.steps.filter(s => s.phase || (s.text || '').trim())
+    .map(s => s.phase ? `\n${s.phase}` : `${++n}. ${s.text}`);
+  return { ...out, steps: stepLines.map(l => l.replace(/^\n/, '')), step_lines: stepLines, step_count: n, notes: out.notes.join('\n') };
 }
 
 // Which vendors and jobs a pasted procedure mentions, so it files itself against them.

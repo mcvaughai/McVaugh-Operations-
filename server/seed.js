@@ -624,6 +624,69 @@ const UPDATES = [
       label: 'Manual: bid request/comparison parked; a work order is now started by a person asking for one',
       source: 'manual', actor: 'brittany', external_id: 'update-park-bids-2026-10-26' });
   } },
+  { key: 'skill-gl-insurance-2026-11-03', apply(db) {
+    const ts = nowIso();
+    // Brittany's ChatGPT skill "Update GL Insurance", pasted 2026-11-03. Filed through the same parser the
+    // paste box uses, so what is stored here is exactly what pasting it in the app would produce.
+    const { parseSkill, mentionsIn } = require('./imports');
+    const text = fs.readFileSync(path.join(__dirname, '..', 'seed', 'skills', 'update-gl-insurance.txt'), 'utf8');
+    const p = parseSkill(text);
+    const id = 'sop-update-gl-insurance';
+    const src = 'ChatGPT skill "Update GL Insurance" (Brittany), 2026-11-03';
+    upsert(db, 'tasks', { id, title: p.title || 'Update GL Insurance', department_id: 'purchasing',
+      owner_id: 'brittany', backup_id: 'kenneth', proposed: 0, documented: 1, automated: 0, verified: 0, board: 'working',
+      trigger: p.trigger, inputs: p.inputs, steps: p.steps.join('\n'), approval_rules: p.approval_rules || null,
+      // Four systems hold the same expiry date and nothing reconciles them; that is the risk this procedure carries.
+      missing_info: 'The same GL expiry lives in four places — the register spreadsheet, the certificate folder, BuildConnect and QuickBooks — and nothing checks that they agree. Nobody is alerted when a certificate is about to lapse; it is noticed when someone looks. No list of which vendors are currently expired or expiring.',
+      evidence: 'Register row saved and re-read, certificate filed with the superseded one archived, BuildConnect GL date re-opened and confirmed, certificate handed to Kenneth for QuickBooks.',
+      next_action: 'Decide with Jim and Kenneth who owns insurance tracking after Maria leaves, then walk one real renewal with that person before 9 November.',
+      source: src, supersedes: ['tr-vendor-onboarding-insurance'], updated_at: ts });
+
+    upsert(db, 'documents', { id: 'doc-' + id, title: 'Update GL Insurance — skill text as written', kind: 'procedure',
+      kind_reason: 'the ChatGPT skill this procedure was written from', sensitive: 0, task_id: id,
+      summary: `${p.subtitle || 'Update vendor insurance records and file renewals'}. Pasted 2026-11-03. ${p.step_count} steps across ${p.steps.filter(s => !/^\d+\./.test(s)).length} phases.`,
+      content: text, size: text.length, source: src, imported_at: ts, underlying_status: 'extracted' });
+
+    // The files it depends on, none of which are reachable from this app: placeholders so they are at least named.
+    for (const [did, title, pth, reason] of [
+      ['doc-insurance-procedure-docx', 'Insurance certificate procedure (Maria)', 'L:\\COMPANY INFORMATION\\MCH\\WORKFLOW PROCESSES\\MARIA LEAVING\\INSURANCE CERTIFICATE PROCEDURE.docx', 'Maria\'s own written procedure, named by the skill as the authority'],
+      ['doc-gl-register-xls', 'GL insurance and workers comp register (current)', 'L:\\COMPANY INFORMATION\\MCH\\PURCHASING\\Vendor.Subcontractors - GL Insurance\\Copy of GL Insurance and workers comp - current.xls', 'the register the expiry dates are kept in; legacy .xls with hidden rows and three tabs'],
+    ]) upsert(db, 'documents', { id: did, title, path: pth, kind: 'procedure', kind_reason: reason, sensitive: 0, task_id: id,
+      summary: 'Named by the GL insurance skill. Not attached: it lives on the L: drive, which this app cannot reach. Attach it with Option 3 or Upload.',
+      source: src, imported_at: ts, underlying_status: 'not_attached' });
+    const t = db.prepare('SELECT doc_ids FROM tasks WHERE id = ?').get(id);
+    upsert(db, 'tasks', { id, doc_ids: [...new Set([...JSON.parse(t.doc_ids || '[]'), 'doc-' + id, 'doc-insurance-procedure-docx', 'doc-gl-register-xls', 'doc-insurance-spreadsheet'])] });
+
+    // The quirks a successor would otherwise rediscover the hard way.
+    for (const [sid, detail] of [
+      ['ws-buildconnect-gl-field', 'BuildConnect GL renewal: the editable record is in the mainframe; the GL field is the liability expiry input. Press Enter to save — blue text means the UI accepted it, not that it saved. The save needs the parent php frame and its submit helper; the standalone contact page is read-only. If Enter errors, go Back then Forward to recover the helper, then re-open the contact and check the stored date before trying again. Never retry a save you are unsure of.'],
+      ['ws-gl-register-tabs', 'The GL register has three tabs (GL INSURANCE, OLD-GL INSURANCE, NOT ACTIVE GL INSURANCE) and hidden inactive rows. Update the active row only. Keep the legacy .xls format and open it in real Excel — converting it loses formulas, formatting and hidden rows. Back it up before editing, and re-read it after saving.'],
+      ['ws-gl-cert-identity', 'Reading a certificate: the insured vendor is the named insured, not the certificate holder (that is McVaugh). Do not take the issue date, or another policy\'s expiry, for the GL expiry. Look at the whole page when the layout matters.'],
+    ]) upsert(db, 'wo_specifics', { id: sid, detail, scope: 'vendor', vendor_name: 'all vendors (GL insurance)', task_id: id, source: src, noted_on: '2026-11-03', updated_at: ts });
+
+    // What the skill settles, and what it does not.
+    const h = db.prepare('SELECT * FROM handover_items WHERE id = ?').get('ho-vendor-insurance');
+    if (h) upsert(db, 'handover_items', { id: 'ho-vendor-insurance', risk: 'medium',
+      documented: 'yes for renewals (GL insurance skill, 11/03); vendor onboarding still not written down',
+      backup: 'James did it once with Maria 10/17; Kenneth is the proposal, not yet decided',
+      why: 'The renewal half is now written down step by step, including the BuildConnect quirks that are easy to get wrong. Two things are still open: who owns it after Maria, and the fact that the same expiry date sits in four systems with nothing reconciling them, so a lapsed certificate is found by looking rather than by being told.',
+      capture: 'Get Jim to name the owner. Walk one real renewal with that person before 9 November. Separately, agree where the list of expiring certificates comes from.',
+      doc_ids: [...new Set([...JSON.parse(h.doc_ids || '[]'), 'doc-' + id, 'doc-insurance-procedure-docx', 'doc-gl-register-xls'])],
+      task_ids: [...new Set([...JSON.parse(h.task_ids || '[]'), id])], updated_at: ts });
+
+    upsert(db, 'tasks', { id: 'tr-vendor-onboarding-insurance', documented: 0,
+      missing_info: 'The renewal half is written down (see "Update GL Insurance"). Signing up a NEW vendor — what is collected, who approves, what goes in the database first — is still only in Maria\'s head.',
+      next_action: 'Ask Maria to walk through signing up one new vendor from scratch before 9 November.', updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-insurance-owner', date: '2026-11-03',
+      title: 'Who owns vendor insurance tracking after Maria leaves',
+      reason: 'Maria suggested Kenneth, since he already updates insurance in QuickBooks and the procedure ends by handing him the certificate. James has done it once, walked through by Maria on 10/17. The renewal procedure is now written down either way, so this is about who owns it, not whether it is documented. Open until Jim names someone.',
+      decided_by: 'Jim to decide', status: 'open', source: 'Maria 10/17; GL insurance skill 11/03', created_at: ts });
+
+    addEvent(db, { entity_type: 'task', entity_id: id, kind: 'setup', status: 'info',
+      label: `Added from a pasted ChatGPT skill: Update GL Insurance (${p.step_count} steps)`,
+      source: 'import', actor: 'brittany', external_id: 'paste-gl-insurance-2026-11-03' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

@@ -565,6 +565,54 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.equal(denied.status, 403);
     cookie = admin;
   });
+  await check('a skill pasted straight out of the ChatGPT dialog loses the UI chrome and keeps its phases', async () => {
+    const imp = require(path.join(__dirname, '..', 'server', 'imports.js'));
+    const text = fs.readFileSync(path.join(__dirname, '..', 'seed', 'skills', 'update-gl-insurance.txt'), 'utf8');
+    const p = imp.parseSkill(text);
+    assert.equal(p.title, 'Update GL Insurance', 'the name comes from the line above the word "Skill", not the dialog heading');
+    assert.equal(p.subtitle, 'Update vendor insurance records and file renewals');
+    assert.ok(!/^Skills?$/i.test(p.title) && !/Extend ChatGPT/.test(JSON.stringify(p)), 'dialog furniture is dropped');
+    assert.match(p.trigger, /Follow Maria's insurance certificate procedure/);
+    assert.match(p.inputs, /Copy of GL Insurance and workers comp/, 'the authoritative locations land as inputs');
+    assert.equal(p.step_count, 14);
+    const phases = p.steps.filter(x => !/^\d+\./.test(x));
+    assert.deepEqual(phases, ['Certificate and register', 'Certificate filing', 'BuildConnect legacy contact update', 'Accounting handoff', 'Finish: save, verify, and close Excel']);
+    assert.ok(p.steps.indexOf('Certificate filing') > p.steps.findIndex(x => /^1\./.test(x)), 'phases stay in place among the steps');
+  });
+  await check('the GL insurance procedure is filed, supersedes the stub, and reaches the ops page', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const t = s.tasks.find(x => x.id === 'sop-update-gl-insurance');
+    assert.ok(t); assert.equal(t.documented, 1); assert.equal(t.backup_id, 'kenneth');
+    assert.deepEqual(JSON.parse(t.supersedes), ['tr-vendor-onboarding-insurance']);
+    assert.match(t.steps, /BuildConnect legacy contact update/);
+    assert.match(t.missing_info, /four places/, 'the four-system gap is recorded, not glossed');
+    const d = s.documents.find(x => x.id === 'doc-sop-update-gl-insurance');
+    assert.equal(d.content, fs.readFileSync(path.join(__dirname, '..', 'seed', 'skills', 'update-gl-insurance.txt'), 'utf8'));
+    // the L: files it depends on are named but honestly marked unreachable
+    for (const id of ['doc-insurance-procedure-docx', 'doc-gl-register-xls']) {
+      const doc = s.documents.find(x => x.id === id);
+      assert.equal(doc.underlying_status, 'not_attached'); assert.match(doc.path, /^L:\\/);
+    }
+    // the quirks a successor would otherwise rediscover
+    assert.equal(s.wo_specifics.filter(x => x.task_id === 'sop-update-gl-insurance').length, 3);
+    assert.ok(s.wo_specifics.some(x => /blue text means the UI accepted it, not that it saved/.test(x.detail)));
+    const html = (await call('GET', '/api/export/opshub')).body;
+    const hub = require(path.join(__dirname, '..', 'server', 'imports.js')).parseOpsHub(html);
+    const proc = hub.processes.find(x => x.id === 'sop-update-gl-insurance');
+    assert.ok(proc, 'it reaches the MCH ops page'); assert.equal(proc.status, 'current');
+    assert.ok(hub.processes.find(x => x.id === 'vendor_onboarding_insurance' || x.id === 'tr-vendor-onboarding-insurance'));
+  });
+  await check('what the insurance skill settles and what it leaves open is recorded', async () => {
+    const ho = (await call('GET', '/api/handover?person=maria')).body;
+    const h = ho.items.find(i => i.id === 'ho-vendor-insurance');
+    assert.match(h.documented, /yes for renewals/); assert.match(h.why, /who owns it after Maria/);
+    assert.ok(h.doc_ids.includes('doc-sop-update-gl-insurance') && h.task_ids.includes('sop-update-gl-insurance'));
+    const s = (await call('GET', '/api/state')).body;
+    assert.ok(s.decisions.some(d => d.id === 'dec-insurance-owner' && d.status === 'open'), 'who owns it stays an open decision for Jim');
+    const stub = s.tasks.find(t => t.id === 'tr-vendor-onboarding-insurance');
+    assert.equal(stub.documented, 0, 'signing up a NEW vendor is still undocumented');
+    assert.match(stub.missing_info, /still only in Maria/);
+  });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('export contains everything', async () => { const x = (await call('GET', '/api/export')).body; assert.equal(x.format, 'mcvaugh-operations-world/1'); assert.ok(x.tasks.length > 0 && x.events.length > 0 && x.checkpoints.length > 0); });
   await stop(); await start();

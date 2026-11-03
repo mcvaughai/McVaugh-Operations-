@@ -385,8 +385,9 @@
         const p = r.parsed;
         $('#pResult').innerHTML = `<div class="pasted"><b>${r.updated ? 'Updated' : 'Added'}: ${esc(p.title)}</b>
           <p class="src">Check what it picked up, then open the procedure to fix anything.</p>
-          <dl>${[['Trigger', p.trigger], ['Inputs', p.inputs], ['Approval', p.approval_rules]].filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-          <b>${p.steps.length} step${p.steps.length === 1 ? '' : 's'}</b><ol>${p.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+          <dl>${[['What it is for', p.trigger], ['Inputs', p.inputs], ['Approval', p.approval_rules]].filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v).replace(/\n/g, '<br>')}</dd>`).join('')}</dl>
+          <b>${p.step_count} step${p.step_count === 1 ? '' : 's'}</b>
+          <div class="psteps">${p.steps.map(x => /^\d+\./.test(x) ? `<div>${esc(x)}</div>` : `<div class="pphase">${esc(x)}</div>`).join('')}</div>
           ${p.notes ? `<b>Kept as notes</b><p class="src">${esc(p.notes)}</p>` : ''}
           ${r.vendors.length ? `<p class="src">Mentions: ${r.vendors.map(v => esc(v.name)).join(', ')}</p>` : ''}
           ${r.homes.length ? `<p class="src">Jobs: ${r.homes.map(h => esc(h.address)).join(', ')}</p>` : ''}
@@ -676,6 +677,10 @@
         : esc(vend(x.vendor_id)?.vendor || x.vendor_name || '') + ' on ' + esc(home(x.home_id)?.address || x.job_name || 'this job')}
       ${x.noted_on ? ' · noted ' + esc(x.noted_on) : ''} · ${esc(x.source || '')}</span></div></div>`).join('');
   }
+  // Steps and other multi-line fields keep their line breaks; a line that is not numbered is a phase heading.
+  const stepsHtml = txt => String(txt || '').split('\n').filter(l => l.trim())
+    .map(l => /^\s*\d+[.)]/.test(l) ? `<div class="stepline">${esc(l.trim())}</div>` : `<div class="stepphase">${esc(l.trim())}</div>`).join('');
+  const linesHtml = txt => esc(txt).replace(/\n/g, '<br>');
   function openDetail(type, id, focusWorld = true) {
     const w = S.permissions.write;
     const obj = { vendor: () => S.vendors.find(v => v.id === id), handover: () => S.handover_items.find(h => h.id === id), document: () => S.documents.find(d => d.id === id), person: () => person(id), agent: () => agent(id), department: () => dept(id), home: () => S.homes.find(h => h.id === id), task: () => S.tasks.find(t => t.id === id), decision: () => S.decisions.find(d => d.id === id), integration: () => S.integrations.find(i => i.id === id), ai: () => S.ai_configs.find(a => a.id === id), system: () => null }[type]?.();
@@ -725,7 +730,7 @@
         ${w ? `<h4>Milestones (distinct)</h4><div class="milestones">${[['documented', 'Documented'], ['automated', 'Automated'], ['verified', 'Verified']].map(([k, l]) => `<button class="${obj[k] ? 'on' : ''}" data-toggle="${k}">${obj[k] ? '✓ ' : ''}${l}</button>`).join('')}</div>
         <h4>Board</h4><div class="milestones">${Object.entries(BOARD).map(([k, l]) => `<button class="${obj.board === k ? 'on' : ''}" data-set="board:${k}">${l}</button>`).join('')}</div>` : ''}
         ${section('Owner / backup', esc(personName(obj.owner_id)) + ' / ' + esc(obj.backup_id ? personName(obj.backup_id) : '—') + ' · ' + esc(deptName(obj.department_id)))}
-        ${section('Trigger', esc(obj.trigger))}${section('Inputs', esc(obj.inputs))}${section('Steps', esc(obj.steps))}${section('Deadline', esc(obj.deadline))}
+        ${section('Trigger', esc(obj.trigger))}${section('Inputs', linesHtml(obj.inputs))}${section('Steps', stepsHtml(obj.steps))}${section('Deadline', esc(obj.deadline))}
         ${section('Completion evidence', esc(obj.evidence))}${section('Approval rules', esc(obj.approval_rules))}${section('Automation approach', esc(obj.automation_approach))}
         ${section('Verification result', esc(obj.verification_result))}${section('Source-system link / file', obj.source_link ? (/^https?:/.test(obj.source_link) ? `<a href="${esc(obj.source_link)}" target="_blank" rel="noopener">${esc(obj.source_link)}</a>` : `<code>${esc(obj.source_link)}</code>`) : '')}
         ${section('Missing information', esc(obj.missing_info))}${section('Blocker / approval needed', esc(obj.blocker))}${section('Waiting on', esc(obj.waiting_on))}

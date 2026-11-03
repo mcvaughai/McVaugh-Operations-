@@ -262,3 +262,9 @@ a.bvendor { color: var(--brand-dark); text-decoration: none; border-bottom: 1px 
 .pasted table { margin-top: 8px; width: 100%; }
 .pasted p { margin: 6px 0 0; }
 #modalCard.wide textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.psteps { margin-top: 6px; }
+.psteps > div { padding: 1px 0 1px 18px; text-indent: -18px; }
+.psteps > div.pphase { font-weight: 600; margin-top: 8px; padding-left: 0; text-indent: 0; color: var(--ink); }
+.stepline { padding: 2px 0 2px 20px; text-indent: -20px; }
+.stepphase { font-weight: 600; margin: 10px 0 2px; color: var(--ink); }
+.stepphase:first-child { margin-top: 0; }

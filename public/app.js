@@ -46,7 +46,29 @@
   const srcChip = src => chip(src === 'demo' ? 'DEMO' : src, src);
 
   // ---------- render ----------
-  function renderAll() {
+  // The 5-second poll used to rebuild every panel, which threw away wherever you had scrolled to — the page
+  // appeared to jump back to the top on its own. Two guards: skip rendering entirely when nothing in the
+  // state actually changed, and put the scroll positions back when it did.
+  let lastSig = null;
+  const stateSignature = st => { const { server, ...rest } = st || {}; const { now, ...srv } = server || {}; return JSON.stringify({ ...rest, server: srv }); };
+  const SCROLLERS = '.view, .start-here, .bscroll, .table-wrap, .section, div[style*="overflow"]';
+  // Keyed by position, not by id or class: several scrollers have neither, and the DOM is rebuilt in the
+  // same order each time, so the index lines up.
+  const scrollSnapshot = () => [...document.querySelectorAll(SCROLLERS)].map(el => el.scrollTop);
+  const scrollRestore = pos => {
+    const els = [...document.querySelectorAll(SCROLLERS)];
+    if (els.length !== pos.length) return;        // shape changed; putting old offsets back would be a guess
+    els.forEach((el, i) => { if (pos[i]) el.scrollTop = pos[i]; });
+  };
+  function renderAll(force = false) {
+    const sig = stateSignature(S);
+    if (!force && sig === lastSig) return;   // nothing changed: leave the DOM, and the scroll, alone
+    lastSig = sig;
+    const pos = scrollSnapshot();
+    renderAllNow();
+    scrollRestore(pos);
+  }
+  function renderAllNow() {
     $('#rolePill').textContent = 'Role: ' + S.role + (S.permissions.write ? '' : ' (read-only)');
     $('#demoToggle').checked = S.demo; $('#demoBanner').hidden = !S.demo;
     $('#addBtn').hidden = !S.permissions.write;

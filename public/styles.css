@@ -273,3 +273,4 @@ a.bvendor { color: var(--brand-dark); text-decoration: none; border-bottom: 1px 
 #viewInsurance tr.expired td, #viewInsurance tr.expiring td { background: #fdeeee; }
 #viewInsurance tr.soon td { background: #fff8e6; }
 #viewInsurance td .src { display: block; }
+.cp-age { float: right; font-size: 11px; font-weight: 400; color: var(--muted); }

@@ -963,6 +963,23 @@ const UPDATES = [
       label: `Hub export read: ${filled} SOPs filled in with their steps, owners assigned from the 3 November session`,
       source: 'import', actor: 'brittany', external_id: 'hub-sop-steps-2026-11-04' });
   } },
+  { key: 'checkpoint-2026-11-04', apply(db) {
+    const ts = nowIso();
+    // The previous checkpoint still said "paste the 7 named SOP skill texts". They were filled from the hub
+    // export on 4 November, so that advice was stale the moment it was carried out. Checkpoints are stored
+    // text, not derived, so an update that finishes a step has to retire the step as well.
+    db.prepare(`INSERT INTO checkpoints (created_at, stage, current_step, last_completed, next_action, waiting_on, decisions_needed, note, author) VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run(ts, 'map',
+        'Hub and world lined up: all 33 hub SOPs exist here, the seven that were name-only now carry their steps, and no procedure is left undocumented.',
+        'Read the 3 November hub export: seven SOPs filled in with steps and owners (work orders, material POs and Lowe\'s to James; cash, draws and starting a house to Brittany; permitting to Lonnie), everyone\'s full names, and the vendor running log.',
+        'Walk the three purchasing procedures with James and the permitting one with Lonnie before Maria\'s last day on 6 November. Those four are the work actually changing hands.',
+        'Lonnie (surname and email — the hub still shows "Update Last Name"); Jim, on how Maria\'s 14 purchasing items split between Lonnie and James',
+        'How the purchasing items split between Lonnie and James; which change-order steps are genuinely no longer done; whether the GL renewal follows the hub\'s 21 steps or the skill\'s 14',
+        'Checkpoint refreshed after the hub import. The earlier one still asked for the seven SOPs to be pasted; they came out of the hub export instead.', 'brittany');
+    addEvent(db, { entity_type: 'system', entity_id: 'checkpoint', kind: 'setup', status: 'info',
+      label: 'Checkpoint refreshed: the seven SOPs are in, so the "paste them" step is retired',
+      source: 'manual', actor: 'brittany', external_id: 'checkpoint-2026-11-04' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

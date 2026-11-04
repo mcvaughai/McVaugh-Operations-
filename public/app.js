@@ -92,7 +92,7 @@
         <dt>Current step</dt><dd>${esc(cp.current_step || '—')}</dd>
         <dt>Last completed</dt><dd>${esc(cp.last_completed || '—')}</dd>
       </dl>
-      <div class="next-action"><b>Recommended next action</b><br>${esc(cp.next_action || 'Set one in the checkpoint.')}</div>
+      <div class="next-action"><b>Recommended next action</b>${cp.created_at ? `<span class="cp-age" title="When this checkpoint was saved">saved ${esc(fmt(cp.created_at))}</span>` : ''}<br>${esc(cp.next_action || 'Set one in the checkpoint.')}</div>
       <dl class="kv">
         <dt>Waiting on</dt><dd>${esc(cp.waiting_on || (waiting.length ? [...new Set(waiting)].join('; ') : 'Nobody'))}</dd>
         <dt>Decisions needed</dt><dd>${esc(cp.decisions_needed || '')}${decisionsNeeded.length ? `<ul style="margin:4px 0 0 16px;padding:0">${decisionsNeeded.map(d => `<li><a href="#" data-open="decision:${d.id}">${esc(d.title)}</a></li>`).join('')}</ul>` : ''}</dd>

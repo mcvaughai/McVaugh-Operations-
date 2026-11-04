@@ -60,7 +60,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     cookie = admin;
   });
   await check('obsidian import keeps source and date', async () => { const r0 = await call('POST', '/api/import/obsidian', { files: [{ name: 'Selections SOP.md', content: '---\nowner: Pam\ndepartment: design\n---\n# Selections SOP\n## Trigger\nSupplier sends sheet\n## Steps\n1. Maria signs\n2. Enter in Excel\n' }] }); const r = r0.body; assert.equal(r.imported, 1, JSON.stringify(r0)); const t = (await call('GET', '/api/state')).body.tasks.find(t => t.id === 'obs-selections-sop'); assert.equal(t.owner_id, 'pam'); assert.match(t.source, /Obsidian import: Selections SOP.md/); assert.equal(t.trigger, 'Supplier sends sheet'); });
-  await check('active jobs recorded from Brittany (data update applied once)', async () => { const s = (await call('GET', '/api/state')).body; const act = s.homes.filter(h => h.active === 'active'); assert.equal(act.length, 13); assert.equal(act.filter(h => /permits/i.test(h.stage)).length, 10); });
+  await check('active jobs recorded from Brittany (data update applied once)', async () => { const s = (await call('GET', '/api/state')).body; const act = s.homes.filter(h => h.active === 'active'); assert.equal(act.length, 15, 'the model and 11623 Bistro went active after the 3 November walk-through'); assert.equal(act.filter(h => /permits/i.test(h.stage)).length, 10); });
   await check('folder import: dry run writes nothing; import; re-import skips unchanged; changed file re-imports', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'mow-vault-')); fs.mkdirSync(path.join(vault, '.obsidian')); fs.writeFileSync(path.join(vault, '.obsidian', 'x.md'), 'ignored');
     fs.writeFileSync(path.join(vault, 'PO.md'), '---\nowner: Maria\ndepartment: Purchasing\n---\n# Issue a purchase order\n## When\nBudget checked\n## Steps\nEnter PO\n## Vendor notes\nx\n');
@@ -138,10 +138,12 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   });
   await check('succession pass: meetings stored with provenance, step reviews, flows, job status, handover sorted no-backup first, agenda', async () => {
     const s = (await call('GET', '/api/state')).body;
-    const m = s.documents.filter(d => d.kind === 'meeting'); assert.equal(m.length, 3); assert.ok(m.every(d => d.meeting_date && JSON.parse(d.attendees).length >= 2 && d.source));
+    const m = s.documents.filter(d => d.kind === 'meeting'); assert.equal(m.length, 4); assert.ok(m.every(d => d.meeting_date && JSON.parse(d.attendees).length >= 2 && d.source));
     const wo = s.tasks.find(t => t.id === 'hub-work_order_ap'); const rev = JSON.parse(wo.step_review); assert.equal(rev.length, 10); assert.ok(rev.every(r => r.verdict !== 'match' || r.cite)); assert.match(wo.verification_result, /Reconciled against meetings/); assert.match(wo.missing_info, /Not mentioned/); assert.ok(JSON.parse(wo.flow).nodes.length > 5);
     assert.ok(s.tasks.find(t => t.id === 'tr-leander-arc-review' && t.proposed === 0 && t.backup_id === 'teresa'));
-    const h = s.homes.find(h => h.address === '11603 Royal Parkside Place'); assert.match(h.stage, /Framing/); assert.match(h.status_cite, /2026-10-16/);
+    const h = s.homes.find(h => h.address === '11603 Royal Parkside Place'); assert.match(h.stage, /Framing/);
+    // The citation moves to the most recent meeting that spoke about the house: 10/16 then 11/03.
+    assert.match(h.status_cite, /J 11\/03/);
     const ho = (await call('GET', '/api/handover?person=maria')).body; assert.equal(ho.items.length, 23); assert.ok(ho.items[0].no_backup && ho.items[0].risk === 'high'); const firstBackup = ho.items.findIndex(i => !i.no_backup); assert.ok(ho.items.slice(firstBackup).every(i => !i.no_backup), 'no-backup items come first');
     assert.ok(ho.not_mentioned.length > 5); assert.equal(ho.person.crossed_off.length, 20);
     const agenda = (await call('GET', '/api/handover/agenda?person=maria')).body; assert.match(agenda, /walk me through how you do this today/); assert.match(agenda, /11603 Royal Parkside Place/); assert.match(agenda, /\[M \d/);
@@ -161,7 +163,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   });
   await check('meeting 3 applied: third transcript, merged step reviews, supersedes links, 11607 active, new handover item', async () => {
     const s = (await call('GET', '/api/state')).body;
-    assert.equal(s.documents.filter(d => d.kind === 'meeting').length, 3);
+    assert.equal(s.documents.filter(d => d.kind === 'meeting').length, 4);
     const co = s.tasks.find(t => t.id === 'hub-change_order_budget'); const rows = JSON.parse(co.step_review); assert.ok(rows.some(r => String(r.n) === '2–3' && r.verdict === 'no_longer' && /M3/.test(r.cite))); assert.ok(!rows.some(r => String(r.n) === '2'), 'earlier per-step rows replaced by the later finding'); assert.match(co.verification_result, /2026-10-20 call/);
     const tco = s.tasks.find(t => t.id === 'tr-change-orders'); assert.deepEqual(JSON.parse(tco.supersedes), ['hub-change_order_request', 'hub-change_order_budget']);
     assert.ok(JSON.parse(s.tasks.find(t => t.id === 'tr-permit-per-address').supersedes).includes('hub-permitting'));
@@ -723,6 +725,26 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'mow-gl-insurance.json'), 'utf8'));
     assert.equal(wf.active, false);
     assert.ok(JSON.stringify(wf).includes('/api/webhooks/insurance/updated'));
+  });
+  await check('the 3 November house-by-house meeting is stored and the four villas carry its status', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const d = s.documents.find(x => x.id === 'doc-meeting-james-2026-11-03');
+    assert.ok(d); assert.equal(d.meeting_date, '2026-11-03'); assert.equal(d.cite_key, 'J 11/03');
+    assert.deepEqual(JSON.parse(d.attendees).sort(), ['brittany', 'james', 'lonnie']);
+    assert.match(d.summary, /automatic transcript with heavy crosstalk/i, 'the transcript\'s reliability is stated, not glossed');
+    const cited = s.homes.filter(h => h.status_cite === '[J 11/03]');
+    assert.equal(cited.length, 5); assert.ok(cited.every(h => h.active === 'active' && h.stage && h.next_milestone));
+    const h607 = s.homes.find(h => /11607 Royal Parkside/.test(h.address));
+    assert.match(h607.issues, /no mechanical work order/);
+    assert.match(h607.next_milestone, /Trusses arrive 4 Nov/);
+    assert.match(s.homes.find(h => /11602 Royal Parkside/.test(h.address)).issues, /oven handle/);
+    // six follow-ups, each owned by a person rather than left in the transcript
+    const f = s.tasks.filter(t => t.id.startsWith('j1103-'));
+    assert.equal(f.length, 6); assert.ok(f.every(t => t.owner_id && t.next_action));
+    assert.equal(f.find(t => t.id === 'j1103-townhome-permits').owner_id, 'lonnie');
+    // and the duplicate vendor lists are raised rather than one being picked
+    assert.match(s.wo_specifics.find(x => x.id === 'ws-vendor-list-duplication').detail, /neither is wrong/);
+    assert.match(s.people.find(p => p.id === 'lonnie').role_summary, /11603 and 11607/);
   });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {

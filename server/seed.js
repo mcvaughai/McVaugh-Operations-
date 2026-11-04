@@ -980,6 +980,88 @@ const UPDATES = [
       label: 'Checkpoint refreshed: the seven SOPs are in, so the "paste them" step is retired',
       source: 'manual', actor: 'brittany', external_id: 'checkpoint-2026-11-04' });
   } },
+  { key: 'meeting-james-2026-11-03', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Meeting recording: James McVaugh, Brittany, Lonnie — 3 November 2026, 1h27m';
+    const CITE = '[J 11/03]';
+    const { docxText } = require('./imports');
+    const fp = path.join(__dirname, '..', 'seed', 'meetings', 'james-2026-11-03.docx');
+    const text = docxText(fs.readFileSync(fp)).replace(/&apos;/g, '’');
+    upsert(db, 'documents', { id: 'doc-meeting-james-2026-11-03', title: 'House-by-house status meeting — 3 November 2026', kind: 'meeting',
+      kind_reason: 'Teams recording transcript', sensitive: 0, meeting_date: '2026-11-03', cite_key: 'J 11/03',
+      attendees: JSON.stringify(['james', 'brittany', 'lonnie']),
+      summary: 'Walked the four Royal Parkside villas one by one, then permits and the outlying jobs. Lonnie was handed the schedules for 11603 and 11607, the lumber drops, and the inspection report and punch list for the model. Automatic transcript with heavy crosstalk, so names and some figures are unreliable; what is recorded below is only what was clear.',
+      content: text.slice(0, 400 * 1024), size: text.length, source: SRC, imported_at: ts,
+      file_path: fp, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', underlying_status: 'extracted' });
+
+    const H = (id, fields) => { if (db.prepare('SELECT 1 FROM homes WHERE id = ?').get(id)) upsert(db, 'homes', { id, status_cite: CITE, updated_at: ts, ...fields }); };
+    H('job-765', { active: 'active', stage: 'The model — punch-out and exterior paint',
+      next_milestone: 'Lonnie and James walk the inspection report and punch list together (4 Nov); painters back on the exterior once it stops raining.',
+      issues: 'Drywall crew were in to fix doors. Exterior paint was walked with the painters on 2 Nov but rain may have stopped them. Painters are needed in the model again after the sheetrockers. Furniture and the patio furniture in the garage go back to the storage unit on Richmond; the garages have to be emptied apart from the window, door and tub. Nobody was sure who holds the storage key.' });
+    H('job-766', { active: 'active', stage: 'Active punch-out, finals in progress',
+      next_milestone: 'Structural final re-inspection on site 4 Nov with plans and permits; proper punch-out walk on Friday once the painters and cleaners are done.',
+      issues: 'Painters are doing the punch-out; a final clean needs booking before Friday. Vent hood, and securing the oven and microwave, due 4 Nov. The oven handle for the model has not arrived — Lonnie is tracking it. Work orders are done. The draw was requested from First Financial and is believed received, but that was not confirmed in the meeting.' });
+    H('job-767', { active: 'active', stage: 'Framing; cabinet drawings under review',
+      next_milestone: 'Review the cabinet drawings against the plans and selections with Lonnie before they go to production; Lonnie to build a Microsoft Project schedule for this house and 11607.',
+      issues: 'Cabinet drawings arrived 3 Nov. Pricing was already compared with the old model about four months ago and the increase was justified by extra cabinets including a trash cabinet; James wants the drawings checked for doors versus added cabinets. Selection sheets are not finalised — Danielle is back next week to finish them.' });
+    H('job-768', { active: 'active', stage: 'Slab down, framing about to start (plan 3A, modified to four bedrooms)',
+      next_milestone: 'Trusses arrive 4 Nov; framer starts Friday once the lumber is released. Framing runs about three weeks through corners and deck with inspections.',
+      issues: 'The framer is waiting on confirmation that the lumber has been released. Grading is done and the site is cleared. Doors and windows are ready whenever wanted, no delay there. Work orders are good through plumbing, electrical, framing and roofing, but there is no mechanical work order and nobody knew why. No selections recorded for this house yet. Same plan as 11602 behind it, with the game room made into a fourth bedroom with a full bath.' });
+    H('job-854', { active: 'active', stage: 'Leander Builders building it; utilities being finalised',
+      next_milestone: 'City was due to enter it on 4 Nov so the impact fees and the meter fee can be paid.',
+      issues: 'Landscaping is installed. Leander Builders is handling the build; Brittany emails them to make contact with James.' });
+
+    // Things the meeting raised that are nobody's task yet.
+    const T = (id, o) => upsert(db, 'tasks', { id, department_id: o.dept, owner_id: o.owner, backup_id: o.backup || null,
+      title: o.title, trigger: o.trigger || null, steps: null, documented: 0, automated: 0, verified: 0, board: o.board || 'next',
+      proposed: 0, missing_info: o.missing || null, next_action: o.next, blocker: o.blocker || null, source: SRC + ' ' + CITE, updated_at: ts });
+    T('j1103-mechanical-wo-11607', { dept: 'purchasing', owner: 'james', backup: 'lonnie',
+      title: '11607: find out why there is no mechanical work order', board: 'next',
+      trigger: 'Raised 3 Nov: work orders are complete through plumbing, electrical, framing and roofing, but mechanical is missing and nobody knew why.',
+      next: 'Check the database for a mechanical work order on 11607 and raise one if it is genuinely absent.' });
+    T('j1103-file-locations-doc', { dept: 'executive', owner: 'brittany', backup: 'teresa',
+      title: 'Write down where all the files live — plans, colours, selections', board: 'next',
+      trigger: 'James, 3 Nov: "one of the documents I need to do is where all the files are. All the plans, all the colour, everything."',
+      missing: 'The exterior colour matrix is said to be in the "how to build a house" document with its file path, and Teresa holds the master copy signed by Jim. That needs confirming and writing down in one place.',
+      next: 'List each document type and its path; confirm the signed colour matrix with Teresa.' });
+    T('j1103-exterior-colour-change', { dept: 'design', owner: 'james', backup: 'lonnie',
+      title: 'Decide whether to lighten the villa exterior colour before stucco', board: 'next',
+      trigger: 'James wants the exterior lightened by a shade; it has to be settled before stucco starts on 11603 and 11607.',
+      missing: 'There is a long-running disagreement about whether the paint and the stucco match; Jim is not satisfied. The stucco mix differs from the paint even though both are Sherwin-Williams.',
+      next: 'Settle the colour with Jim before the stucco contractor starts.' });
+    T('j1103-hoa-wall-repairs', { dept: 'hoa', owner: 'james', backup: 'teresa',
+      title: 'HOA front wall: crack repair and repainting (11507 end)', board: 'next',
+      trigger: 'Phase one of the wall repairs was agreed but has not been started.',
+      missing: 'Alberto quoted for the repaint but nobody could remember the figure. MCH is the HOA here and is responsible for the walls, landscaping and common areas; there are reserves, but this has to be checked against the budget first.',
+      next: 'Find Alberto’s price, check it against the HOA budget, then schedule the front wall.' });
+    T('j1103-townhome-permits', { dept: 'permits', owner: 'lonnie', backup: 'brittany',
+      title: 'Townhomes: update and push the two submitted permit applications', board: 'next',
+      trigger: 'Both buildings are submitted with project numbers and open applications. Nothing is approved.',
+      missing: 'Both were submitted for OLA and need updating. Both are to be the new fives with a third floor, three storeys like the building next to them.',
+      next: 'James wants Lonnie to run these, using the document Brittany has just finished on how to start a new application.' });
+    T('j1103-anna-maria-remodel', { dept: 'estimating', owner: 'james', backup: 'pam',
+      title: 'Anna Maria remodel (Royal Oaks): needs plans before it can be priced', board: 'waiting',
+      trigger: 'She wants a price for added square footage and redone elevations throughout.',
+      missing: 'It cannot be bid without plans, and drawings cost money. She has not replied to the email.',
+      next: 'Chase the reply, then agree who pays for the drawings before quoting.' });
+
+    // Two people keeping the same vendor list is the same duplication problem as the hub.
+    upsert(db, 'wo_specifics', { id: 'ws-vendor-list-duplication', vendor_name: 'ALL — which vendor list is right?',
+      detail: 'Brittany keeps a spreadsheet of which vendor was used at each construction stage for each villa; James says the current list already lives in the workflow folder. Brittany’s is per house and historical (the plumber changed between houses, Shelltex then another), James’s is the current vendors only. Both are useful and neither is wrong, but agree which one is checked before a work order is raised.',
+      scope: 'vendor', task_id: 'tr-wo-entry-from-bid', source: SRC + ' ' + CITE, noted_on: '2026-11-03', updated_at: ts });
+
+    // Lonnie is being handed real work now, which is what the handover was waiting for.
+    upsert(db, 'people', { id: 'lonnie', review_status: 'under_review',
+      role_summary: 'Construction and permitting. Taking the schedules for 11603 and 11607, the lumber drops, the model’s inspection report and punch list, and the townhome permit applications. Learning the plan reviews alongside James.',
+      updated_at: ts });
+    for (const [hid, note] of [['ho-scheduling', '11/03: Lonnie takes the 11603 and 11607 schedules, to be built in Microsoft Project, after James walks him through the lumber drops. First real handover of a schedule.'],
+      ['ho-trade-calls', '11/03: James is going through the model’s punch list with Lonnie and telling him who to call for what.']])
+      { const h = db.prepare('SELECT note FROM handover_items WHERE id = ?').get(hid); if (h) upsert(db, 'handover_items', { id: hid, note: [h.note, note].filter(Boolean).join('\n'), updated_at: ts }); }
+
+    addEvent(db, { entity_type: 'document', entity_id: 'doc-meeting-james-2026-11-03', kind: 'import', status: 'info',
+      label: 'Meeting stored: house-by-house status with James and Lonnie, 3 November; five jobs updated and six follow-ups raised',
+      source: 'import', actor: 'brittany', external_id: 'meeting-james-2026-11-03' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

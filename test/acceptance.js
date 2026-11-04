@@ -250,7 +250,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const s = (await call('GET', '/api/state')).body;
     const a = s.approvals.find(x => x.id === id);
     assert.equal(a.status, 'pending'); assert.equal(a.released, 0, 'nothing is released while it is pending');
-    assert.equal(a.requested_from, 'brittany', 'routed to the task owner');
+    assert.equal(a.requested_from, 'james', 'the work order goes to James, who raises it once a price is agreed');
     assert.ok(a.token === undefined, 'the approval token is never sent to the browser');
     assert.equal(s.agents.find(g => g.id === 'agent-purchasing').runtime.status, 'waiting');
     assert.equal(s.integrations.find(i => i.id === 'teams').status, 'disconnected', 'Teams is not connected until Brittany sets the webhook');
@@ -305,7 +305,8 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.equal(t.blocker, null, 'the draft-state question fell away once the agent asks before entering');
     assert.ok(s.decisions.some(d => d.id === 'dec-wo-agent-draft-first' && d.status === 'accepted'));
     assert.match(t.steps, /M-chat 10\/24/, "Maria's answer is cited where the procedure says entering notifies the sub");
-    assert.match(t.trigger, /A person asks for it/, 'a person starts every work order');
+    assert.match(t.trigger, /price has been reviewed and agreed by Lonnie/, 'Lonnie agrees the price, then James raises it');
+    assert.equal(t.owner_id, 'james'); assert.equal(t.backup_id, 'lonnie');
     for (const f of ['mow-wo-approval', 'mow-bid-requests']) {
       const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', f + '.json'), 'utf8'));
       assert.equal(wf.active, false, f + ' ships switched off');
@@ -660,7 +661,8 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(s.documents.some(d => d.id === 'doc-hub-gl-insurance-steps'), 'the hub\'s longer GL version is kept beside the skill, not merged over it');
     assert.match(s.tasks.find(t => t.id === 'sop-update-gl-insurance').missing_info, /21 steps and the ChatGPT skill as 14/);
     assert.equal(s.people.find(p => p.id === 'maria').full_name, 'Maria Abney', 'full names came from the hub');
-    assert.ok(s.decisions.some(d => d.id === 'dec-purchasing-split-lonnie-james' && d.status === 'open'));
+    // Left open on 3 November, answered by Maria on the 4th.
+    assert.ok(s.decisions.some(d => d.id === 'dec-purchasing-split-lonnie-james' && d.status === 'accepted'));
   });
   await check('GL insurance: James owns it, and the register mirror warns before a certificate lapses', async () => {
     const soon = new Date(Date.now() + 10 * 864e5).toISOString().slice(0, 10);
@@ -745,6 +747,28 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     // and the duplicate vendor lists are raised rather than one being picked
     assert.match(s.wo_specifics.find(x => x.id === 'ws-vendor-list-duplication').detail, /neither is wrong/);
     assert.match(s.people.find(p => p.id === 'lonnie').role_summary, /11603 and 11607/);
+  });
+  await check('Maria\'s split holds: Lonnie judges the bid, James raises the work order', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const d = s.decisions.find(x => x.id === 'dec-purchasing-split-lonnie-james');
+    assert.equal(d.status, 'accepted'); assert.match(d.reason, /judgment versus entry/);
+    assert.match(s.documents.find(x => x.id === 'doc-maria-purchasing-split').content, /matches the specifications provided/);
+    // judgment follows Lonnie, entry follows James
+    for (const id of ['tr-bids-and-sqft-rates', 'tr-schedule-and-trade-coordination', 'tr-field-verification-and-draws'])
+      assert.equal(s.tasks.find(t => t.id === id).owner_id, 'lonnie', id + ' is judgment');
+    for (const id of ['tr-purchase-orders-materials', 'tr-wo-entry-from-bid'])
+      assert.equal(s.tasks.find(t => t.id === id).owner_id, 'james', id + ' is entry');
+    // the routing follows the rule, not just the text
+    const r = await call('POST', '/api/work-orders/request', { vendor_id: 'vendor-plumbing', amount: '$1,000' });
+    assert.equal(s.tasks.find(t => t.id === 'tr-wo-entry-from-bid').backup_id, 'lonnie');
+    const ap = (await call('GET', '/api/state')).body.approvals.find(a => a.id === r.body.id);
+    assert.equal(ap.requested_from, 'james');
+    const over = await call('POST', '/api/work-orders/request', { vendor_id: 'vendor-plumbing', amount: '$99,000', over_budget: true });
+    assert.equal((await call('GET', '/api/state')).body.approvals.find(a => a.id === over.body.id).requested_from, 'jim');
+    // and the gap it opens is recorded rather than assumed away
+    const cap = s.tasks.find(t => t.id === 'tr-lonnie-bid-review-handover');
+    assert.ok(cap); assert.match(cap.missing_info, /only in her head/);
+    assert.equal(s.handover_items.find(h => h.id === 'ho-bids-vendors').risk, 'high');
   });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {

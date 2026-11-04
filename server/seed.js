@@ -1062,6 +1062,78 @@ const UPDATES = [
       label: 'Meeting stored: house-by-house status with James and Lonnie, 3 November; five jobs updated and six follow-ups raised',
       source: 'import', actor: 'brittany', external_id: 'meeting-james-2026-11-03' });
   } },
+  { key: 'purchasing-split-2026-11-04', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Maria to Brittany, 2026-11-04 07:30';
+    const CITE = '[M-chat 11/04]';
+    // Maria's answer to "who takes over your pricing and coordination": Lonnie, because it needs somebody
+    // who knows what they are looking at in a bid — whether it is accurate and matches the specification.
+    // Once the price is negotiated and agreed, James raises the work order or PO. Judgment and entry split.
+    upsert(db, 'documents', { id: 'doc-maria-purchasing-split', title: 'Maria on who takes over pricing and coordination (11/04)',
+      kind: 'procedure', kind_reason: 'Maria answering the open question directly, four days before she leaves',
+      sensitive: 0, meeting_date: '2026-11-04', cite_key: 'M-chat 11/04', attendees: JSON.stringify(['maria', 'brittany']),
+      summary: 'Lonnie takes pricing and coordination, because reviewing a bid needs someone who can tell whether it is accurate and matches the specifications provided. Once the price is negotiated and agreed, James does the work order or PO.',
+      content: 'Brittany: who takes over Maria’s pricing and coordination responsibilities.\n\nMaria: this should be Lonnie. like we discussed in the meeting on Monday, it needs to be somebody that knows what they are looking for/at in the bids received so they know it is accurate and it matches the specifications provided, etc. once the price is negotiated and agreed, then James can come in and do the work order or PO necessary,',
+      source: SRC, imported_at: ts, underlying_status: 'extracted' });
+
+    upsert(db, 'decisions', { id: 'dec-purchasing-split-lonnie-james', status: 'accepted', decided_by: 'Maria, confirming what was agreed in the Monday meeting',
+      title: 'Lonnie prices and coordinates; James raises the work order or PO once the price is agreed',
+      reason: 'Maria, 4 November: the bid review has to sit with someone who knows what they are looking at, so they can tell whether a bid is accurate and matches the specifications provided. That is Lonnie. Once the price is negotiated and agreed, James comes in and does the work order or PO. The line is judgment versus entry, not purchasing versus construction, which is why it does not split neatly by department. ' + CITE,
+      source: SRC });
+
+    // Judgment work follows Lonnie.
+    for (const [id, note] of [
+      ['tr-bids-and-sqft-rates', 'Lonnie reviews the bid against the specification and agrees the price; James raises the work order afterwards ' + CITE],
+      ['tr-schedule-and-trade-coordination', 'Coordination passes to Lonnie ' + CITE],
+      ['tr-field-verification-and-draws', 'Verifying the work before a draw is judgment, so it follows Lonnie ' + CITE],
+    ]) { const t = db.prepare('SELECT approval_rules FROM tasks WHERE id = ?').get(id); if (!t) continue;
+      upsert(db, 'tasks', { id, owner_id: 'lonnie', backup_id: 'james',
+        approval_rules: [t.approval_rules, note].filter(Boolean).join(' '), updated_at: ts }); }
+    upsert(db, 'tasks', { id: 'tr-selections-vendor-bidding', owner_id: 'lonnie', backup_id: 'danielle',
+      missing_info: 'Danielle still owns the selections themselves; what moves to Lonnie is pricing them and judging new vendor bids ' + CITE, updated_at: ts });
+
+    // Entry work follows James.
+    for (const id of ['tr-purchase-orders-materials', 'tr-wo-entry-from-bid'])
+      if (db.prepare('SELECT 1 FROM tasks WHERE id = ?').get(id))
+        upsert(db, 'tasks', { id, owner_id: 'james', backup_id: 'lonnie',
+          trigger: 'A price has been reviewed and agreed by Lonnie. James then raises the work order or purchase order. ' + CITE, updated_at: ts });
+
+    // The handover items this settles.
+    for (const [hid, backup, why] of [
+      ['ho-bids-vendors', 'Lonnie (prices and negotiates); James raises the WO/PO afterwards',
+        'Settled 4 November: Lonnie takes this, because judging whether a bid is accurate and matches the specification needs someone who knows what they are looking at ' + CITE + '. He is new, so the knowledge of who to call and what a fair price looks like is still the thing to capture before Maria goes.'],
+      ['ho-budget-check', 'Lonnie checks the bid; Jim still decides anything over budget',
+        'Settled 4 November: checking a bid against the budget sits with Lonnie as part of pricing ' + CITE + '. Over the line it is still Jim.'],
+      ['ho-work-orders', 'James (entry), from a price Lonnie has agreed',
+        'Settled 4 November: James raises the work order once the price is agreed ' + CITE + '. The judgment about whether the price is right is not his.'],
+      ['ho-purchase-orders', 'James (entry), from a price Lonnie has agreed',
+        'Settled 4 November: same split as work orders ' + CITE + '.'],
+    ]) { const h = db.prepare('SELECT * FROM handover_items WHERE id = ?').get(hid); if (!h) continue;
+      upsert(db, 'handover_items', { id: hid, backup, why, status: 'reassigned', risk: hid === 'ho-bids-vendors' ? 'high' : 'medium',
+        capture: hid === 'ho-bids-vendors'
+          ? 'Sit Lonnie down with Maria over two or three real bids before 6 November: what she checks first, what makes a bid wrong, and what a fair number looks like per trade.'
+          : h.capture,
+        doc_ids: [...new Set([...JSON.parse(h.doc_ids || '[]'), 'doc-maria-purchasing-split'])], updated_at: ts }); }
+
+    upsert(db, 'people', { id: 'lonnie',
+      role_summary: 'Construction, permitting, and now pricing and trade coordination. Reviews bids against the specification, negotiates and agrees the price; James raises the work order or PO afterwards ' + CITE + '. Holds the schedules for 11603 and 11607, the lumber drops, the model’s punch list and the townhome permits.',
+      departments: ['construction', 'permits', 'purchasing'], updated_at: ts });
+
+    // The thing this makes urgent: Lonnie inherits the judgment with none of the experience behind it.
+    upsert(db, 'tasks', { id: 'tr-lonnie-bid-review-handover', title: 'Walk real bids with Maria and Lonnie before she leaves',
+      department_id: 'purchasing', owner_id: 'brittany', backup_id: 'james', board: 'working', proposed: 0,
+      documented: 0, automated: 0, verified: 0,
+      trigger: 'Maria named Lonnie for pricing on 4 November; her last day is the 6th.',
+      inputs: 'Two or three bids already in hand, ideally from different trades including one priced per square foot.',
+      steps: '1. Pick two or three recent bids, including a per-square-foot trade.\n2. Maria walks Lonnie through each: what she looks at first, how she checks it against the specification, what would make her reject it.\n3. Write down what she checks, in her words, against each trade.\n4. Lonnie prices the next live bid with Maria watching rather than the other way round.',
+      missing_info: 'Everything about how Maria judges a bid is still only in her head. The procedure for entering a work order is written down; the judgment that comes before it is not.',
+      next_action: 'Book it for 5 November. This is the last of Maria’s knowledge that has no written form and no backup.',
+      source: SRC + ' ' + CITE, updated_at: ts });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'lonnie', kind: 'setup', status: 'info',
+      label: 'Manual: Maria named Lonnie for pricing and coordination; James raises the work order or PO once the price is agreed',
+      source: 'manual', actor: 'brittany', external_id: 'purchasing-split-2026-11-04' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

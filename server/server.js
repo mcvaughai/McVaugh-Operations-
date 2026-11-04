@@ -339,7 +339,7 @@ function askToDecide(br, reason) {
     ? `All ${br.expected} bids requested for ${br.line_item} have come in. Which one do you want? Approving enters the work order, which emails that subcontractor to say it is approved.`
     : `A bid was received for ${br.line_item}${br.sole_source ? ` (only vendor asked${br.sole_source_reason ? `: ${br.sole_source_reason}` : ''})` : ''}. Do you approve? Approving enters the work order, which emails ${bids[0].vendor_name || 'the subcontractor'} to say it is approved.`;
   const a = newApproval({ agent_id: 'agent-purchasing', task_id: 'tr-wo-entry-from-bid', kind: multi ? 'bid_award' : 'work_order',
-    bid_request_id: br.id, subject, question, requested_from: br.requested_by || 'brittany',
+    bid_request_id: br.id, subject, question, requested_from: br.requested_by || 'lonnie',
     vendor_id: multi ? null : bids[0].vendor_id, home_id: br.home_id, amount: multi ? null : bids[0].amount,
     options: JSON.stringify(bids.map(b => ({ id: b.id, label: (b.vendor_name || vendorOf(b.vendor_id).vendor || b.vendor_id) + sqftWarn(b), amount: b.amount, note: b.scope_notes || null }))),
     evidence: reason || (multi ? `All ${bids.length} bids in` : br.sole_source ? 'Sole-sourced line item' : 'Bid received'),
@@ -376,7 +376,7 @@ function sweepOverdueBids() {
       subject: `${br.line_item}: ${got} of ${br.expected} bids in and the date has passed`,
       question: `${late.length ? late.join(', ') + ' have not sent a bid. ' : ''}Do you want to chase them, or decide on the ${got} you have? Nothing has been entered.`,
       options: JSON.stringify([{ id: 'chase', label: 'Chase the missing bids' }, ...(got ? [{ id: 'decide', label: `Decide on the ${got} bid${got === 1 ? '' : 's'} already in` }] : []), { id: 'cancel', label: 'Cancel this line item' }]),
-      requested_from: br.requested_by || 'brittany', home_id: br.home_id, due_by: br.due_by, source: 'manual', external_id: 'chase:' + br.id });
+      requested_from: br.requested_by || 'lonnie', home_id: br.home_id, due_by: br.due_by, source: 'manual', external_id: 'chase:' + br.id });
     dbm.addEvent(db, { entity_type: 'agent', entity_id: 'agent-purchasing', kind: 'run', status: 'waiting_approval', source: 'manual', actor: 'app',
       label: `${br.line_item} overdue: ${got} of ${br.expected} bids in`, external_id: `overdue:${br.id}` });
   }
@@ -615,7 +615,7 @@ async function api(req, res, url, p, role) {
     const id = 'ap-' + crypto.randomUUID().slice(0, 8);
     const token = crypto.randomBytes(16).toString('hex');
     const agentId = b.agent_id || 'agent-purchasing';
-    const who = b.requested_from || db.prepare('SELECT owner_id FROM tasks WHERE id = ?').get(b.task_id || '')?.owner_id || 'brittany';
+    const who = b.requested_from || db.prepare('SELECT owner_id FROM tasks WHERE id = ?').get(b.task_id || '')?.owner_id || 'james';
     const row = { id, agent_id: agentId, task_id: b.task_id || null, kind: b.kind || 'work_order', subject: String(b.subject),
       vendor_id: b.vendor_id || null, home_id: b.home_id || null, amount: b.amount != null ? String(b.amount) : null,
       question: b.question || 'A work order was entered as a draft. Please verify it is correct. Do you approve sending it to the subcontractor?',
@@ -809,7 +809,7 @@ async function api(req, res, url, p, role) {
         Draws: b.draws || '1' }),
       evidence: b.evidence || (b.bid_doc_id ? 'Bid document ' + b.bid_doc_id : 'Asked for by ' + role),
       vendor_id: b.vendor_id, home_id: b.home_id || null, amount: b.amount != null ? String(b.amount) : null,
-      requested_by: role, requested_from: over ? 'jim' : 'brittany',
+      requested_by: role, requested_from: over ? 'jim' : 'james',
       channel: b.channel || 'app', source: 'manual', external_id: 'wo:' + crypto.randomUUID() });
     dbm.audit(db, role, 'work_order_requested', 'approval', a.id, a.subject);
     return send(res, 200, { ok: true, id: a.id, url: approvalLink(a), needs_sqft: needsSqft });

@@ -770,6 +770,29 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(cap); assert.match(cap.missing_info, /only in her head/);
     assert.equal(s.handover_items.find(h => h.id === 'ho-bids-vendors').risk, 'high');
   });
+  await check('the Landing scope is filed with McVaugh\'s own items and the contradictions raised, not smoothed over', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const d = s.documents.find(x => x.id === 'doc-rol-scope-2026-10-14');
+    assert.ok(d); assert.equal(d.cite_key, 'ROL SOW 10/14'); assert.match(d.content, /REMAINING ALLOWANCES/);
+    // the four (by owner) items are McVaugh's scope
+    const scope = s.tasks.find(t => t.id === 'tr-landing-frank-scope');
+    assert.equal(scope.documented, 1); assert.equal(scope.owner_id, 'lonnie');
+    for (const bit of [/Geotechnical/, /Form survey and final survey/, /impact fees/])
+      assert.match(scope.steps, bit);
+    assert.match(scope.missing_info, /applies to what comes before it or everything after/, 'the ambiguous marker is flagged, not resolved by guessing');
+    // the money question is an open decision rather than an answer
+    const dec = s.decisions.find(x => x.id === 'dec-rol-allowance-or-standard');
+    assert.equal(dec.status, 'open'); assert.match(dec.reason, /\$98,700/); assert.match(dec.reason, /Both cannot be true/);
+    // the document errors are listed for one message to Frank
+    const errs = s.tasks.find(t => t.id === 'tr-rol-document-errors');
+    assert.match(errs.steps, /ten items" introduces a list of eleven/);
+    assert.match(errs.steps, /second to third floor/, 'the three-storey carpet line on a two-storey plan is caught');
+    assert.match(errs.steps, /lot and block/);
+    // and it closes something Maria owed
+    const h = s.handover_items.find(x => x.id === 'ho-landing-frank');
+    assert.equal(h.status, 'captured'); assert.match(h.note, /RECEIVED 4 November/);
+    assert.ok(JSON.parse(h.doc_ids).includes('doc-rol-scope-2026-10-14'));
+  });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {
     // A route accidentally placed above the session gate would answer a signed-out caller. This catches that.

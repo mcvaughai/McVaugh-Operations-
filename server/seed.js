@@ -1134,6 +1134,71 @@ const UPDATES = [
       label: 'Manual: Maria named Lonnie for pricing and coordination; James raises the work order or PO once the price is agreed',
       source: 'manual', actor: 'brittany', external_id: 'purchasing-split-2026-11-04' });
   } },
+  { key: 'rol-scope-2026-11-04', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Revised scope of work and specifications, Royal Oaks Landing Plan 1A — Urban Edge Builders (Frank Martin), dated 14 October 2026; sent by Maria 4 November 2026';
+    const CITE = '[ROL SOW 10/14]';
+    const { docxText } = require('./imports');
+    const fp = path.join(__dirname, '..', 'seed', 'meetings', 'rol-scope-2026-10-14.docx');
+    const text = docxText(fs.readFileSync(fp)).replace(/&apos;/g, '’');
+    upsert(db, 'documents', { id: 'doc-rol-scope-2026-10-14', title: 'Royal Oaks Landing — scope of work and specifications, Plan 1A (Frank Martin)',
+      kind: 'reference', kind_reason: 'the Landing scope Brittany has been waiting on since 20 October', sensitive: 0,
+      meeting_date: '2026-10-14', cite_key: 'ROL SOW 10/14',
+      summary: 'Urban Edge Builders’ construction proposal for one Plan 1A two-storey house at Royal Oaks Landing, 2,035.39 SF air conditioned, addressed to Maria. Sets out what is built, what is included at the contract price, what is an allowance and what is excluded. Maria: the highlights are what is still waiting on information, and the items marked "(by owner)" are McVaugh’s own scope. Not signed; several blanks and open questions remain.',
+      content: text, size: text.length, source: SRC, imported_at: ts,
+      file_path: fp, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', underlying_status: 'extracted' });
+
+    // What McVaugh does itself, marked "(by owner)" in the proposal. The site-and-permitting line is
+    // genuinely ambiguous about where the marker starts, so it is recorded as ambiguous rather than guessed.
+    upsert(db, 'tasks', { id: 'tr-landing-frank-scope', owner_id: 'lonnie', backup_id: 'james', documented: 1, updated_at: ts,
+      trigger: 'A Landing house is to be built. Frank Martin’s company (Urban Edge Builders) is the contractor; this says which parts McVaugh still carries.',
+      inputs: 'The scope of work and specifications for the plan being built ' + CITE + '.',
+      steps: 'McVaugh’s own scope, from the items marked "(by owner)":\n1. Geotechnical investigation and soil report (excluded by Frank).\n2. Form survey and final survey (excluded by Frank, along with title insurance, appraisal and all lender and closing costs).\n3. Water, sewer and wastewater impact fees (excluded by Frank).\n4. Part of the site and permitting line, where "(by owner)" is written mid-sentence — see the missing information below.\n\nEverything else in the included scope is Urban Edge Builders at the contract price.',
+      missing_info: 'The site and permitting line reads "Survey and form-board survey, foundation check, HOA and ARC submittal, (by owner) excavation, select fill, temporary power, water and sanitary facilities, silt fence and stormwater controls, dumpster and site cleanup." The marker sits in the middle of the list and it is not clear whether it applies to what comes before it or everything after. That is the difference between McVaugh paying for excavation, fill, temporary utilities and site cleanup or not. Ask Frank to re-punctuate that line before anyone signs.',
+      next_action: 'Get the site and permitting line clarified in writing, then confirm the four (by owner) items are in the McVaugh budget for each Landing lot.',
+      source: SRC, doc_ids: ['doc-rol-scope-2026-10-14'] });
+
+    // The commercially significant contradiction. Not resolved here: it changes who pays.
+    upsert(db, 'decisions', { id: 'dec-rol-allowance-or-standard', date: '2026-11-04',
+      title: 'Royal Oaks Landing: are the eleven finish categories allowances or standard?',
+      reason: 'Section Four is headed REMAINING ALLOWANCES and says "These ten items have no fixed specification yet and are carried as allowances until quotations are obtained." The next sentence says "Categories highlighted below have been discussed and agreed as STANDARD, not allowances". Every one of the rows beneath it is highlighted, which would mean nothing is left as an allowance — yet the signature page carries a total of $98,700 in allowances. Both cannot be true. If they are allowances, McVaugh pays any overage plus overhead and profit by change order; if they are standard, they are in the contract price. Nobody should sign until Frank says which. The sentence also has no full stop and reads like it was inserted later. ' + CITE,
+      decided_by: 'Frank Martin to clarify', status: 'open', source: SRC, created_at: ts });
+
+    // The eleven categories and what each is still waiting for.
+    upsert(db, 'tasks', { id: 'tr-rol-open-selections', title: 'Royal Oaks Landing Plan 1A: close out the open finish selections',
+      department_id: 'design', owner_id: 'lonnie', backup_id: 'danielle', board: 'working', proposed: 0,
+      documented: 1, automated: 0, verified: 0,
+      trigger: 'The scope lists eleven finish categories with no fixed specification.',
+      steps: '1. Cabinetry and vanities — selections per samples presented to owner.\n2. Countertops — selections available per samples; "island with waterfall?" is still a question in the document.\n3. Masonry and stone veneer — owner is waiting on samples.\n4. Exterior stucco system — colour to be selected by owner.\n5. Landscaping and sod.\n6. Stair rail and baluster package — contemporary wood handrail, matte black iron balusters as presented.\n7. Irrigation — must meet City of Houston requirements.\n8. Mirrors and shower enclosures — frameless enclosures, plate mirrors to ceiling in master bathrooms.\n9. Decorative light fixtures — selections to be decided.\n10. Door and cabinet hardware — brushed nickel, polished chrome and matte black.\n11. Carpet — bedrooms, closets, stairs and landings.',
+      missing_info: 'The section says ten items and lists eleven. No amount is shown against any line; the only figure is a $98,700 total on the signature page. Window style is marked TBD. Three tile lines say "additional selections and options TBD based on recent meetings" without saying which meetings or what was decided. Several entries are literally rows of question marks. The flooring colour has a deadline sentence with the date left blank, and if it passes Urban Edge proceeds with its own standard vinyl plank.',
+      next_action: 'Ask Frank for the per-line allowance amounts and the missing specifications; fill in the flooring deadline date before it becomes his choice by default.',
+      source: SRC, doc_ids: ['doc-rol-scope-2026-10-14'], updated_at: ts });
+
+    upsert(db, 'tasks', { id: 'tr-rol-document-errors', title: 'Royal Oaks Landing scope: corrections to raise with Frank before signing',
+      department_id: 'estimating', owner_id: 'james', backup_id: 'lonnie', board: 'next', proposed: 0,
+      documented: 1, automated: 0, verified: 0,
+      trigger: 'Reading the 14 October proposal before it is signed.',
+      steps: '1. Allowance or standard? Section Four contradicts itself and the $98,700 total (see the open decision).\n2. "These ten items" introduces a list of eleven.\n3. No allowance amount is given on any individual line.\n4. The carpet line covers "stairs from second to third floor and landings" on a plan described throughout as two storey. Either the line was copied from a three-storey plan or the plan is wrong.\n5. The "(by owner)" marker in the site and permitting line is mid-sentence and ambiguous.\n6. Two blanks are unfilled: the lot and block, and the date by which the flooring selection must be confirmed in writing.',
+      evidence: 'A revised proposal from Frank with each of these resolved in writing.',
+      next_action: 'Send the list to Frank in one message rather than piecemeal; none of it should wait for Maria to chase.',
+      source: SRC, doc_ids: ['doc-rol-scope-2026-10-14'], updated_at: ts });
+
+    // This closes one of the things Maria owed, and opens the real work behind it.
+    for (const [hid, note] of [
+      ['ho-landing-frank', 'RECEIVED 4 November: the scope of work and specifications arrived, dated 14 October ' + CITE + '. It names the four things McVaugh carries at the Landing, so "what we do vs what Frank does" is answered on paper. What it does not settle: whether eleven finish categories are allowances or standard, which is a $98,700 question, and where the "(by owner)" marker starts in the site and permitting line.'],
+      ['ho-permits', '4 November: the Landing scope confirms HOA and ARC submittal sits inside Frank’s included scope, not McVaugh’s ' + CITE + '.'],
+    ]) { const h = db.prepare('SELECT note, doc_ids FROM handover_items WHERE id = ?').get(hid); if (!h) continue;
+      upsert(db, 'handover_items', { id: hid, note: [h.note, note].filter(Boolean).join('\n'),
+        doc_ids: [...new Set([...JSON.parse(h.doc_ids || '[]'), 'doc-rol-scope-2026-10-14'])], updated_at: ts }); }
+    { const h = db.prepare('SELECT * FROM handover_items WHERE id = ?').get('ho-landing-frank');
+      if (h) upsert(db, 'handover_items', { id: 'ho-landing-frank', documented: 'yes — scope of work received 4 November',
+        backup: 'Lonnie (takes the Landing supervision with James on the commercial side)', status: 'captured',
+        task_ids: [...new Set([...JSON.parse(h.task_ids || '[]'), 'tr-landing-frank-scope', 'tr-rol-open-selections', 'tr-rol-document-errors'])], updated_at: ts }); }
+
+    addEvent(db, { entity_type: 'document', entity_id: 'doc-rol-scope-2026-10-14', kind: 'import', status: 'info',
+      label: 'Landing scope of work received from Maria — McVaugh’s four (by owner) items recorded; allowance-or-standard contradiction raised',
+      source: 'import', actor: 'brittany', external_id: 'rol-scope-2026-11-04' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

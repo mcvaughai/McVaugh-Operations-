@@ -1221,6 +1221,28 @@ const UPDATES = [
       label: 'Correction: the 14-step permitting procedure was drafted from review notes, not from Maria, and named jurisdictions McVaugh does not build in',
       source: 'manual', actor: 'brittany', external_id: 'permitting-provenance-2026-11-08' });
   } },
+  { key: 'purchasing-rewrite-losses-2026-11-08', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Comparison of the 3 and 4 November hub exports, 2026-11-08';
+    // The 4 November rewrites added good corrections and removed the mechanics. Recorded against each
+    // procedure so the next person to edit them knows what to put back rather than rediscovering it.
+    upsert(db, 'tasks', { id: 'sop-pur-01-wo-entry-buildconnect', verified: 0,
+      missing_info: 'The 4 November rewrite (15 steps to 11) dropped: the navigation (Jobs, routed job, New Work Order in the BuildConnect frame); why the payment-period count goes first (changing it reloads the form); submitting via the passcode-box Enter step and keeping the passcode private; leaving completion and payment flags unset for new work; "never create a duplicate" as a stop rule; and the calendar-persistence workaround (report requested versus saved date, preserve the existing record). Three vendor rules also left this procedure for the vendor-rules panel: Synergy 30/50/20, Electrical Works code 620, Reece 601 split valves and trims. What it gained is worth keeping: a source document alone is not spending approval, do not substitute the bill-to address, do not sign for vendors, and the ten-minute turnaround was discussed rather than committed.',
+      next_action: 'Merge: put the dropped mechanics back as the body and keep the new caveats around them.',
+      source: SRC, updated_at: ts });
+    upsert(db, 'tasks', { id: 'sop-pur-02-material-po-entry', verified: 0,
+      missing_info: 'The 4 November rewrite (15 steps to 8) dropped: the navigation (Jobs, correct job, New Purchase Order); cost code 996 for Lowe’s and Home Depot; using a single draw for standalone quotes; separating merchandise from tax; verifying the form recalculates after blur; the proposal-date versus invoice-date rule; verifying the cost code on the saved PO; and the distinction between Complete, Received, Pay and Paid In Full. It also dropped an open question rather than answering it: who owns this procedure, who backs it up, and what someone may spend without asking.',
+      blocker: 'Nobody has been named as owner or backup for material POs, and no spending authority boundary has been set. The 3 November version flagged this; the 4 November rewrite removed the flag.',
+      next_action: 'Decide the owner, the backup and the spending boundary, then merge the dropped mechanics back into the steps.',
+      source: SRC, updated_at: ts });
+    upsert(db, 'decisions', { id: 'dec-material-po-authority', date: '2026-11-08',
+      title: 'Who owns material purchase orders, and what can be spent without asking',
+      reason: 'The 3 November procedure carried this as an open note: "Material PO procedure owner and backup to be confirmed; approval boundary for spending authority to be established." The 4 November rewrite removed the note without answering it. Under Maria’s split, Lonnie agrees the price and James raises the PO, but neither is recorded as owning the procedure, and no figure has been set above which someone has to ask. Jim sets spending limits elsewhere, so this is his to decide.',
+      decided_by: 'Jim to decide', status: 'open', source: SRC, created_at: ts });
+    addEvent(db, { entity_type: 'task', entity_id: 'sop-pur-02-material-po-entry', kind: 'setup', status: 'info',
+      label: 'Recorded what the 4 November rewrites dropped from the two purchasing procedures, including an open spending-authority question that was removed rather than answered',
+      source: 'manual', actor: 'brittany', external_id: 'purchasing-rewrite-losses-2026-11-08' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

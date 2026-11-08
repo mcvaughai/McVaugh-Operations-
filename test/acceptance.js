@@ -829,6 +829,19 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(legacy.step_review, 'the legacy SOP carries its reconciliation');
     assert.equal(t.step_review, null, 'the current one does not');
   });
+  await check('what the purchasing rewrites dropped is recorded against each procedure', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const wo = s.tasks.find(t => t.id === 'sop-pur-01-wo-entry-buildconnect');
+    assert.match(wo.missing_info, /changing it reloads the form/);
+    assert.match(wo.missing_info, /calendar-persistence workaround/);
+    assert.match(wo.next_action, /Merge/);
+    const po = s.tasks.find(t => t.id === 'sop-pur-02-material-po-entry');
+    assert.match(po.missing_info, /996 for Lowe/);
+    assert.match(po.missing_info, /Complete, Received, Pay and Paid In Full/);
+    assert.match(po.blocker, /no spending authority boundary has been set/);
+    // the question the rewrite deleted is now an open decision rather than gone
+    assert.ok(s.decisions.some(d => d.id === 'dec-material-po-authority' && d.status === 'open'));
+  });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {
     // A route accidentally placed above the session gate would answer a signed-out caller. This catches that.

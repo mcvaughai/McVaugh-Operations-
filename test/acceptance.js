@@ -129,7 +129,9 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const s = (await call('GET', '/api/state')).body;
     const hub = s.tasks.filter(t => t.id.startsWith('hub-')); assert.equal(hub.length, 25);
     const nwo = s.tasks.find(t => t.id === 'hub-new_work_order'); assert.equal(nwo.owner_id, 'ernesto'); assert.equal(nwo.department_id, 'purchasing'); assert.match(nwo.steps, /^1\. Red-lined plans/); assert.equal(nwo.documented, 1); assert.equal(nwo.proposed, 1);
-    assert.equal(JSON.parse(s.people.find(p => p.id === 'maria').responsibilities).length, 63); assert.equal(JSON.parse(s.people.find(p => p.id === 'maria').crossed_off).length, 20); assert.deepEqual(JSON.parse(s.people.find(p => p.id === 'kenneth').legacy_roles), ['CFO']);
+    // Maria's list was emptied on 8 November once all three handover transcripts were applied.
+    assert.equal(JSON.parse(s.people.find(p => p.id === 'maria').responsibilities).length, 0);
+    assert.equal(JSON.parse(s.people.find(p => p.id === 'maria').crossed_off).length, 24, 'what she struck off on her last day'); assert.deepEqual(JSON.parse(s.people.find(p => p.id === 'kenneth').legacy_roles), ['CFO']);
     assert.equal(s.documents.filter(d => d.id.startsWith('doc-legacy-role')).length, 16);
     const dbp = s.tasks.find(t => t.id === 'obs-procedures-for-the-mch-database'); assert.match(dbp.steps, /Work orders must be in the database prior to work commencing/); assert.equal(dbp.owner_id, 'maria');
     await call('POST', '/api/tasks/hub-new_work_order', { proposed: 0, owner_id: 'maria' });
@@ -138,14 +140,14 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   });
   await check('succession pass: meetings stored with provenance, step reviews, flows, job status, handover sorted no-backup first, agenda', async () => {
     const s = (await call('GET', '/api/state')).body;
-    const m = s.documents.filter(d => d.kind === 'meeting'); assert.equal(m.length, 6); assert.ok(m.every(d => d.meeting_date && JSON.parse(d.attendees).length >= 2 && d.source));
+    const m = s.documents.filter(d => d.kind === 'meeting'); assert.equal(m.length, 7); assert.ok(m.every(d => d.meeting_date && JSON.parse(d.attendees).length >= 2 && d.source));
     const wo = s.tasks.find(t => t.id === 'hub-work_order_ap'); const rev = JSON.parse(wo.step_review); assert.equal(rev.length, 10); assert.ok(rev.every(r => r.verdict !== 'match' || r.cite)); assert.match(wo.verification_result, /Reconciled against meetings/); assert.match(wo.missing_info, /Not mentioned/); assert.ok(JSON.parse(wo.flow).nodes.length > 5);
     assert.ok(s.tasks.find(t => t.id === 'tr-leander-arc-review' && t.proposed === 0 && t.backup_id === 'teresa'));
     const h = s.homes.find(h => h.address === '11603 Royal Parkside Place'); assert.match(h.stage, /Framing/);
     // The citation moves to the most recent meeting that spoke about the house: 10/16 then 11/03.
     assert.match(h.status_cite, /J 11\/03/);
     const ho = (await call('GET', '/api/handover?person=maria')).body; assert.equal(ho.items.length, 23); assert.ok(ho.items[0].no_backup && ho.items[0].risk === 'high'); const firstBackup = ho.items.findIndex(i => !i.no_backup); assert.ok(ho.items.slice(firstBackup).every(i => !i.no_backup), 'no-backup items come first');
-    assert.ok(ho.not_mentioned.length > 5); assert.equal(ho.person.crossed_off.length, 20);
+    assert.ok(ho.not_mentioned.length > 5); assert.equal(ho.person.crossed_off.length, 24);
     const agenda = (await call('GET', '/api/handover/agenda?person=maria')).body; assert.match(agenda, /walk me through how you do this today/); assert.match(agenda, /11603 Royal Parkside Place/); assert.match(agenda, /\[M \d/);
     await call('POST', '/api/handover_items/ho-leander', { status: 'reassigned', note: 'Teresa' }); assert.equal((await call('GET', '/api/state')).body.handover_items.find(i => i.id === 'ho-leander').status, 'reassigned');
   });
@@ -163,13 +165,13 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   });
   await check('meeting 3 applied: third transcript, merged step reviews, supersedes links, 11607 active, new handover item', async () => {
     const s = (await call('GET', '/api/state')).body;
-    assert.equal(s.documents.filter(d => d.kind === 'meeting').length, 6);
+    assert.equal(s.documents.filter(d => d.kind === 'meeting').length, 7);
     const co = s.tasks.find(t => t.id === 'hub-change_order_budget'); const rows = JSON.parse(co.step_review); assert.ok(rows.some(r => String(r.n) === '2–3' && r.verdict === 'no_longer' && /M3/.test(r.cite))); assert.ok(!rows.some(r => String(r.n) === '2'), 'earlier per-step rows replaced by the later finding'); assert.match(co.verification_result, /2026-10-20 call/);
     const tco = s.tasks.find(t => t.id === 'tr-change-orders'); assert.deepEqual(JSON.parse(tco.supersedes), ['hub-change_order_request', 'hub-change_order_budget']);
     assert.ok(JSON.parse(s.tasks.find(t => t.id === 'tr-permit-per-address').supersedes).includes('hub-permitting'));
     const h = s.homes.find(h => h.address === '11607 Royal Parkside Place'); assert.equal(h.active, 'active'); assert.match(h.notes, /Plan 3A/);
     const ho = (await call('GET', '/api/handover?person=maria')).body; assert.ok(ho.items.find(i => i.id === 'ho-inspection-binder' && i.no_backup)); assert.match(ho.items.find(i => i.id === 'ho-vendor-insurance').backup, /James/);
-    assert.match(s.people.find(p => p.id === 'maria').notes, /Nov 9/);
+    assert.match(s.people.find(p => p.id === 'maria').notes, /DEPARTED 6 November 2026/);
   });
   await check('SOW Excel → vendors (restricted contacts); regenerated ops hub parses back with current + superseded SOPs', async () => {
     const s = (await call('GET', '/api/state')).body; assert.ok(s.vendors.length >= 40);
@@ -635,7 +637,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const lonnie = s.people.find(p => p.id === 'lonnie');
     assert.ok(lonnie, 'Maria has a named successor now'); assert.equal(lonnie.confirmed, 0, 'not verified with Lonnie directly');
     assert.match(lonnie.notes, /surname and email are the outstanding piece/, 'still the one gap on Lonnie');
-    assert.match(s.people.find(p => p.id === 'maria').notes, /last day 6 November 2026/, 'corrected from the earlier "before Nov 9"');
+    assert.match(s.people.find(p => p.id === 'maria').notes, /DEPARTED 6 November 2026/, 'she has now left');
     assert.ok(s.tasks.filter(t => t.backup_id === 'lonnie').length >= 10, 'Maria\'s construction work has a backup at last');
     // The hub's short rules were replaced by the fuller running log on 4 November; the codes survive.
     const byVendor = n => s.wo_specifics.find(x => new RegExp(n, 'i').test(x.vendor_name || ''));
@@ -890,6 +892,33 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.match(gl.evidence, /builder.s risk only/);
     // and the two-approval rule is recorded
     assert.ok(s.decisions.some(x => x.id === 'dec-budget-increase-approvals' && x.status === 'accepted'));
+  });
+  await check('nothing is left with Maria or on the purchasing list; every item went somewhere or was struck off', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const R = id => JSON.parse(s.people.find(p => p.id === id).responsibilities || '[]');
+    const X = id => JSON.parse(s.people.find(p => p.id === id).crossed_off || '[]');
+    assert.equal(R('maria').length, 0, 'Maria holds nothing, even after the hub was re-imported');
+    assert.equal(R('ernesto').length, 0, 'and neither does the purchasing list');
+    assert.equal(R('ernesto').length, 0, 'the purchasing list is empty');
+    assert.equal(X('maria').length, 24); assert.equal(X('ernesto').length, 7, 'what was struck off is kept, not deleted');
+    // the work went where Maria said
+    const got = (id, re) => R(id).some(x => re.test(x));
+    assert.ok(R('lonnie').length >= 60, 'Lonnie carries the construction and judgement work');
+    assert.ok(got('lonnie', /superintendent on all active job sites/));
+    assert.ok(got('james', /Clicks back charge approval/), 'James enters the back charge');
+    assert.ok(got('james', /Maintain W-9 on every vendor/));
+    assert.ok(got('teresa', /Leander Architectural Plan review/));
+    assert.ok(got('jim', /Returns redlined plans to architect/));
+    assert.ok(got('kenneth', /Prepares the proformas for the banks/), 'reworded so it reads under its new owner');
+    assert.ok(got('jim', /there is no SpecWriter any more/), 'and the correction Maria made is carried through');
+    // shared items name the other holder
+    assert.ok(R('james').some(x => /Determines most competitive bid/.test(x) && /with lonnie/.test(x)));
+    // provenance: every transferred line says where it came from
+    for (const id of ['lonnie', 'james', 'teresa'])
+      assert.ok(R(id).some(x => /\(from Maria\)|\(from the purchasing list/.test(x)), id + ' lines carry their source');
+    assert.match(s.people.find(p => p.id === 'maria').notes, /100% overkill/, 'her own verdict on the lists is kept');
+    assert.ok(s.decisions.some(d => d.id === 'dec-responsibilities-reassigned' && d.status === 'accepted'));
+    assert.ok(s.documents.some(d => d.id === 'doc-meeting-maria-final-2026-11-06'));
   });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {

@@ -1385,6 +1385,82 @@ const UPDATES = [
       label: 'All-office handover stored (6 November, Maria’s last day): eight document sets inventoried, six follow-ups raised, portal identity flagged as the most urgent gap',
       source: 'import', actor: 'brittany', external_id: 'meeting-alloffice-2026-11-06' });
   } },
+  { key: 'responsibility-handover-2026-11-08', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Three handover transcripts: purchasing review 5 Nov, all-office walkthrough 6 Nov, final line-by-line review 6 Nov';
+    const CITE = '[FINAL 11/06]';
+    const { docxText, parseOpsHub } = require('./imports');
+
+    const fp = path.join(__dirname, '..', 'seed', 'meetings', 'maria-final-review-2026-11-06.docx');
+    const text = docxText(fs.readFileSync(fp)).replace(/&apos;/g, '’');
+    upsert(db, 'documents', { id: 'doc-meeting-maria-final-2026-11-06', title: 'Maria’s final review — every item on her list, assigned or removed (6 November)',
+      kind: 'meeting', kind_reason: 'Teams recording; Maria going line by line through her own 85 responsibilities', sensitive: 0,
+      meeting_date: '2026-11-06', cite_key: 'FINAL 11/06', attendees: JSON.stringify(['maria', 'brittany', 'james']),
+      summary: 'Maria went through all 85 of her listed responsibilities and said, for each one, who takes it or whether it goes. Her closing verdict: "a combination of this and the Ernesto one are like 100% overkill, because these were made for Royal Oaks and 30 homes at a time. Everything that needs to be assigned has been assigned, and everything that needs to be gone has been deleted."',
+      content: text, size: text.length, source: SRC, imported_at: ts,
+      file_path: fp, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', underlying_status: 'extracted' });
+
+    const hub = parseOpsHub(fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub-2026-11-04.html'), 'utf8'));
+    const clean = s => String(s).replace(/^Historical \/ transition reference:\s*/, '').replace(/^\[N\/A\]\s*/, '').trim();
+    const MARIA = (hub.team.find(t => t.id === 'maria').responsibilities || []).map(clean);
+    const ERN = (hub.team.find(t => t.id === 'purchasing' || t.id === 'ernesto').responsibilities || []).map(clean);
+
+    // Maria's 85, as she assigned them. null means she said it goes.
+    const L = 'lonnie', J = 'james', T = 'teresa', M = 'jim', K = 'kenneth';
+    const MARIA_TO = { 1: L, 2: L, 3: L, 4: L, 5: L, 6: L, 7: L, 8: L, 9: L, 10: L, 11: L, 12: L, 13: L,
+      14: J, 15: J, 16: L, 17: L, 18: L, 19: null, 20: null, 21: M, 22: L, 23: L, 24: null, 25: L, 26: null,
+      27: L, 28: T, 29: null, 30: L, 31: L, 32: null, 33: L, 34: [L, M], 35: L, 36: M, 37: L, 38: null,
+      39: [L, M], 40: L, 41: [L, J], 42: L, 43: L, 44: L, 45: L, 46: L, 47: L, 48: L, 49: L, 50: [L, M],
+      51: J, 52: L, 53: J, 54: L, 55: L, 56: [L, K], 57: L, 58: [M, K], 59: [L, J], 60: L, 61: L, 62: L,
+      63: null, 64: T, 65: J, 66: null, 67: L, 68: null, 69: null, 70: null, 71: null, 72: null, 73: null,
+      74: null, 75: null, 76: null, 77: null, 78: null, 79: M, 80: M, 81: null, 82: null, 83: null, 84: null, 85: K };
+    // Ernesto's 25, from the 5 November review. Nothing stays with him.
+    const ERN_TO = { 1: null, 2: null, 3: L, 4: null, 5: L, 6: null, 7: L, 8: L, 9: L, 10: L, 11: J, 12: J,
+      13: null, 14: null, 15: L, 16: J, 17: J, 18: L, 19: [L, K], 20: null, 21: L, 22: L, 23: L, 24: L, 25: L };
+
+    // Two lines Maria corrected as she went, so they do not read as nonsense under a new owner.
+    const REWORD = {
+      'Creates the spec writer (including interior selections)': 'Specifications including interior selections — there is no SpecWriter any more',
+      'Prepares proforma and forwards to Kenneth': 'Prepares the proformas for the banks',
+    };
+    const add = {}; const dropped = [];
+    const push = (who, textLine, from) => { (add[who] = add[who] || []).push(textLine + (from ? ` (${from})` : '')); };
+    for (const [list, map, from] of [[MARIA, MARIA_TO, 'from Maria'], [ERN, ERN_TO, 'from the purchasing list']]) {
+      list.forEach((line, i) => {
+        const to = map[i + 1];
+        if (!to) { dropped.push(line); return; }
+        const whos = Array.isArray(to) ? to : [to];
+        const body = REWORD[line.replace(/^\(Purchasing\)\s*/, '')] || line;
+        for (const w of whos) push(w, body, whos.length > 1 ? from + ', with ' + whos.filter(x => x !== w).join(' and ') : from);
+      });
+    }
+
+    const merge = (pid, extra) => {
+      const p = db.prepare('SELECT responsibilities FROM people WHERE id = ?').get(pid); if (!p) return;
+      const now = JSON.parse(p.responsibilities || '[]');
+      const seen = new Set(now.map(x => String(x).toLowerCase().slice(0, 60)));
+      for (const line of extra || []) if (!seen.has(line.toLowerCase().slice(0, 60))) { now.push(line); seen.add(line.toLowerCase().slice(0, 60)); }
+      upsert(db, 'people', { id: pid, responsibilities: now, updated_at: ts });
+    };
+    for (const pid of [L, J, T, M, K]) merge(pid, add[pid]);
+
+    // Nothing is left with either of them.
+    upsert(db, 'people', { id: 'ernesto', responsibilities: [], crossed_off: ERN.filter((_, i) => !ERN_TO[i + 1]),
+      notes: 'Purchasing list emptied 8 November. Every one of the 25 items was reviewed with Maria on 5 November and went to Lonnie, to James, or off the list entirely ' + CITE + '. Nothing remains assigned here.',
+      updated_at: ts });
+    upsert(db, 'people', { id: 'maria', responsibilities: [], crossed_off: MARIA.filter((_, i) => !MARIA_TO[i + 1]),
+      notes: 'DEPARTED 6 November 2026. All 85 listed responsibilities were reviewed with her on her last day and either reassigned or removed ' + CITE + '. Her verdict on both lists: "100% overkill, because these were made for Royal Oaks and 30 homes at a time." Open projects were transferred to Lonnie. She left a personal number with the office.',
+      updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-responsibilities-reassigned', date: '2026-11-08',
+      title: 'Maria’s and the purchasing list are fully reassigned; nothing is left with either',
+      reason: `Across three recorded sessions Maria went through all 85 of her own items and all 25 purchasing items and named an owner or struck each one off. Of the 110, ${dropped.length} were removed as no longer done, and the rest went to Lonnie (the construction and judgement work), James (entry and administration), Teresa, Jim or Kenneth. The removals are not deletions of history: each is kept against the person who used to hold it. Maria’s own view was that both lists were written for Royal Oaks at thirty homes at a time and are heavier than the current operation needs.`,
+      decided_by: 'Maria, with Brittany and James', status: 'accepted', source: SRC, created_at: ts });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'ernesto', kind: 'setup', status: 'info',
+      label: `Responsibilities reassigned: ${(add[L] || []).length} to Lonnie, ${(add[J] || []).length} to James, ${(add[T] || []).length} to Teresa, ${(add[M] || []).length} to Jim, ${(add[K] || []).length} to Kenneth, ${dropped.length} removed. Maria and the purchasing list are both empty.`,
+      source: 'manual', actor: 'brittany', external_id: 'responsibility-handover-2026-11-08' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

@@ -484,13 +484,32 @@ function importOpsHub(db, { filename, content }, role) {
   const idFor = t => { const byId = people.find(p => p.id === t.id); if (byId) return byId.id; const first = String(t.name || '').split(' ')[0].toLowerCase(); return people.find(p => p.name.toLowerCase() === first)?.id || slug(t.name || t.id); };
   const roleOwner = {}; // legacy role id → current person id
   const roleTitle = Object.fromEntries(hub.roles.map(r => [r.id, r.title]));
-  let peopleUpdated = 0, tasks = 0, docs = 0;
+  let peopleUpdated = 0, tasks = 0, docs = 0; const skippedPeople = [];
   for (const t of hub.team) {
     const pid = idFor(t); const ex = db.prepare('SELECT id FROM people WHERE id = ?').get(pid);
     for (const r of t.absorbs || []) roleOwner[r] = pid;
     const all = t.responsibilities || [];
     const crossed = all.filter(r => /^\s*\[N\/A\]/i.test(r)).map(r => r.replace(/^\s*\[N\/A\]\s*/i, ''));
-    const row = { id: pid, responsibilities: JSON.stringify(all.filter(r => !/^\s*\[N\/A\]/i.test(r))), crossed_off: JSON.stringify(crossed), legacy_roles: JSON.stringify((t.absorbs || []).map(r => roleTitle[r] || r)) };
+    // A hub export is a snapshot. Re-importing one taken before a handover must not put a departed
+    // person's work back on them, or undo a reassignment someone made deliberately afterwards.
+    const cur = ex ? db.prepare('SELECT responsibilities, crossed_off, notes FROM people WHERE id = ?').get(pid) : null;
+    const departed = /\bDEPARTED\b/i.test(String(cur?.notes || ''));
+    const deliberatelyEmptied = cur && JSON.parse(cur.responsibilities || '[]').length === 0 && JSON.parse(cur.crossed_off || '[]').length > 0;
+    const keepAsIs = departed || deliberatelyEmptied;
+    const row = { id: pid, legacy_roles: JSON.stringify((t.absorbs || []).map(r => roleTitle[r] || r)) };
+    if (keepAsIs) skippedPeople.push(pid);
+    else {
+      // Merge rather than replace. Lines added since the snapshot — a handover, a reassignment — stay,
+      // and anything already struck off is not resurrected by an older export.
+      const existing = JSON.parse(cur?.responsibilities || '[]');
+      const struck = new Set([...JSON.parse(cur?.crossed_off || '[]'), ...crossed].map(x => String(x).toLowerCase().slice(0, 60)));
+      const key = x => String(x).toLowerCase().replace(/\s*\(from [^)]*\)\s*$/, '').slice(0, 60);
+      const out = existing.filter(x => !struck.has(key(x)));
+      const seen = new Set(out.map(key));
+      for (const r of all.filter(r => !/^\s*\[N\/A\]/i.test(r)))
+        if (!seen.has(key(r)) && !struck.has(key(r))) { out.push(r); seen.add(key(r)); }
+      Object.assign(row, { responsibilities: JSON.stringify(out), crossed_off: JSON.stringify([...new Set([...JSON.parse(cur?.crossed_off || '[]'), ...crossed])]) });
+    }
     if (!ex) Object.assign(row, { name: String(t.name || t.id).split(' ')[0], full_name: t.name, title: t.title, confirmed: 0, review_status: 'not_reviewed', departments: [normalizeDept(t.department, db.prepare('SELECT id, name, short FROM departments').all())].filter(d => db.prepare('SELECT 1 FROM departments WHERE id = ?').get(d)), source: src, notes: 'Imported from the old ops hub; not in the handoff or org chart.' });
     upsert(db, 'people', row); peopleUpdated++;
   }
@@ -517,7 +536,7 @@ function importOpsHub(db, { filename, content }, role) {
     tasks++;
   }
   addEvent(db, { entity_type: 'integration', entity_id: 'dashboard', kind: 'import', status: 'info', label: `Snapshot import: old ops hub (${tasks} SOPs, ${hub.roles.length} legacy roles, ${hub.team.length} people)`, source: 'import', actor: role, external_id: 'hub-' + crypto.randomUUID() });
-  return { imported: tasks + docs + peopleUpdated, tasks, legacy_roles: hub.roles.length, people: peopleUpdated, unassigned_roles: hub.roles.filter(r => !roleOwner[r.id]).map(r => r.title), imported_at: ts };
+  return { imported: tasks + docs + peopleUpdated, tasks, legacy_roles: hub.roles.length, people: peopleUpdated, unassigned_roles: hub.roles.filter(r => !roleOwner[r.id]).map(r => r.title), imported_at: ts , responsibilities_kept: skippedPeople };
 }
 function personNameFromDb(db, id) { return db.prepare('SELECT name FROM people WHERE id = ?').get(id)?.name || id; }
 

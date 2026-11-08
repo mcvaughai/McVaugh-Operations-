@@ -450,11 +450,31 @@ function parseOpsHub(text) {
     src = blocks.find(b => /const\s+INITIAL_PROCESSES\s*=/.test(b)) || '';
   }
   if (!/const\s+INITIAL_PROCESSES\s*=/.test(src)) return null;
-  const end = src.search(/export\s+default|function\s+MCHOpsHub/); const body = (end > 0 ? src.slice(0, end) : src).replace(/^\s*import[^\n]*\n/gm, '');
-  const ctx = vm.createContext(Object.assign(Object.create(null), { React: { useState() {}, useEffect() {}, useRef() {} }, window: {}, document: {} })); // the built hub destructures React at the top; stubbed, never rendered
-  vm.runInContext(body + '\n;this.__out = { roles: typeof INITIAL_ROLES !== "undefined" ? INITIAL_ROLES : [], processes: INITIAL_PROCESSES, team: typeof CURRENT_TEAM !== "undefined" ? CURRENT_TEAM : [] };', ctx, { timeout: 2000 });
-  const out = ctx.__out;
-  return { roles: out.roles || [], processes: out.processes || [], team: out.team || [] };
+  // Read each constant's own literal rather than evaluating everything above the component. Whoever edits
+  // the hub next may declare new components before MCHOpsHub — Codex did on 4 November — and those carry
+  // JSX, which is a syntax error outside Babel. Only the data is wanted, so only the data is evaluated.
+  const literalOf = name => {
+    const m = new RegExp('const\\s+' + name + '\\s*=\\s*').exec(src); if (!m) return null;
+    let i = m.index + m[0].length;
+    const open = src[i]; if (open !== '[' && open !== '{') return null;
+    const close = open === '[' ? ']' : '}';
+    let depth = 0, inStr = null, esc = false;
+    for (; i < src.length; i++) {
+      const c = src[i];
+      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === inStr) inStr = null; continue; }
+      if (c === '"' || c === "'" || c === '`') { inStr = c; continue; }
+      if (c === open) depth++;
+      else if (c === close) { depth--; if (!depth) return src.slice(m.index + m[0].length, i + 1); }
+    }
+    return null;
+  };
+  const ctx = vm.createContext(Object.create(null));
+  const val = name => { const lit = literalOf(name); if (!lit) return null;
+    try { return vm.runInContext('(' + lit + ')', ctx, { timeout: 2000 }); } catch { return null; } };
+  const processes = val('INITIAL_PROCESSES'); if (!processes) return null;
+  return { roles: val('INITIAL_ROLES') || [], processes, team: val('CURRENT_TEAM') || [],
+    vendor_rules: val('VENDOR_RULES') || [], completed_records: val('COMPLETED_RECORDS') || [],
+    assignments: val('CURRENT_ASSIGNMENTS') || [], review_documents: val('REVIEW_DOCUMENTS') || [] };
 }
 function importOpsHub(db, { filename, content }, role) {
   let hub = null; try { const j = JSON.parse(content); if (j && Array.isArray(j.processes)) hub = { roles: j.roles || [], processes: j.processes, team: j.team || [] }; } catch { /* not JSON */ }

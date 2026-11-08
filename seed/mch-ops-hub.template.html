@@ -17,12 +17,12 @@
 
 const INITIAL_ROLES = [
   {
-    id: "president",
-    title: "President",
-    name: "Jim McVaugh",
-    department: "Executive",
-    color: "#DC2626",
-    responsibilities: [
+    "id": "president",
+    "title": "President",
+    "name": "Jim McVaugh",
+    "department": "Executive",
+    "color": "#DC2626",
+    "responsibilities": [
       "Signs purchase contracts (30 days to close)",
       "Decides on house plans and approves them",
       "Decides bank for funding, communicates to CFO",
@@ -40,15 +40,23 @@ const INITIAL_ROLES = [
       "Returns approved plan to Admin Assistant",
       "Signs off and initials contract binder"
     ],
-    processes: ["preconstruction_planning", "budget_spec", "change_order_budget", "budget_revision", "change_order_request", "bonus_request", "president_plan_selection"]
+    "processes": [
+      "preconstruction_planning",
+      "budget_spec",
+      "change_order_budget",
+      "budget_revision",
+      "change_order_request",
+      "bonus_request",
+      "president_plan_selection"
+    ]
   },
   {
-    id: "doc",
-    title: "Director of Construction (DOC)",
-    name: "",
-    department: "Construction",
-    color: "#059669",
-    responsibilities: [
+    "id": "doc",
+    "title": "Director of Construction (DOC)",
+    "name": "",
+    "department": "Construction",
+    "color": "#059669",
+    "responsibilities": [
       "Assigns superintendent and designer per project",
       "Orders survey and begins start process",
       "Enters new address in permit/HOA log",
@@ -86,15 +94,28 @@ const INITIAL_ROLES = [
       "Places original start memo in job file outbox",
       "Updates construction status with start date"
     ],
-    processes: ["preconstruction_planning", "preconstruction_spec", "change_order_budget", "change_order_request", "back_charge", "budget_revision", "budget_spec", "preconstruction_redline", "work_order_ap", "bonus_request", "permitting", "gl_insurance_update"]
+    "processes": [
+      "preconstruction_planning",
+      "preconstruction_spec",
+      "change_order_budget",
+      "change_order_request",
+      "back_charge",
+      "budget_revision",
+      "budget_spec",
+      "preconstruction_redline",
+      "work_order_ap",
+      "bonus_request",
+      "permitting",
+      "gl_insurance_update"
+    ]
   },
   {
-    id: "dop",
-    title: "Director of Purchasing / Operations (DOP)",
-    name: "",
-    department: "Operations",
-    color: "#DB2777",
-    responsibilities: [
+    "id": "dop",
+    "title": "Director of Purchasing / Operations (DOP)",
+    "name": "",
+    "department": "Operations",
+    "color": "#DB2777",
+    "responsibilities": [
       "Enters house info into database upon start request",
       "Orders plan from architect",
       "Makes job folder after database entry",
@@ -123,30 +144,42 @@ const INITIAL_ROLES = [
       "Sends landscape drawing to DOS before resubmitting to HOA",
       "[ROCC] Receives approval/disapproval from HOA"
     ],
-    processes: ["start_packet", "preconstruction_spec", "change_order_budget", "preconstruction_planning"]
+    "processes": [
+      "start_packet",
+      "preconstruction_spec",
+      "change_order_budget",
+      "preconstruction_planning"
+    ]
   },
   {
-    id: "cfo",
-    title: "CFO",
-    name: "",
-    department: "Finance",
-    color: "#2563EB",
-    responsibilities: [
+    "id": "cfo",
+    "title": "CFO",
+    "name": "",
+    "department": "Finance",
+    "color": "#2563EB",
+    "responsibilities": [
       "Prepares financing and database setup",
       "Updates QuickBooks with revised budget numbers",
       "Receives change order log from DOC",
       "Receives budget revision log from DOC",
       "Receives proforma from DOC"
     ],
-    processes: ["preconstruction_planning", "budget_revision", "change_order_budget", "accounting_weekly", "accounting_monthly", "accounting_quarterly_yearly"]
+    "processes": [
+      "preconstruction_planning",
+      "budget_revision",
+      "change_order_budget",
+      "accounting_weekly",
+      "accounting_monthly",
+      "accounting_quarterly_yearly"
+    ]
   },
   {
-    id: "superintendent",
-    title: "Superintendent",
-    name: "",
-    department: "Construction",
-    color: "#92400E",
-    responsibilities: [
+    "id": "superintendent",
+    "title": "Superintendent",
+    "name": "",
+    "department": "Construction",
+    "color": "#92400E",
+    "responsibilities": [
       "Reviews blueprints, specs, upgrade sheet, scheduling",
       "Conducts pre-construction check list and Q&A session with client",
       "Confirms meeting with client, sales, and designer if applicable",
@@ -195,15 +228,25 @@ const INITIAL_ROLES = [
       "Gives measurements for framed mirrors to interior designer when house starts",
       "Schedules trim carpenter to install mirrors when ready"
     ],
-    processes: ["preconstruction_redline", "change_order_request", "back_charge", "budget_revision", "work_order_ap", "budget_review", "bonus_request", "permitting", "framed_mirror_purchase"]
+    "processes": [
+      "preconstruction_redline",
+      "change_order_request",
+      "back_charge",
+      "budget_revision",
+      "work_order_ap",
+      "budget_review",
+      "bonus_request",
+      "permitting",
+      "framed_mirror_purchase"
+    ]
   },
   {
-    id: "dir_sales",
-    title: "Director of Sales (DOS)",
-    name: "",
-    department: "Sales",
-    color: "#7C3AED",
-    responsibilities: [
+    "id": "dir_sales",
+    "title": "Director of Sales (DOS)",
+    "name": "",
+    "department": "Sales",
+    "color": "#7C3AED",
+    "responsibilities": [
       "Reviews change order requests",
       "Communicates upcoming projects to sales to update database",
       "Reviews specs from Dir of Purchasing",
@@ -212,15 +255,19 @@ const INITIAL_ROLES = [
       "Routes budget to accounting assistant",
       "Reviews landscape drawings before HOA submission"
     ],
-    processes: ["change_order_request", "preconstruction_planning", "budget_spec"]
+    "processes": [
+      "change_order_request",
+      "preconstruction_planning",
+      "budget_spec"
+    ]
   },
   {
-    id: "sales_exec",
-    title: "Sales Executive",
-    name: "",
-    department: "Sales",
-    color: "#16A34A",
-    responsibilities: [
+    "id": "sales_exec",
+    "title": "Sales Executive",
+    "name": "",
+    "department": "Sales",
+    "color": "#16A34A",
+    "responsibilities": [
       "Distributes copies of contract, specs, and upgrades to DOC, DOP, Controller, and DFO",
       "Submits change order requests (customer or internal)",
       "Follows up on customer approval of change orders",
@@ -230,15 +277,19 @@ const INITIAL_ROLES = [
       "Schedules New Home Orientation",
       "Schedules Homeowner Acceptance meeting"
     ],
-    processes: ["change_order_request", "preconstruction_redline", "homebuyer_expectations"]
+    "processes": [
+      "change_order_request",
+      "preconstruction_redline",
+      "homebuyer_expectations"
+    ]
   },
   {
-    id: "purchasing_mgr",
-    title: "Purchasing Manager",
-    name: "",
-    department: "Operations",
-    color: "#0891B2",
-    responsibilities: [
+    "id": "purchasing_mgr",
+    "title": "Purchasing Manager",
+    "name": "",
+    "department": "Operations",
+    "color": "#0891B2",
+    "responsibilities": [
       "Determines price/value to customer for change orders",
       "Receives bid from truss companies, selects one, signs contract, sends PO",
       "Determines most competitive bid and creates work order",
@@ -247,28 +298,40 @@ const INITIAL_ROLES = [
       "Enters work orders in database",
       "Calls subcontractors for bids if not received within 1 week"
     ],
-    processes: ["change_order_request", "start_packet", "new_work_order", "work_order_ap", "lowes_bill_process", "wo_entry_buildconnect", "material_po_entry"]
+    "processes": [
+      "change_order_request",
+      "start_packet",
+      "new_work_order",
+      "work_order_ap",
+      "lowes_bill_process",
+      "wo_entry_buildconnect",
+      "material_po_entry"
+    ]
   },
   {
-    id: "project_mgr",
-    title: "Project Manager (PM)",
-    name: "",
-    department: "Construction",
-    color: "#4338CA",
-    responsibilities: [
+    "id": "project_mgr",
+    "title": "Project Manager (PM)",
+    "name": "",
+    "department": "Construction",
+    "color": "#4338CA",
+    "responsibilities": [
       "Approves or disapproves work orders (with DOC)",
       "Types note and disapproves if work order has issues",
       "Responds same day to superintendent direction/answer requests"
     ],
-    processes: ["work_order_ap", "back_charge", "preconstruction_redline"]
+    "processes": [
+      "work_order_ap",
+      "back_charge",
+      "preconstruction_redline"
+    ]
   },
   {
-    id: "acct_asst",
-    title: "Accounting Assistant",
-    name: "",
-    department: "Finance",
-    color: "#0D9488",
-    responsibilities: [
+    "id": "acct_asst",
+    "title": "Accounting Assistant",
+    "name": "",
+    "department": "Finance",
+    "color": "#0D9488",
+    "responsibilities": [
       "Receives back charge electronically for processing",
       "Prints back charge from inbox",
       "Enters back charge in QuickBooks for future credit",
@@ -280,15 +343,27 @@ const INITIAL_ROLES = [
       "Logs budget into QuickBooks",
       "Processes Actual to Budget reports weekly into Excel"
     ],
-    processes: ["back_charge", "budget_spec", "budget_review", "lowes_bill_process", "accounting_weekly", "accounting_monthly", "accounting_quarterly_yearly", "lowes_po_buildconnect", "cash_report_weekly", "draw_schedule_update", "start_house_database"]
+    "processes": [
+      "back_charge",
+      "budget_spec",
+      "budget_review",
+      "lowes_bill_process",
+      "accounting_weekly",
+      "accounting_monthly",
+      "accounting_quarterly_yearly",
+      "lowes_po_buildconnect",
+      "cash_report_weekly",
+      "draw_schedule_update",
+      "start_house_database"
+    ]
   },
   {
-    id: "construction_asst",
-    title: "Construction Assistant (CA)",
-    name: "",
-    department: "Construction",
-    color: "#E11D48",
-    responsibilities: [
+    "id": "construction_asst",
+    "title": "Construction Assistant (CA)",
+    "name": "",
+    "department": "Construction",
+    "color": "#E11D48",
+    "responsibilities": [
       "Makes copies of contract package (listed items)",
       "Reviews status report and distributes contract package to super and designer within 24 hours",
       "Files redline plan rack with labeled tab",
@@ -334,15 +409,22 @@ const INITIAL_ROLES = [
       "Places redlined #3 plan in redline plan rack",
       "Has check cut and signed within 24 hours, returns to CA"
     ],
-    processes: ["preconstruction_redline", "new_work_order", "preconstruction_planning", "permitting", "interior_designer_selection", "interior_designer_hoa_rocc"]
+    "processes": [
+      "preconstruction_redline",
+      "new_work_order",
+      "preconstruction_planning",
+      "permitting",
+      "interior_designer_selection",
+      "interior_designer_hoa_rocc"
+    ]
   },
   {
-    id: "admin_asst",
-    title: "Admin Assistant",
-    name: "",
-    department: "Administration",
-    color: "#EA580C",
-    responsibilities: [
+    "id": "admin_asst",
+    "title": "Admin Assistant",
+    "name": "",
+    "department": "Administration",
+    "color": "#EA580C",
+    "responsibilities": [
       "Hands signed contract to admin assistant (Day 1)",
       "Sends signed contract to Title Co. (Day 1)",
       "Distributes copies of contract to CFO, DOC, DOS (Day 1)",
@@ -379,28 +461,35 @@ const INITIAL_ROLES = [
       "Removes from Availability Listings",
       "Delivers Welcome Packet and Welcome Gift to homeowners"
     ],
-    processes: ["preconstruction_planning", "president_plan_selection", "in_house_contract"]
+    "processes": [
+      "preconstruction_planning",
+      "president_plan_selection",
+      "in_house_contract"
+    ]
   },
   {
-    id: "controller",
-    title: "Controller",
-    name: "",
-    department: "Finance",
-    color: "#6D28D9",
-    responsibilities: [
+    "id": "controller",
+    "title": "Controller",
+    "name": "",
+    "department": "Finance",
+    "color": "#6D28D9",
+    "responsibilities": [
       "Issues start memo",
       "Provides Account Reconciliation for closing process",
       "Faxes signed Account Reconciliation to Title Company"
     ],
-    processes: ["preconstruction_redline", "in_house_contract"]
+    "processes": [
+      "preconstruction_redline",
+      "in_house_contract"
+    ]
   },
   {
-    id: "interior_designer",
-    title: "Interior Designer",
-    name: "",
-    department: "Design",
-    color: "#C026D3",
-    responsibilities: [
+    "id": "interior_designer",
+    "title": "Interior Designer",
+    "name": "",
+    "department": "Design",
+    "color": "#C026D3",
+    "responsibilities": [
       "Calls client to set up design selection orientation within 1 week",
       "Interior HOA/ROCC selection process",
       "Redlines plan and returns to DOC within 2 days",
@@ -419,44 +508,54 @@ const INITIAL_ROLES = [
       "When mirror inventory is low, goes to Verno to pick out more or orders same types (faxed to Brandon's)",
       "Files notification form in job file"
     ],
-    processes: ["preconstruction_redline", "preconstruction_planning", "interior_designer_selection", "interior_designer_hoa_rocc", "framed_mirror_purchase"]
+    "processes": [
+      "preconstruction_redline",
+      "preconstruction_planning",
+      "interior_designer_selection",
+      "interior_designer_hoa_rocc",
+      "framed_mirror_purchase"
+    ]
   },
   {
-    id: "selection_coordinator",
-    title: "Selection Coordinator",
-    name: "",
-    department: "Sales",
-    color: "#F472B6",
-    responsibilities: [
+    "id": "selection_coordinator",
+    "title": "Selection Coordinator",
+    "name": "",
+    "department": "Sales",
+    "color": "#F472B6",
+    "responsibilities": [
       "Calls buyer within 24-48 hours to set up consultation",
       "Guides buyer through interior and exterior scheme selections",
       "Helps buyer bring pictures, samples, or anything applicable to design consultation"
     ],
-    processes: ["homebuyer_expectations"]
+    "processes": [
+      "homebuyer_expectations"
+    ]
   },
   {
-    id: "customer_care",
-    title: "Customer Care Department",
-    name: "",
-    department: "Administration",
-    color: "#14B8A6",
-    responsibilities: [
+    "id": "customer_care",
+    "title": "Customer Care Department",
+    "name": "",
+    "department": "Administration",
+    "color": "#14B8A6",
+    "responsibilities": [
       "Contacts homeowner within 24 hours when warranty request is submitted",
       "Handles post-closing warranty items"
     ],
-    processes: ["homebuyer_expectations"]
+    "processes": [
+      "homebuyer_expectations"
+    ]
   }
 ];
 
 const INITIAL_PROCESSES = [
   {
-    id: "preconstruction_planning",
-    name: "Preconstruction Planning Process",
-    owner: "doc",
-    date: "October 1, 2004 (Revised 11/05/04)",
-    category: "Preconstruction",
-    description: "End-to-end preconstruction planning from contract signing through plan approval, budget preparation, financing setup, and sales price establishment. Covers new and existing plans, architect coordination, HOA review, interior design, and permitting.",
-    steps: [
+    "id": "preconstruction_planning",
+    "name": "Preconstruction Planning Process",
+    "owner": "doc",
+    "date": "October 1, 2004 (Revised 11/05/04)",
+    "category": "Preconstruction",
+    "description": "End-to-end preconstruction planning from contract signing through plan approval, budget preparation, financing setup, and sales price establishment. Covers new and existing plans, architect coordination, HOA review, interior design, and permitting.",
+    "steps": [
       "President signs purchase contract (30 days to close)",
       "President decides on plan (Day 1)",
       "If new plan: Dir of Sales communicates upcoming project to sales for database update",
@@ -496,16 +595,25 @@ const INITIAL_PROCESSES = [
       "Accounting assistant logs budget into QuickBooks",
       "DOC prepares proforma and forwards to CFO"
     ],
-    participants: ["president", "doc", "cfo", "dir_sales", "dop", "admin_asst", "construction_asst", "interior_designer"]
+    "participants": [
+      "president",
+      "doc",
+      "cfo",
+      "dir_sales",
+      "dop",
+      "admin_asst",
+      "construction_asst",
+      "interior_designer"
+    ]
   },
   {
-    id: "preconstruction_spec",
-    name: "Preconstruction Start Process - Spec Home",
-    owner: "doc",
-    date: "May 18, 2022",
-    category: "Preconstruction",
-    description: "Detailed preconstruction start process specific to spec homes, including soil testing, plan review cycles with president approval, redline coordination, engineer involvement, permitting, and final plan delivery for purchasing.",
-    steps: [
+    "id": "preconstruction_spec",
+    "name": "Preconstruction Start Process - Spec Home",
+    "owner": "doc",
+    "date": "May 18, 2022",
+    "category": "Preconstruction",
+    "description": "Detailed preconstruction start process specific to spec homes, including soil testing, plan review cycles with president approval, redline coordination, engineer involvement, permitting, and final plan delivery for purchasing.",
+    "steps": [
       "DOP files redline in redline plan rack",
       "DOC returns redline to DOP for filing",
       "DOC distributes 3rd plan to DOP for filing",
@@ -554,16 +662,22 @@ const INITIAL_PROCESSES = [
       "Truss plan approval process",
       "DOP follows up with architect/engineer on status of plans"
     ],
-    participants: ["doc", "dop", "president", "superintendent", "construction_asst"]
+    "participants": [
+      "doc",
+      "dop",
+      "president",
+      "superintendent",
+      "construction_asst"
+    ]
   },
   {
-    id: "preconstruction_redline",
-    name: "Preconstruction & Redline with Buyer - Custom Home",
-    owner: "doc",
-    date: "March 30, 2004 (Updated 11/1/04)",
-    category: "Preconstruction",
-    description: "The preconstruction and redline process specifically for custom homes involving buyer participation. Covers contract distribution, start memo issuance, blueprint review, pre-construction meetings, design selection, redline sign-off, and issue resolution.",
-    steps: [
+    "id": "preconstruction_redline",
+    "name": "Preconstruction & Redline with Buyer - Custom Home",
+    "owner": "doc",
+    "date": "March 30, 2004 (Updated 11/1/04)",
+    "category": "Preconstruction",
+    "description": "The preconstruction and redline process specifically for custom homes involving buyer participation. Covers contract distribution, start memo issuance, blueprint review, pre-construction meetings, design selection, redline sign-off, and issue resolution.",
+    "steps": [
       "Sales Exec distributes copies of contract, specs, upgrades to DOC, DOP, Controller, DFO",
       "Controller issues start memo",
       "DOC and Area/Project Manager select superintendent and designer per project within 24 hours",
@@ -593,16 +707,24 @@ const INITIAL_PROCESSES = [
       "Superintendent notifies designer and sales of applicable meeting date, time, and location - project manager attendance optional",
       "Superintendent confirms with Construction Asst that HOA approval is received"
     ],
-    participants: ["doc", "sales_exec", "controller", "construction_asst", "superintendent", "interior_designer", "project_mgr"]
+    "participants": [
+      "doc",
+      "sales_exec",
+      "controller",
+      "construction_asst",
+      "superintendent",
+      "interior_designer",
+      "project_mgr"
+    ]
   },
   {
-    id: "homebuilding",
-    name: "Homebuilding Process - Estate, Villas & Custom",
-    owner: "doc",
-    date: "",
-    category: "Construction",
-    description: "The 10-phase construction timeline from permitting through closing for three product types: Estate Series, Villas, and Custom homes. Each series has different durations per phase.",
-    steps: [
+    "id": "homebuilding",
+    "name": "Homebuilding Process - Estate, Villas & Custom",
+    "owner": "doc",
+    "date": "",
+    "category": "Construction",
+    "description": "The 10-phase construction timeline from permitting through closing for three product types: Estate Series, Villas, and Custom homes. Each series has different durations per phase.",
+    "steps": [
       "Phase 1: Permitting and Financing Finalized (Estate: 34 days, Villas: 14 days, Custom: 24 days)",
       "Phase 2: Foundation (Estate: 40 days, Villas: 21 days, Custom: 29 days)",
       "Phase 3: Framing (Estate: 28 days, Villas: 11 days, Custom: 15 days)",
@@ -617,16 +739,19 @@ const INITIAL_PROCESSES = [
       "Homeowner Walk Through (Estate: 1-7 days, Villas: 1-7 days, Custom: 1-7 days)",
       "Homeowner Closing (Estate: 7 days, Villas: 7 days, Custom: 7 days)"
     ],
-    participants: ["superintendent", "doc"]
+    "participants": [
+      "superintendent",
+      "doc"
+    ]
   },
   {
-    id: "change_order_request",
-    name: "Change Order Request Process",
-    owner: "dir_sales",
-    date: "May 2022",
-    category: "Change Management",
-    description: "Process for handling customer or sales executive-initiated change order requests, including review chain through Dir of Sales, DOC approval, purchasing pricing, customer approval (for non-spec), and final execution steps.",
-    steps: [
+    "id": "change_order_request",
+    "name": "Legacy reference — Change Order Request Process",
+    "owner": "dir_sales",
+    "date": "May 2022",
+    "category": "Change Management",
+    "description": "Historical database module: Maria reported October 20 it has not been used in about ten years. Do not teach daily inbox/multi-person routing as current procedure. Current customer changes were priced by Maria, approved and paid before work, with extra WOs (.1/.2) as applicable. Successor pricing/approval authority unresolved. Landing separately requires written change orders under its final agreed contract. Original historical steps retained below. Process for handling customer or sales executive-initiated change order requests, including review chain through Dir of Sales, DOC approval, purchasing pricing, customer approval (for non-spec), and final execution steps.",
+    "steps": [
       "Change order request initiated by customer/sales executive",
       "Request clarity check (Is your request clear?)",
       "Dir of Sales reviews request",
@@ -640,16 +765,22 @@ const INITIAL_PROCESSES = [
       "If yes: Collect funds, Increase budget (database & QuickBooks), Create WO, Create PO, Adjust cost/sales price",
       "Notified parties: Accounting, Superintendent, Project Mgr, DOC, Sales Mgr, Sales"
     ],
-    participants: ["sales_exec", "dir_sales", "doc", "purchasing_mgr", "superintendent"]
+    "participants": [
+      "sales_exec",
+      "dir_sales",
+      "doc",
+      "purchasing_mgr",
+      "superintendent"
+    ]
   },
   {
-    id: "change_order_budget",
-    name: "Change Order Budget Entry",
-    owner: "doc",
-    date: "May 18, 2022",
-    category: "Change Management",
-    description: "Process for entering approved change orders into the budget system, from buyer approval through DOC logging, president review, QuickBooks entry, and database updates.",
-    steps: [
+    "id": "change_order_budget",
+    "name": "Legacy reference — Change Order Budget Entry",
+    "owner": "doc",
+    "date": "May 18, 2022",
+    "category": "Change Management",
+    "description": "Historical database module: Maria reported October 20 it has not been used in about ten years. Do not teach daily inbox/multi-person routing as current procedure. Current customer changes were priced by Maria, approved and paid before work, with extra WOs (.1/.2) as applicable. Successor pricing/approval authority unresolved. Landing separately requires written change orders under its final agreed contract. Original historical steps retained below. Process for entering approved change orders into the budget system, from buyer approval through DOC logging, president review, QuickBooks entry, and database updates.",
+    "steps": [
       "Change order is approved by buyer",
       "DOC reviews database inbox daily for approved change orders",
       "DOC logs change order into change order budget log",
@@ -660,16 +791,22 @@ const INITIAL_PROCESSES = [
       "DOC prints out copy of reviewed log and forwards to CA",
       "DOP enters change order budgets into database"
     ],
-    participants: ["doc", "president", "cfo", "dop", "construction_asst"]
+    "participants": [
+      "doc",
+      "president",
+      "cfo",
+      "dop",
+      "construction_asst"
+    ]
   },
   {
-    id: "back_charge",
-    name: "Back Charge Process",
-    owner: "doc",
-    date: "December 9, 2004",
-    category: "Financial",
-    description: "Process for handling back charges against subcontractors when rework is needed. Covers superintendent initiation, trade notification, DOC approval, accounting entry, and credit tracking.",
-    steps: [
+    "id": "back_charge",
+    "name": "Back Charge Process",
+    "owner": "doc",
+    "date": "December 9, 2004",
+    "category": "Financial",
+    "description": "Process for handling back charges against subcontractors when rework is needed. Covers superintendent initiation, trade notification, DOC approval, accounting entry, and credit tracking.",
+    "steps": [
       "Superintendent notes rework item or situation requiring back charge",
       "Super contacts trade that caused repair and gives opportunity to repair if feasible",
       "Super negotiates price with trade performing repair",
@@ -693,16 +830,21 @@ const INITIAL_PROCESSES = [
       "If yes: Acct Asst staples back charge to back of check",
       "If no: Acct Asst keeps back charge in folder for review the following week"
     ],
-    participants: ["superintendent", "doc", "acct_asst", "project_mgr"]
+    "participants": [
+      "superintendent",
+      "doc",
+      "acct_asst",
+      "project_mgr"
+    ]
   },
   {
-    id: "budget_review",
-    name: "Weekly Budget Review",
-    owner: "doc",
-    date: "June 13, 2005",
-    category: "Financial",
-    description: "Weekly process for budget monitoring. Accounting updates budgets weekly, downloads reports to Excel on the public drive for superintendent review during AP processing.",
-    steps: [
+    "id": "budget_review",
+    "name": "Weekly Budget Review",
+    "owner": "doc",
+    "date": "June 13, 2005",
+    "category": "Financial",
+    "description": "Weekly process for budget monitoring. Accounting updates budgets weekly, downloads reports to Excel on the public drive for superintendent review during AP processing.",
+    "steps": [
       "Accounting updates budgets weekly",
       "Reports saved to Public Drive > Company Information > MCH > Weekly Download - Actual to Budget Excel File",
       "Superintendent reviews budget as they process their accounts payable",
@@ -711,16 +853,19 @@ const INITIAL_PROCESSES = [
       "Overages to $1,000 approved by Mark; over $1,000 approved by Jim",
       "Budget also used to check account number for coding expenses properly"
     ],
-    participants: ["superintendent", "acct_asst"]
+    "participants": [
+      "superintendent",
+      "acct_asst"
+    ]
   },
   {
-    id: "budget_revision",
-    name: "Budget Revision Update Process",
-    owner: "doc",
-    date: "August 23, 2005",
-    category: "Financial",
-    description: "Process for handling budget revisions when bids/quotes differ from budgeted amounts. Includes superintendent review, DOC approval chain, overage logging, and president sign-off at tactical meetings.",
-    steps: [
+    "id": "budget_revision",
+    "name": "Budget Revision Update Process",
+    "owner": "doc",
+    "date": "August 23, 2005",
+    "category": "Financial",
+    "description": "Process for handling budget revisions when bids/quotes differ from budgeted amounts. Includes superintendent review, DOC approval chain, overage logging, and president sign-off at tactical meetings.",
+    "steps": [
       "Superintendent reviews bid/quote against budget",
       "Is amount greater than budget?",
       "If no: Superintendent enters amount as work order in database",
@@ -737,16 +882,21 @@ const INITIAL_PROCESSES = [
       "DOC/Super cannot enter work order without approval",
       "If budget change not approved: Request goes to President for approval"
     ],
-    participants: ["superintendent", "doc", "cfo", "president"]
+    "participants": [
+      "superintendent",
+      "doc",
+      "cfo",
+      "president"
+    ]
   },
   {
-    id: "budget_spec",
-    name: "Budget & Home Specification Process",
-    owner: "doc",
-    date: "January 4, 2005",
-    category: "Financial",
-    description: "Process for budget creation and home specification preparation after preconstruction start, including Dir of Purchasing budget preparation, president approval cycle, specification routing, and sales price establishment.",
-    steps: [
+    "id": "budget_spec",
+    "name": "Budget & Home Specification Process",
+    "owner": "doc",
+    "date": "January 4, 2005",
+    "category": "Financial",
+    "description": "Process for budget creation and home specification preparation after preconstruction start, including Dir of Purchasing budget preparation, president approval cycle, specification routing, and sales price establishment.",
+    "steps": [
       "Follows Precon Start Process",
       "Director of Purchasing prepares budget",
       "Dir of Purchasing delivers budget to president for approval",
@@ -769,16 +919,22 @@ const INITIAL_PROCESSES = [
       "Dir of Sales prepares marketing specifications",
       "Permitting process begins simultaneously"
     ],
-    participants: ["president", "dop", "dir_sales", "acct_asst", "construction_asst"]
+    "participants": [
+      "president",
+      "dop",
+      "dir_sales",
+      "acct_asst",
+      "construction_asst"
+    ]
   },
   {
-    id: "start_packet",
-    name: "Start Packet Process",
-    owner: "dop",
-    date: "May 18, 2022 (Updated April 17, 2007)",
-    category: "Preconstruction",
-    description: "Comprehensive process for assembling the start packet including plan ordering, copying, numbering, soils reports, structural engineering, truss bidding, financing initiation, HOA approvals, permitting, landscape drawings, and utility setup.",
-    steps: [
+    "id": "start_packet",
+    "name": "Start Packet Process",
+    "owner": "dop",
+    "date": "May 18, 2022 (Updated April 17, 2007)",
+    "category": "Preconstruction",
+    "description": "Comprehensive process for assembling the start packet including plan ordering, copying, numbering, soils reports, structural engineering, truss bidding, financing initiation, HOA approvals, permitting, landscape drawings, and utility setup.",
+    "steps": [
       "DOP enters house information into database when receiving start request from DOS-DOS",
       "DOP gives copy to designer",
       "DOP orders plan from architect",
@@ -827,16 +983,22 @@ const INITIAL_PROCESSES = [
       "DOP orders water meter from Severn Trent",
       "DOP receives memo from accounting that financing is approved"
     ],
-    participants: ["dop", "doc", "purchasing_mgr", "construction_asst", "superintendent"]
+    "participants": [
+      "dop",
+      "doc",
+      "purchasing_mgr",
+      "construction_asst",
+      "superintendent"
+    ]
   },
   {
-    id: "new_work_order",
-    name: "New Work Order Process (Legacy — October 2006, archived)",
-    owner: "purchasing_mgr",
-    date: "October 18, 2006",
-    category: "Operations",
-    description: "Process for creating new work orders from redlined plans through bidding, bid evaluation, and work order creation for the start package.",
-    steps: [
+    "id": "new_work_order",
+    "name": "New Work Order Process (Legacy — October 2006, archived)",
+    "owner": "purchasing_mgr",
+    "date": "October 18, 2006",
+    "category": "Operations",
+    "description": "Process for creating new work orders from redlined plans through bidding, bid evaluation, and work order creation for the start package.",
+    "steps": [
       "Red-lined plans are received by CA",
       "CA requests current bid list from PM",
       "CA receives bid list and sends plans to subcontractors for bidding",
@@ -845,16 +1007,20 @@ const INITIAL_PROCESSES = [
       "Purchasing Manager determines most competitive bid and creates work order",
       "Purchasing Manager returns work order to CA for start package"
     ],
-    participants: ["construction_asst", "purchasing_mgr", "project_mgr"]
+    "participants": [
+      "construction_asst",
+      "purchasing_mgr",
+      "project_mgr"
+    ]
   },
   {
-    id: "work_order_ap",
-    name: "Work Order Accounts Payable Process (Legacy — October 2006, archived)",
-    owner: "purchasing_mgr",
-    date: "October 19, 2006",
-    category: "Financial",
-    description: "Process for work order payment from bid collection through purchasing entry, subcontractor completion, superintendent verification, PM/DOC approval, and final payment routing to accounting.",
-    steps: [
+    "id": "work_order_ap",
+    "name": "Work Order Accounts Payable Process (Legacy — October 2006, archived)",
+    "owner": "purchasing_mgr",
+    "date": "October 19, 2006",
+    "category": "Financial",
+    "description": "Process for work order payment from bid collection through purchasing entry, subcontractor completion, superintendent verification, PM/DOC approval, and final payment routing to accounting.",
+    "steps": [
       "Purchasing collects bid",
       "Purchasing enters work order in database",
       "Subcontractor or CA clicks 'complete' if job is 100% complete",
@@ -866,16 +1032,22 @@ const INITIAL_PROCESSES = [
       "Subcontractor logs into database to fix issue",
       "Superintendent verifies completion and approves"
     ],
-    participants: ["purchasing_mgr", "superintendent", "project_mgr", "doc", "acct_asst"]
+    "participants": [
+      "purchasing_mgr",
+      "superintendent",
+      "project_mgr",
+      "doc",
+      "acct_asst"
+    ]
   },
   {
-    id: "bonus_request",
-    name: "Bonus Request Submittal Process",
-    owner: "doc",
-    date: "August 23, 2005",
-    category: "HR / Admin",
-    description: "Process for superintendent bonus requests upon home completion. Covers walk-through completion, occupancy/substantial completion paperwork, DOC review of job performance, bonus calculation, and president approval with 60-day submission requirement.",
-    steps: [
+    "id": "bonus_request",
+    "name": "Bonus Request Submittal Process",
+    "owner": "doc",
+    "date": "August 23, 2005",
+    "category": "HR / Admin",
+    "description": "Process for superintendent bonus requests upon home completion. Covers walk-through completion, occupancy/substantial completion paperwork, DOC review of job performance, bonus calculation, and president approval with 60-day submission requirement.",
+    "steps": [
       "Superintendent completes final walk through with homebuyer",
       "Superintendent makes copy of Occ and Sub paperwork, gives original to DOC",
       "Is Occupancy and Substantial Completion 100% signed off and dated?",
@@ -898,16 +1070,21 @@ const INITIAL_PROCESSES = [
       "CFO processes bonus payment toward next scheduled pay period",
       "Superintendent receives bonus on pay check"
     ],
-    participants: ["superintendent", "doc", "president", "cfo"]
+    "participants": [
+      "superintendent",
+      "doc",
+      "president",
+      "cfo"
+    ]
   },
   {
-    id: "homebuyer_expectations",
-    name: "Setting the Expectation with the Homebuyer - Step by Step",
-    owner: "dir_sales",
-    date: "",
-    category: "Sales",
-    description: "Customer-facing step-by-step guide outlining the entire homebuying journey from floorplan selection through closing, move-in, and warranty. Covers contract signing, design consultation, selections, pre-construction conference, construction stages, walk-throughs, closing, and post-closing warranty.",
-    steps: [
+    "id": "homebuyer_expectations",
+    "name": "Setting the Expectation with the Homebuyer - Step by Step",
+    "owner": "dir_sales",
+    "date": "",
+    "category": "Sales",
+    "description": "Customer-facing step-by-step guide outlining the entire homebuying journey from floorplan selection through closing, move-in, and warranty. Covers contract signing, design consultation, selections, pre-construction conference, construction stages, walk-throughs, closing, and post-closing warranty.",
+    "steps": [
       "Step 1: Review floorplan choices, design options, and upgrade possibilities with Sales Executive",
       "Step 2: Sign Residential Contract and pay 10% non-refundable deposit plus 100% of changes upfront",
       "Receive homeowner manual including HOA information and deed restrictions",
@@ -936,16 +1113,21 @@ const INITIAL_PROCESSES = [
       "Step 21: Receive title to new home",
       "Step 22: For warranty items, log onto warranty request system - Customer Care Dept contacts within 24 hours"
     ],
-    participants: ["sales_exec", "selection_coordinator", "superintendent", "customer_care"]
+    "participants": [
+      "sales_exec",
+      "selection_coordinator",
+      "superintendent",
+      "customer_care"
+    ]
   },
   {
-    id: "in_house_contract",
-    name: "In-House Contract Process Checklist",
-    owner: "admin_asst",
-    date: "",
-    category: "Sales",
-    description: "Comprehensive administrative checklist for processing a new home contract in-house. Covers contract binder receipt, check processing, database updates, MLS updates, title company coordination, closing process, HUD signing, and post-closing tasks including welcome packet delivery.",
-    steps: [
+    "id": "in_house_contract",
+    "name": "In-House Contract Process Checklist",
+    "owner": "admin_asst",
+    "date": "",
+    "category": "Sales",
+    "description": "Comprehensive administrative checklist for processing a new home contract in-house. Covers contract binder receipt, check processing, database updates, MLS updates, title company coordination, closing process, HUD signing, and post-closing tasks including welcome packet delivery.",
+    "steps": [
       "Contract binder and monies received in-house from sales executive - ensure close date on last page",
       "Update Check Log (Public/Company Information/MCH/Properties/Check Log) - ensure correct month",
       "Make copies of checks: one for Michael, one for Pat, one for Sales packet, one for Job Folder",
@@ -979,16 +1161,24 @@ const INITIAL_PROCESSES = [
       "Remove from Availability Listings - make copies for sales exec at property",
       "Personally deliver Welcome Packet and appropriate Welcome Gift to homeowners"
     ],
-    participants: ["admin_asst", "president", "controller", "cfo", "sales_exec", "doc", "project_mgr"]
+    "participants": [
+      "admin_asst",
+      "president",
+      "controller",
+      "cfo",
+      "sales_exec",
+      "doc",
+      "project_mgr"
+    ]
   },
   {
-    id: "interior_designer_hoa_rocc",
-    name: "Interior Designer HOA / ROCC Selection Process",
-    owner: "doc",
-    date: "January 3, 2005",
-    category: "Design",
-    description: "Process for getting interior/exterior selections approved by the HOA and ROCC (Residential Owners Community Committee). Covers plan retrieval, designer packet assembly, Phase 1 selection, ROCC application submission through Debby Duffy, approval/disapproval handling, and notification distribution.",
-    steps: [
+    "id": "interior_designer_hoa_rocc",
+    "name": "Interior Designer HOA / ROCC Selection Process",
+    "owner": "doc",
+    "date": "January 3, 2005",
+    "category": "Design",
+    "description": "Process for getting interior/exterior selections approved by the HOA and ROCC (Residential Owners Community Committee). Covers plan retrieval, designer packet assembly, Phase 1 selection, ROCC application submission through Debby Duffy, approval/disapproval handling, and notification distribution.",
+    "steps": [
       "CA retrieves plan #4 for interior designer",
       "CA notifies DOP for designer start packet",
       "DOP delivers designer start packet to CA",
@@ -1016,16 +1206,22 @@ const INITIAL_PROCESSES = [
       "Interior Designer receives approved architectural review letter from CA",
       "ROCC/HOA Review Process continues as needed"
     ],
-    participants: ["construction_asst", "interior_designer", "dop", "doc", "superintendent"]
+    "participants": [
+      "construction_asst",
+      "interior_designer",
+      "dop",
+      "doc",
+      "superintendent"
+    ]
   },
   {
-    id: "president_plan_selection",
-    name: "President Plan Selection Process",
-    owner: "doc",
-    date: "January 27, 2005",
-    category: "Preconstruction",
-    description: "Process for president-driven plan selection for spec homes. Follows the precon start process and covers architect recommendation, preliminary plan review, president approval cycle with potential architect meetings, and handoff to the precon start process for spec homes.",
-    steps: [
+    "id": "president_plan_selection",
+    "name": "President Plan Selection Process",
+    "owner": "doc",
+    "date": "January 27, 2005",
+    "category": "Preconstruction",
+    "description": "Process for president-driven plan selection for spec homes. Follows the precon start process and covers architect recommendation, preliminary plan review, president approval cycle with potential architect meetings, and handoff to the precon start process for spec homes.",
+    "steps": [
       "Follows Precon Start Process - Spec Home",
       "Architect selects recommended plans for specific lot",
       "Architect notifies President or Admin Assistant of preliminary plans ready for pick up",
@@ -1045,16 +1241,20 @@ const INITIAL_PROCESSES = [
       "Admin Assistant orders 3 sets of checkset plans",
       "Proceeds to Precon Start Process - Spec Home"
     ],
-    participants: ["president", "admin_asst", "doc"]
+    "participants": [
+      "president",
+      "admin_asst",
+      "doc"
+    ]
   },
   {
-    id: "interior_designer_selection",
-    name: "Interior Designer Selection Process",
-    owner: "doc",
-    date: "March 14, 2005",
-    category: "Design",
-    description: "Detailed process for interior designer selections including Phase 1 HOA/ROCC submittals, designer packet assembly, ROCC application with Debby Duffy, approval/disapproval cycles, and coordination between CA, DOP, and Interior Designer.",
-    steps: [
+    "id": "interior_designer_selection",
+    "name": "Interior Designer Selection Process",
+    "owner": "doc",
+    "date": "March 14, 2005",
+    "category": "Design",
+    "description": "Detailed process for interior designer selections including Phase 1 HOA/ROCC submittals, designer packet assembly, ROCC application with Debby Duffy, approval/disapproval cycles, and coordination between CA, DOP, and Interior Designer.",
+    "steps": [
       "CA retrieves plan #4 for interior designer",
       "CA notifies DOP for designer start packet",
       "DOP delivers designer start packet to CA",
@@ -1082,16 +1282,21 @@ const INITIAL_PROCESSES = [
       "Interior Designer receives approved architectural review letter from CA",
       "ROCC/HOA Review Process"
     ],
-    participants: ["construction_asst", "interior_designer", "dop", "superintendent"]
+    "participants": [
+      "construction_asst",
+      "interior_designer",
+      "dop",
+      "superintendent"
+    ]
   },
   {
-    id: "permitting",
-    name: "Permitting Process (Legacy — December 2004, archived)",
-    owner: "doc",
-    date: "December 30, 2004",
-    category: "Preconstruction",
-    description: "Detailed permitting process from precon start through permit acquisition, impact fees, rescheck analysis, permit tracking, start packet assembly, and construction start. Covers CA coordination with permitting company, database logging, and DOC start memo distribution.",
-    steps: [
+    "id": "permitting",
+    "name": "Legacy 2004 reference — Permitting Process (Legacy — December 2004, archived)",
+    "owner": "doc",
+    "date": "December 30, 2004",
+    "category": "Preconstruction",
+    "description": "Historical reference only; use current iPermits/ProjectDox handoff with jurisdiction verification. Detailed permitting process from precon start through permit acquisition, impact fees, rescheck analysis, permit tracking, start packet assembly, and construction start. Covers CA coordination with permitting company, database logging, and DOC start memo distribution.",
+    "steps": [
       "Follows Precon Start Process",
       "CA removes plans 1 and 2 and sets aside for permitting",
       "CA fills out check request for impact fee (if any) and water/meter fee",
@@ -1135,16 +1340,22 @@ const INITIAL_PROCESSES = [
       "Super returns #3 plan to CA",
       "CA places redlined #3 plan in redline plan rack"
     ],
-    participants: ["construction_asst", "doc", "dop", "acct_asst", "superintendent"]
+    "participants": [
+      "construction_asst",
+      "doc",
+      "dop",
+      "acct_asst",
+      "superintendent"
+    ]
   },
   {
-    id: "framed_mirror_purchase",
-    name: "Framed Mirror Purchase Process - Division 1 and 2 Homes",
-    owner: "doc",
-    date: "April 2, 2004 (Updated 4/07/04)",
-    category: "Operations",
-    description: "Specialized process for purchasing and installing framed mirrors in Division 1 and 2 homes. Covers superintendent measurements, interior designer selection from Verno casita, mirror inventory management, Brandon's delivery, and trim carpenter installation scheduling.",
-    steps: [
+    "id": "framed_mirror_purchase",
+    "name": "Framed Mirror Purchase Process - Division 1 and 2 Homes",
+    "owner": "doc",
+    "date": "April 2, 2004 (Updated 4/07/04)",
+    "category": "Operations",
+    "description": "Specialized process for purchasing and installing framed mirrors in Division 1 and 2 homes. Covers superintendent measurements, interior designer selection from Verno casita, mirror inventory management, Brandon's delivery, and trim carpenter installation scheduling.",
+    "steps": [
       "Superintendent gives measurements for framed mirrors to Interior Designer when house starts",
       "Mirrors will be selected from casita at time of redline by Interior Designer",
       "Interior Designer will mark address on cardboard edges of mirrors in casita",
@@ -1157,16 +1368,19 @@ const INITIAL_PROCESSES = [
       "Interior Designers are responsible for keeping inventory of mirrors",
       "When mirror inventory is low, Interior Designers will go to Verno to pick out more or order same mirror types (will be faxed to Brandon's)"
     ],
-    participants: ["superintendent", "interior_designer"]
+    "participants": [
+      "superintendent",
+      "interior_designer"
+    ]
   },
   {
-    id: "lowes_bill_process",
-    name: "Lowes / Home Depot Bill Process",
-    owner: "acct_asst",
-    date: "",
-    category: "Financial",
-    description: "Monthly process for matching Lowes/Home Depot bills to purchase orders in the database, entering into QuickBooks, and processing payment. Involves coordination between Accounting (Brittany) and Purchasing (Ernesto) for PO matching and database updates.",
-    steps: [
+    "id": "lowes_bill_process",
+    "name": "Lowes / Home Depot Bill Process",
+    "owner": "acct_asst",
+    "date": "",
+    "category": "Financial",
+    "description": "Monthly process for matching Lowes/Home Depot bills to purchase orders in the database, entering into QuickBooks, and processing payment. Involves coordination between Accounting (Brittany) and Purchasing (Ernesto) for PO matching and database updates.",
+    "steps": [
       "Receive Lowes/Home Depot bill in mail",
       "Purchasing (Ernesto) emails POs for Lowes bill to accounting",
       "Accounting saves emailed POs to Accounting-payables-purchase orders-emailed POs folder",
@@ -1181,16 +1395,19 @@ const INITIAL_PROCESSES = [
       "Each subsequent day make payment for one company's bills until all are paid",
       "Mark Purchase Orders Paid in database"
     ],
-    participants: ["acct_asst", "purchasing_mgr"]
+    "participants": [
+      "acct_asst",
+      "purchasing_mgr"
+    ]
   },
   {
-    id: "accounting_weekly",
-    name: "Accounting Weekly Tasks",
-    owner: "acct_asst",
-    date: "",
-    category: "Financial",
-    description: "Weekly recurring accounting tasks including check processing, draw requests, utility payments, deposit handling, database imports, and Friday check run submission to Jim and Kenneth.",
-    steps: [
+    "id": "accounting_weekly",
+    "name": "Accounting Weekly Tasks",
+    "owner": "acct_asst",
+    "date": "",
+    "category": "Financial",
+    "description": "Weekly recurring accounting tasks including check processing, draw requests, utility payments, deposit handling, database imports, and Friday check run submission to Jim and Kenneth.",
+    "steps": [
       "FRIDAY: Submit list of suggested checks to print and auto pays/payments to Jim and Kenneth",
       "Request draws via Built.com & Excel/email to bank (411 Electra & 4019 Del Bello via Built)",
       "59NKW & 11419 St Germain need supplemental form signed for draws",
@@ -1210,16 +1427,19 @@ const INITIAL_PROCESSES = [
       "Verify Purchase Orders found/should be in Database",
       "Send shutoff notices to TA and OA past due on water"
     ],
-    participants: ["acct_asst", "cfo"]
+    "participants": [
+      "acct_asst",
+      "cfo"
+    ]
   },
   {
-    id: "accounting_monthly",
-    name: "Accounting Monthly Tasks",
-    owner: "cfo",
-    date: "",
-    category: "Financial",
-    description: "Monthly recurring accounting tasks including AMEX processing, Builders Risk reporting, bank reconciliations, HOA water billing, cash reports, sales tax reporting, and Banyan Tree reconciliation.",
-    steps: [
+    "id": "accounting_monthly",
+    "name": "Accounting Monthly Tasks",
+    "owner": "cfo",
+    "date": "",
+    "category": "Financial",
+    "description": "Monthly recurring accounting tasks including AMEX processing, Builders Risk reporting, bank reconciliations, HOA water billing, cash reports, sales tax reporting, and Banyan Tree reconciliation.",
+    "steps": [
       "Process AMEX Bill - save receipts in organized statement date folders",
       "Update Builders Risk Excel - create copy of worksheet from previous month, update name and dates",
       "Update Builders Risk Excel Value Column with current job value from MCH P/L by Job report",
@@ -1238,16 +1458,19 @@ const INITIAL_PROCESSES = [
       "Process general payables",
       "Prepare Invoices for Title Companies when sale in TA or OA"
     ],
-    participants: ["cfo", "acct_asst"]
+    "participants": [
+      "cfo",
+      "acct_asst"
+    ]
   },
   {
-    id: "accounting_quarterly_yearly",
-    name: "Accounting Quarterly & Yearly Tasks",
-    owner: "cfo",
-    date: "",
-    category: "Financial",
-    description: "Quarterly and yearly accounting tasks including financial reporting, intercompany balancing, payroll reports, GL audits, HOA assessments, tax preparation, 1099s, insurance management, and 401K administration.",
-    steps: [
+    "id": "accounting_quarterly_yearly",
+    "name": "Accounting Quarterly & Yearly Tasks",
+    "owner": "cfo",
+    "date": "",
+    "category": "Financial",
+    "description": "Quarterly and yearly accounting tasks including financial reporting, intercompany balancing, payroll reports, GL audits, HOA assessments, tax preparation, 1099s, insurance management, and 401K administration.",
+    "steps": [
       "QUARTERLY: Prepare Financial Reports",
       "QUARTERLY: % of Completion reports",
       "QUARTERLY: Balance Intercompanies",
@@ -1274,43 +1497,45 @@ const INITIAL_PROCESSES = [
       "AS NEEDED: Send new companies to CPA",
       "AS NEEDED: Items not importing for MCH QB send to IT to add to DB/QB import"
     ],
-    participants: ["cfo", "acct_asst"]
-  }
-,
-  {
-    id: "wo_entry_buildconnect",
-    name: "Work Order Entry in BuildConnect (SOP-PUR-01)",
-    owner: "purchasing_mgr",
-    date: "October 2026",
-    category: "Operations",
-    description: "Detailed procedure for entering labor work orders in the BuildConnect database through logged-in Chrome. Covers source document reading, job routing (including HOA/ROCVTA routing through Teresa), duplicate checking, vendor-specific rules (Johnston Waterproofing, HVAC, H&H Fence), payment period setup, submission via passcode, and post-save verification.",
-    steps: [
-      "Read the source estimate/invoice — extract vendor, verified job/routing, reference number, date, scope, quantities, rates, total, work site, schedule, and approval context",
-      "Apply routing first: HOA work approved through Teresa goes to ROCVTA; keep ROCVTA as database job and put actual full work address in description",
-      "In logged-in Chrome, check Work Order Tracking for the selected job — use All and include voided records to prevent duplicates",
-      "Open Jobs → correctly routed job → New Work Order in the BuildConnect frame",
-      "Set payment-period count FIRST — changing it reloads the form",
-      "Apply current vendor/scope rule: Johnston (409.0, separate priced scopes, blank general sqft); HVAC — 60%/30%/10% draw breakdown per WO 39974 precedent, recalculate dollar amounts from each new contract total, use WO 39974 draw descriptions, pricing based on equipment/register counts/system requirements NOT per-sqft, enter verified A/C sqft in WO field AND description (2,626 sqft applies ONLY to 11603 Royal Parkside); H&H HOA (940.0, Maintenance, ROCVTA); Synergy roofing (30%/50%/20% draws); Electrical Works COs (code 620); Reece plumbing fixtures (code 601, split valves/trims when requested)",
-      "Verify line amounts after blur, confirm sum matches contract total, percentages sum to 100%",
-      "Use authorized schedule — invoice/estimate date is NOT automatically the Start Date; leave completion/payment flags unset for new work",
-      "Submit using passcode-box Enter step within current authorization; keep passcode private",
-      "If white screen appears after submit — this is uncertain result, NOT proof of failure; do NOT retry immediately",
-      "Verify saved WO ID, routed job, vendor, reference, rows, total, and dates in Work Order Tracking",
-      "If verification inconclusive, stop and report uncertainty — never create a duplicate",
-      "Use proposal dates in Invoice Date fields for proposal-based orders; use invoice dates for invoices — Start and scheduled completion dates are separate",
-      "Calendar selections have sometimes failed to persist — if date does not apply, report requested vs saved date and preserve existing record",
-      "After verifying saved order, file original proposal/estimate/invoice in Public → matching job → Purchasing → vendor folder (create vendor folder if missing)"
-    ],
-    participants: ["purchasing_mgr", "superintendent", "doc"]
+    "participants": [
+      "cfo",
+      "acct_asst"
+    ]
   },
   {
-    id: "lowes_po_buildconnect",
-    name: "Lowe's Receipt PO Entry and Handoff (SOP-PUR-03)",
-    owner: "acct_asst",
-    date: "October 26, 2026 (User-confirmed)",
-    category: "Financial",
-    description: "Confirmed procedure for entering job-specific Lowe's receipt purchase orders in BuildConnect, including CUSTOMER CODE matching, tax separation, Complete vs Received status distinction, Canon printing, Microsoft Teams Purchasing channel notification, and physical receipt handoff to Kenneth's Lowe's inbox.",
-    steps: [
+    "id": "wo_entry_buildconnect",
+    "name": "Work Order Entry in BuildConnect (SOP-PUR-01)",
+    "owner": "purchasing_mgr",
+    "date": "November 4, 2026 — evidence reconciled",
+    "category": "Operations",
+    "description": "Purchasing ownership/backup unresolved. Current WO entry rules; existing job/vendor, source review, routing, duplicate checks and verified save. Full purchasing owner/backup remains unresolved.",
+    "steps": [
+      "Review current approved quote against selections, plans, takeoffs, counts, scope, quantities, references, total and authorization. A source document alone is not spending approval.",
+      "Use existing job/vendor. HOA work requested and approved through Teresa uses ROCVTA; place full physical work address prominently in description. Do not substitute bill-to address.",
+      "Check Tracking including relevant voided/extras before entry and every retry. Set payment-period count first; verify all amounts, totals and 100% after recalculation.",
+      "Johnston: Membrane/Built-Up Roofing, 409; separate priced scopes, general SF/rate blank; supplied area/rate in scope row, preserve package totals.",
+      "All A/C WOs: 60/30/10 following WO 39974 exact draw descriptions; recalculate from new contract total and reconcile rounding. Contract pricing is equipment/register/system based, not per SF. Enter verified A/C area in SF field AND saved description. 2,626 A/C SF is 11603 only.",
+      "H & H HOA fence maintenance: ROCVTA, Maintenance, 940, one 100% draw for one priced scope; other HOA trades need verified coding.",
+      "Proposal date belongs in applicable Invoice Date fields for proposal orders; actual invoice date for invoices. Start/completion are schedule-based dates with agreed duration, separate from invoice date. Date persistence, edit permissions and WO 40186 correction remain open.",
+      "Respect requested review stops; submit only within current authorization. Do not sign for vendors or infer field acceptance, completion or payment approval.",
+      "Blank submission screen may still mean saved. Reopen Tracking and saved record to verify ID, vendor/job, references, rows, labeled area, dates and total before retrying.",
+      "After verification file original in existing Public / matching job / Purchasing / accepted-bid-work-order / vendor folder; reuse actual accepted structure, create missing vendor folder only, preserve original and verify copy. H & H HOA source uses community Purchasing / ROCV H & H Fence.",
+      "Urgent ready WO requests were expected promptly (about ten minutes in discussion), not a universal SLA. Confirm responsible primary/backup and supplier deadlines."
+    ],
+    "participants": [
+      "purchasing_mgr",
+      "superintendent",
+      "doc"
+    ]
+  },
+  {
+    "id": "lowes_po_buildconnect",
+    "name": "Lowe's Receipt PO Entry and Handoff (SOP-PUR-03)",
+    "owner": "acct_asst",
+    "date": "October 26, 2026 (User-confirmed)",
+    "category": "Financial",
+    "description": "Confirmed procedure for entering job-specific Lowe's receipt purchase orders in BuildConnect, including CUSTOMER CODE matching, tax separation, Complete vs Received status distinction, Canon printing, Microsoft Teams Purchasing channel notification, and physical receipt handoff to Kenneth's Lowe's inbox.",
+    "steps": [
       "Obtain original readable receipt with CUSTOMER CODE, verified full job address, invoice/receipt number, purchase date, goods, quantities, net merchandise subtotal, tax, and total",
       "In logged-in Chrome, check Purchase Order Tracking for exact job and Lowe's — use All, compare reference/date/amount to prevent duplicates",
       "Select Jobs → correct job by CUSTOMER CODE → New Purchase Order",
@@ -1326,42 +1551,42 @@ const INITIAL_PROCESSES = [
       "Final report: saved PO number, job, receipt number/date, total, cost code, Complete/Received status, print outcome, Teams notification, and outstanding physical handoff",
       "File verified PO and receipt copy in Public → matching job → Purchasing → Lowes folder"
     ],
-    participants: ["acct_asst", "purchasing_mgr"]
+    "participants": [
+      "acct_asst",
+      "purchasing_mgr"
+    ]
   },
   {
-    id: "material_po_entry",
-    name: "Material Purchase Order Entry (SOP-PUR-02)",
-    owner: "purchasing_mgr",
-    date: "October 2026 (Draft)",
-    category: "Operations",
-    description: "Procedure for entering material purchase orders in BuildConnect from approved quotes, proposals, or invoices. Covers selection/spec/quantity review against budget, supplier dispatch with acknowledgment, proper filing, and draw splitting. Owner and approval boundary pending confirmation.",
-    steps: [
-      "Obtain approved quote, proposal, or invoice — verify vendor, job address, items, selections, specifications, quantities, and pricing against the approved scope/budget",
-      "Verify job address and match to correct BuildConnect job",
-      "Check Purchase Order Tracking for duplicates before entry",
-      "Review selections, specifications, and quantities against the approved budget and takeoff — flag discrepancies before proceeding",
-      "Select Jobs → correct job → New Purchase Order",
-      "Select vendor and appropriate cost code for the material type (e.g. 601 for plumbing fixtures, 996 for Lowe's/HD)",
-      "Set payment rows — split into separate draws when scope requires it (e.g. Reece valves vs trims); use single draw for standalone quotes",
-      "Enter amounts — separate merchandise from tax where applicable; verify form recalculation after blur",
-      "Enter invoice/proposal number and actual date; use proposal date for proposal-based orders, invoice date for invoices",
-      "Submit and verify saved PO in Tracking — confirm PO number, job, vendor, reference, amounts, and cost code",
-      "For supplier-dispatched POs: prepare verified proposal/PO for email to supplier contact, CC Maria (or designated construction lead), confirm supplier acknowledgment",
-      "Mark Complete when authorized — note: Complete is separate from Received/Pay/Paid In Full",
-      "File original quote/proposal/invoice in Public → matching job → Purchasing → accepted-bid or work-order folder → vendor folder (create vendor folder if missing)",
-      "NOTE: Early lumber/material coverage may require expedited PO entry — about-ten-minute urgent-ready expectation is job-specific, not a universal SLA",
-      "NOTE: Material PO procedure owner and backup to be confirmed; approval boundary for spending authority to be established"
+    "id": "material_po_entry",
+    "name": "Material Purchase Order Entry (SOP-PUR-02)",
+    "owner": "purchasing_mgr",
+    "date": "November 4, 2026 — evidence reconciled",
+    "category": "Operations",
+    "description": "Purchasing ownership/backup unresolved. Material PO workflow with technical quote review, supplier dispatch and source filing; approval and complete purchasing ownership still require named authority.",
+    "steps": [
+      "Use existing job/vendor; check duplicate references, date, scope and amount before entry/retry.",
+      "Compare current quote with approved selections, specification, plans/takeoff, quantities and inclusions. Confirm price, actual tax, deposit, delivery, source date/reference and approval.",
+      "Reece fixtures use 601; split valves/trims when requested. Water-heater one-draw case is a historical example, not every quote default. Verify current recipients rather than automatically copying Maria after transition.",
+      "Enter authorized PO rows, amounts and references; verify persisted ID, job, vendor, total and dates in Tracking.",
+      "Email authorized supplier PO to verified proposal contact, retain actual dispatch and supplier acknowledgment. Reported WO portal notifications do not establish PO delivery.",
+      "Extra lumber before 9 AM may catch same-day truck; verify supplier cutoff and early coverage. Do not promise a truck without confirmation.",
+      "File unchanged source and applicable PO PDF in existing matching Public Purchasing/accepted-bid/vendor structure; preserve originals and verify copy.",
+      "Lowe’s receipt status/Canon/physical handoff follows its separate confirmed SOP. Do not automatically apply Lowe’s Complete-for-payment rule to every material PO."
     ],
-    participants: ["purchasing_mgr", "superintendent", "acct_asst"]
+    "participants": [
+      "purchasing_mgr",
+      "superintendent",
+      "acct_asst"
+    ]
   },
   {
-    id: "cash_report_weekly",
-    name: "Weekly Cash Flow Statement Rollover (SOP-FIN-01)",
-    owner: "acct_asst",
-    date: "October 2026",
-    category: "Financial",
-    description: "Procedure for rolling the 2026 Cash Flow Statement forward each week. Involves copying Week tabs in Excel, rolling dates and formulas forward, clearing copied main-report details while PRESERVING all Support-tab transactions. Uses the Python helper script for preview, apply, and verify steps. Works in Brittany's active OneDrive file.",
-    steps: [
+    "id": "cash_report_weekly",
+    "name": "Weekly Cash Flow Statement Rollover (SOP-FIN-01)",
+    "owner": "acct_asst",
+    "date": "October 2026",
+    "category": "Financial",
+    "description": "Procedure for rolling the 2026 Cash Flow Statement forward each week. Involves copying Week tabs in Excel, rolling dates and formulas forward, clearing copied main-report details while PRESERVING all Support-tab transactions. Uses the Python helper script for preview, apply, and verify steps. Works in Brittany's active OneDrive file.",
+    "steps": [
       "Fetch the active 2026 Cash Flow Statement.xlsx from OneDrive — record drive/item identity, eTag/version, and modified time; retain original backup",
       "Identify the next week number from the latest main tab (Week NN format)",
       "If new tabs are missing, copy prior main/support tabs using native Excel worksheet-copy tools and rename them",
@@ -1377,16 +1602,18 @@ const INITIAL_PROCESSES = [
       "Verify recalculation, opening balances against prior closing balances BY BANK ACCOUNT, Support entries preserved, and saved state",
       "Report: week/date range, main details cleared, Support entries preserved, live-file verification status"
     ],
-    participants: ["acct_asst"]
+    "participants": [
+      "acct_asst"
+    ]
   },
   {
-    id: "draw_schedule_update",
-    name: "Draw Schedule Update and Bank Request (SOP-FIN-02)",
-    owner: "acct_asst",
-    date: "October 2026",
-    category: "Financial",
-    description: "Procedure for updating McVaugh home loan draw schedule Excel workbooks from BuildConnect available-for-draw items and preparing an Outlook draw-request draft. Covers workbook location on M: drive, BuildConnect reconciliation, percentage calculations, and bank email preparation with supporting invoices.",
-    steps: [
+    "id": "draw_schedule_update",
+    "name": "Draw Schedule Update and Bank Request (SOP-FIN-02)",
+    "owner": "acct_asst",
+    "date": "October 2026",
+    "category": "Financial",
+    "description": "Procedure for updating McVaugh home loan draw schedule Excel workbooks from BuildConnect available-for-draw items and preparing an Outlook draw-request draft. Covers workbook location on M: drive, BuildConnect reconciliation, percentage calculations, and bank email preparation with supporting invoices.",
+    "steps": [
       "Identify property and requested scope (update only vs update + bank request)",
       "Open the authoritative Excel workbook from M:/Accounting/DRAW SCHEDULES/<property address>/",
       "Read all existing draw entries, formulas, budget percentages, dates, and summary balances; save working copy and record original hash",
@@ -1402,16 +1629,19 @@ const INITIAL_PROCESSES = [
       "Save as Outlook draft — do NOT send; user reviews and sends",
       "Report: workbook save location, draw amount, draft link, attachments, and unsent status"
     ],
-    participants: ["acct_asst", "cfo"]
+    "participants": [
+      "acct_asst",
+      "cfo"
+    ]
   },
   {
-    id: "start_house_database",
-    name: "Start House in BuildConnect Database",
-    owner: "acct_asst",
-    date: "October 2026",
-    category: "Operations",
-    description: "Procedure for starting new MCH houses in the MIGVA/BuildConnect database, including financial loan amounts (building cost, land loan, construction loan, total loan) and creating Builders Capital Template #4 draw schedules from Excel files. Requires explicit confirmation before submitting financial information.",
-    steps: [
+    "id": "start_house_database",
+    "name": "Start House in BuildConnect Database",
+    "owner": "acct_asst",
+    "date": "October 2026",
+    "category": "Operations",
+    "description": "Procedure for starting new MCH houses in the MIGVA/BuildConnect database, including financial loan amounts (building cost, land loan, construction loan, total loan) and creating Builders Capital Template #4 draw schedules from Excel files. Requires explicit confirmation before submitting financial information.",
+    "steps": [
       "Get explicit confirmation identifying: MIGVA/BuildConnect as destination, each property address/job ID, land loan amount, construction/building budget, total loan amount, and whether Builders Capital template #4 draw schedule will be created",
       "Navigate to Jobs in BuildConnect and find or create the job entry",
       "Set financial fields: Building Cost (estimated), Construction Loan Amount, Land Loan Amount, Total Loan Amount",
@@ -1425,17 +1655,19 @@ const INITIAL_PROCESSES = [
       "Click Update Information to save",
       "Verify: correct address/job ID, financial header, 48 rows, 100.000 total, draw total = construction budget, every line matches Excel"
     ],
-    participants: ["acct_asst"]
-  }
-,
+    "participants": [
+      "acct_asst"
+    ]
+  },
   {
-    id: "gl_insurance_update",
-    name: "Vendor GL Insurance Certificate Renewal Process",
-    owner: "doc",
-    date: "October 2026",
-    category: "Operations",
-    description: "Procedure for updating vendor/subcontractor general liability insurance records when renewal certificates are received. Covers certificate verification, Excel register update (L: drive), PDF filing with archive of superseded cert, BuildConnect contact GL date update, and handoff to Kenneth for QuickBooks update via Teams. Authoritative procedure doc is in Maria Leaving folder.",
-    steps: [
+    "id": "gl_insurance_update",
+    "name": "Vendor GL Insurance Certificate Renewal Process",
+    "owner": "doc",
+    "date": "October 2026",
+    "category": "Operations",
+    "description": "James assigned; access/training/acceptance pending. Current update-gl-insurance skill; James assigned, access/training/accepted handoff pending. Authoritative register and database updates, preserved certificate, authorized direct Teams handoff to Kenneth, saved/closed workbook.",
+    "steps": [
+      "Use current supplied certificate and installed update-gl-insurance skill. Resolve vendor/date conflicts before dependent changes; no inactive-to-active move without direction.",
       "Receive renewed insurance certificate PDF from vendor",
       "Read certificate as evidence — verify insured legal/business name, certificate holder, GL effective and expiration dates; do NOT mistake issue date or another policy's expiration",
       "Match existing vendor across the register, certificate folder, and BuildConnect database",
@@ -1456,35 +1688,74 @@ const INITIAL_PROCESSES = [
       "Send renewed certificate copy to Kenneth Chapman via Teams direct chat — include vendor name, GL expiration, and confirmation of register/database updates; request QuickBooks update",
       "Do NOT claim QuickBooks itself was updated — Kenneth handles that separately",
       "Save and close the Excel insurance workbook after verification — handle any save prompt by saving authorized changes",
-      "Final report: vendor, new expiration, saved register verification, database verification, certificate filing/archive, Teams handoff status, and workbook closed confirmation"
+      "Final report: vendor, new expiration, saved register verification, database verification, certificate filing/archive, Teams handoff status, and workbook closed confirmation",
+      "Preserve original PDF; verify destination hash, inspect rerun files and prior handoff to avoid duplicates. A skill is not unattended automation or transmission permission. Send actual PDF to Kenneth direct Teams only when the current request authorizes handoff; verify sent attachment. Lowe’s uses Purchasing channel separately.",
+      "Use full legacy frame for safe save, retain private pre-edit field comparison and independently reopen saved contact. Never output Tax IDs/SSNs or bypass failed helper validation."
     ],
-    participants: ["doc", "acct_asst", "cfo"]
-  }
-,
+    "participants": [
+      "doc",
+      "acct_asst",
+      "cfo"
+    ]
+  },
   {
-    id: "permitting_current",
-    name: "Permitting Process — iPermits / ProjectDox (Current)",
-    owner: "superintendent",
-    date: "November 2026",
-    category: "Preconstruction",
-    description: "Current permitting workflow using iPermits for permit applications, payments, and inspection scheduling, and ProjectDox for document submissions and revision cycles. Replaces the legacy 2004 permitting process. Owned by Lonnie as construction/permitting lead.",
-    steps: [
-      "Review approved plans and confirm all required documents are ready for submission",
-      "Log into iPermits portal for the applicable jurisdiction (Leander, Cedar Park, etc.)",
-      "Create new permit application — enter property address, lot number, permit type, and contractor information",
-      "Upload required documents: approved plans, engineering reports, soils reports, energy compliance",
-      "Pay permit application fees through iPermits payment system",
-      "Track application status in iPermits — monitor for reviewer comments or hold notices",
-      "Log into ProjectDox for document review cycles — respond to reviewer comments, upload revised documents",
-      "Track ProjectDox comment threads and ensure all items are addressed before resubmission",
-      "Schedule required inspections through iPermits as construction phases complete",
-      "Maintain per-lot permit inventory: track which permits are applied, approved, paid, and which inspections are scheduled/completed",
-      "Coordinate with Maria (through Nov 6) on email continuity for any in-progress permit communications",
-      "If permit is denied or requires revision, coordinate with architect/engineer for plan changes and resubmit",
-      "File approved permits and inspection results in Public → job → Permits folder",
-      "Update construction status and start packet when permit is approved and ready for construction release"
+    "id": "permitting_current",
+    "name": "Permitting Process — iPermits / ProjectDox (Current)",
+    "owner": "superintendent",
+    "date": "November 4, 2026 — evidence reconciled",
+    "category": "Preconstruction",
+    "description": "Lonnie assigned; notifications/access/acceptance pending. Meeting-reported Houston iPermits and ProjectDox handoff for Lonnie; not independently verified jurisdictional requirements. Initial-application how-to reported finished November 3; file review and accepted handoff still open.",
+    "steps": [
+      "Inventory exact address/lot/building, application/project number, jurisdiction, status, approved revisions, missing comments, utility letters, fees and next action.",
+      "For Houston workflow described by Maria: iPermits handles application, water/capacity requests, fees and inspections; ProjectDox separately handles invitations, plan uploads and review comments. Verify other jurisdictions separately.",
+      "Locate Maria’s completed new-application how-to and demonstrate a real application/comment cycle with current files. No paid dummy training application.",
+      "Both townhome building applications were reported submitted November 3 and neither approved; verify actual project IDs and deficiencies.",
+      "Preserve Maria email and existing ProjectDox invitation continuity until authorized access/notification tests succeed. Login alone does not prove invitation or old-application notifications transfer.",
+      "Confirm actual fees/authority before payment; retain source permits, applicable city-stamped plans, inspection documents and approval evidence in existing project structure.",
+      "Record actual results, owner and next date. Maria last day November 6; confirm monitor/backup and November 9 coverage. No handoff marked accepted without demonstration."
     ],
-    participants: ["superintendent", "doc", "project_mgr"]
+    "participants": [
+      "superintendent",
+      "doc",
+      "project_mgr"
+    ]
+  },
+  {
+    "id": "changes_current",
+    "name": "Current Changes — Customer / Internal / Landing",
+    "owner": "president",
+    "category": "Change Management",
+    "date": "November 4, 2026",
+    "description": "Separate current change handling from unused legacy database module. Landing document terms are project-specific and not verified executed.",
+    "participants": [
+      "president",
+      "purchasing_mgr",
+      "superintendent",
+      "acct_asst"
+    ],
+    "steps": [
+      "Customer-requested changes: Maria reported pricing, customer approval, customer payment, then execution; retain approval/payment evidence and related extra WOs. Name successor and authority before applying.",
+      "Internal plan/site changes: review permit, cost, purchasing and schedule effects; approve current revision before trade release. This is a proposed control requiring named authority.",
+      "Landing proposal calls for written change orders signed by both parties before changed work, funded allowance overages, markup/admin fee and escalation provisions. Verify final executed terms; do not infer companywide fees or revive legacy database routing."
+    ]
+  },
+  {
+    "id": "cbusa_current",
+    "name": "CBUSA — Local, National, Surveys and Meetings",
+    "owner": "acct_asst",
+    "category": "Operations",
+    "date": "November 4, 2026",
+    "description": "Brittany continues local reporting; Lonnie intended national lead. Procedure, contact introduction, backup and precise deadlines remain open.",
+    "participants": [
+      "acct_asst",
+      "superintendent",
+      "purchasing_mgr"
+    ],
+    "steps": [
+      "Keep quarterly local/national reporting separate from monthly start surveys and supplier meetings.",
+      "Obtain Maria introduction, portal requirements, vendor/program eligibility, invoices/quantities and named backup. January reporting and a 15th were discussed; verify exact deadline.",
+      "Prepare against verified current records, review and retain actual submission confirmation. No recurring automation or submission established."
+    ]
   }
 ];
 
@@ -1503,111 +1774,118 @@ const CATEGORIES = ["All", "Preconstruction", "Construction", "Change Management
 // Current team: 6 employees absorbing all 16+ original roles
 const CURRENT_TEAM = [
   {
-    id: "maria",
-    name: "Maria Abney",
-    title: "Senior Project Manager (Last day: Nov 6, 2026 — transitioning to Lonnie)",
-    departing: "2026-11-06",
-    department: "Construction",
-    color: "#059669",
-    email: "mabney@mcvaugh.com",
-    absorbs: ["doc", "superintendent", "project_mgr", "construction_asst"],
-        responsibilities: [
-      "Assigns and manages all construction projects as sole construction team member",
-      "Acts as superintendent on all active job sites",
-      "Reviews blueprints, specs, upgrade sheets, and scheduling",
-      "Conducts pre-construction check list and Q&A sessions with clients",
-      "Manages all subcontractor relationships and work orders",
-      "Reviews bid/quotes against budget, forwards to Jim if over budget",
-      "Clicks 'pay' and verifies completion on all work orders",
-      "Approves or disapproves work orders",
-      "Notes rework items requiring back charges",
-      "Contacts trades that caused repairs, negotiates pricing",
-      "Clicks complete on backcharges once requirements met",
-      "Approves/denies change order requests with delay days noted",
-      "Clicks back charge approval in database",
-      "Modifies database budget when bid/quote approved",
-      "Prepares budget and specs",
-      "Sends budget to Jim for approval",
-      "Redlines additional items on plans if necessary",
-      "Marks second check set with redline items for reference",
-      "Files redline plan rack with labeled tab",
-      "Returns redlined plans to architect for changes",
-      "Completes final walk through with homebuyer",
-      "Updates construction status with start date",
-      "Verifies HOA approval prior to start of home",
-      "Conducts redline meeting with buyer, reviews specifics, has plans signed",
-      "Reviews budget weekly as processing accounts payable",
-      "Notifies Sales/Jim when change order is 100% complete",
-      "(Purchasing) Enters house information into database upon start request",
-      "(Purchasing) Orders plan from architect",
-      "(Purchasing) Orders soils report (4-week process for custom)",
-      "(Purchasing) Sends soils report and plan to engineer (3-4 week process)",
-      "(Purchasing) Requests CAD file from architect and engineer",
-      "(Purchasing) Sends plan to truss companies for bidding",
-      "(Purchasing) Follows up with architect/engineer on status of plans",
-      "(Purchasing) Verifies budget in database",
-      "(Purchasing) Creates the spec writer (including interior selections)",
-      "(Purchasing) Orders ESI IDs from Reliant Energy",
-      "(Purchasing) Puts together construction start packet (start memo, specs, permit card, truss plan, PO list, WO list, acct budget)",
-      "(Purchasing) Determines price/value to customer for change orders",
-      "(Purchasing) Receives bids from truss companies, selects one, signs contract",
-      "(Purchasing) Determines most competitive bid and creates work orders",
-      "Inspect jobsites regularly; identify deficiencies, safety hazards, incomplete work, and schedule risks",
-      "Cross-check plans and specifications against actual site conditions; resolve trade conflicts and sequencing issues",
-      "Coordinate jobsite security and orderly site conditions",
-      "Document subcontractor performance and recommend corrective action or replacement when necessary",
-      "Complete pre-turnover inspections, manage punch lists, ensure homes meet company standards before delivery",
-      "Develop, maintain, and update schedules and milestones for assigned homes (trade work, inspections, material deliveries)",
-      "Identify delays promptly, document scheduling variances, implement approved recovery measures while controlling carrying costs",
-      "Coordinate construction starts and upcoming project requirements with Sales, Design, Purchasing, and Accounting",
-      "Participate in weekly construction and pipeline meetings; keep project status current in company systems",
-      "Assist with takeoffs, estimates, home-specific specifications, scopes of work, and construction budget preparation",
-      "Verify materials received against ordered quantities, specifications, and budgets; monitor waste and resolve discrepancies",
-      "Maintain vendor pricing, W-9s, required insurance and license documents, purchasing data, and performance files",
-      "Pursue available discounts, rebates, and purchasing-program benefits; coordinate invoice discrepancies with Accounting",
-      "Coordinate option, upgrade, and change-order pricing with Sales and Design, targeting 24-hour response",
-      "Monitor committed and actual costs against approved project budgets and the established 2% variance target",
-      "Flag anticipated overruns or scope changes promptly; obtain required approval before extra work or cost commitments",
-      "Support projected gross profit through purchasing discipline, scheduling efficiency, and control of avoidable rework",
-      "Confirm required permits, insurance, licenses, and approvals are in place before applicable work starts",
-      "Ensure homeowner-requested changes are priced, documented, approved, and incorporated into plans/budgets before execution",
-      "Communicate project progress, risks, cost variances, and proposed solutions to management and relevant departments",
-      "Document deficiencies, incidents, subcontractor problems, and corrective actions",
-      "Work allocation: approximately 50% Field / 50% Office"
-    ,
-      "Leander Architectural Plan review (how-to doc in maria leaving folder)",
-      "Vendor GL insurance certificate renewal process — verify certificates, update register and BuildConnect, file PDFs, handoff to Kenneth (procedure doc in maria leaving folder)",
-      "[N/A] Reviews invoices on Friday morning, initials and notes backcharges",
-      "[N/A] Reviews database inbox daily for approved change orders",
-      "[N/A] Logs change orders into change order budget log",
-      "[N/A] Prints log copies weekly for tactical meeting",
-      "[N/A] Receives plan, attaches check set tracking form for president approval",
-      "[N/A] Reviews plan against 2nd redline",
-      "[N/A] Logs overage into budget revision log",
-      "[N/A] Prints budget revision log each week for tactical meeting",
-      "[N/A] Forwards budget revision log to Kenneth",
-      "[N/A] Logs return date into permit/HOA log",
-      "[N/A] Coordinates plan pick up",
-      "[N/A] Reviews precon start log daily",
-      "[N/A] Submits Occ and Sub paperwork to Jim",
-      "[N/A] Calculates appropriate bonus based on job performance",
-      "[N/A] Fills out Bonus Request Form",
-      "[N/A] Fills out start date and super on start memo",
-      "[N/A] Distributes start packet and start memo",
-      "[N/A] Gives measurements for framed mirrors to Pam when house starts",
-      "[N/A] Schedules trim carpenter to install mirrors when ready",
-      "[N/A] Prepares proforma and forwards to Kenneth"
+    "id": "maria",
+    "name": "Maria Abney",
+    "title": "Outgoing Construction Lead — last day November 6, 2026",
+    "departing": "2026-11-06",
+    "department": "Construction",
+    "color": "#059669",
+    "email": "mabney@mcvaugh.com",
+    "absorbs": [
+      "doc",
+      "superintendent",
+      "project_mgr",
+      "construction_asst"
+    ],
+    "responsibilities": [
+      "Transfer open projects, actual files, contacts, portal invitations and representative task training before November 6; handoffs remain unaccepted without evidence.",
+      "Historical / transition reference: Assigns and manages all construction projects as sole construction team member",
+      "Historical / transition reference: Acts as superintendent on all active job sites",
+      "Historical / transition reference: Reviews blueprints, specs, upgrade sheets, and scheduling",
+      "Historical / transition reference: Conducts pre-construction check list and Q&A sessions with clients",
+      "Historical / transition reference: Manages all subcontractor relationships and work orders",
+      "Historical / transition reference: Reviews bid/quotes against budget, forwards to Jim if over budget",
+      "Historical / transition reference: Clicks 'pay' and verifies completion on all work orders",
+      "Historical / transition reference: Approves or disapproves work orders",
+      "Historical / transition reference: Notes rework items requiring back charges",
+      "Historical / transition reference: Contacts trades that caused repairs, negotiates pricing",
+      "Historical / transition reference: Clicks complete on backcharges once requirements met",
+      "Historical / transition reference: Approves/denies change order requests with delay days noted",
+      "Historical / transition reference: Clicks back charge approval in database",
+      "Historical / transition reference: Modifies database budget when bid/quote approved",
+      "Historical / transition reference: Prepares budget and specs",
+      "Historical / transition reference: Sends budget to Jim for approval",
+      "Historical / transition reference: Redlines additional items on plans if necessary",
+      "Historical / transition reference: Marks second check set with redline items for reference",
+      "Historical / transition reference: Files redline plan rack with labeled tab",
+      "Historical / transition reference: Returns redlined plans to architect for changes",
+      "Historical / transition reference: Completes final walk through with homebuyer",
+      "Historical / transition reference: Updates construction status with start date",
+      "Historical / transition reference: Verifies HOA approval prior to start of home",
+      "Historical / transition reference: Conducts redline meeting with buyer, reviews specifics, has plans signed",
+      "Historical / transition reference: Reviews budget weekly as processing accounts payable",
+      "Historical / transition reference: Notifies Sales/Jim when change order is 100% complete",
+      "Historical / transition reference: (Purchasing) Enters house information into database upon start request",
+      "Historical / transition reference: (Purchasing) Orders plan from architect",
+      "Historical / transition reference: (Purchasing) Orders soils report (4-week process for custom)",
+      "Historical / transition reference: (Purchasing) Sends soils report and plan to engineer (3-4 week process)",
+      "Historical / transition reference: (Purchasing) Requests CAD file from architect and engineer",
+      "Historical / transition reference: (Purchasing) Sends plan to truss companies for bidding",
+      "Historical / transition reference: (Purchasing) Follows up with architect/engineer on status of plans",
+      "Historical / transition reference: (Purchasing) Verifies budget in database",
+      "Historical / transition reference: (Purchasing) Creates the spec writer (including interior selections)",
+      "Historical / transition reference: (Purchasing) Orders ESI IDs from Reliant Energy",
+      "Historical / transition reference: (Purchasing) Puts together construction start packet (start memo, specs, permit card, truss plan, PO list, WO list, acct budget)",
+      "Historical / transition reference: (Purchasing) Determines price/value to customer for change orders",
+      "Historical / transition reference: (Purchasing) Receives bids from truss companies, selects one, signs contract",
+      "Historical / transition reference: (Purchasing) Determines most competitive bid and creates work orders",
+      "Historical / transition reference: Inspect jobsites regularly; identify deficiencies, safety hazards, incomplete work, and schedule risks",
+      "Historical / transition reference: Cross-check plans and specifications against actual site conditions; resolve trade conflicts and sequencing issues",
+      "Historical / transition reference: Coordinate jobsite security and orderly site conditions",
+      "Historical / transition reference: Document subcontractor performance and recommend corrective action or replacement when necessary",
+      "Historical / transition reference: Complete pre-turnover inspections, manage punch lists, ensure homes meet company standards before delivery",
+      "Historical / transition reference: Develop, maintain, and update schedules and milestones for assigned homes (trade work, inspections, material deliveries)",
+      "Historical / transition reference: Identify delays promptly, document scheduling variances, implement approved recovery measures while controlling carrying costs",
+      "Historical / transition reference: Coordinate construction starts and upcoming project requirements with Sales, Design, Purchasing, and Accounting",
+      "Historical / transition reference: Participate in weekly construction and pipeline meetings; keep project status current in company systems",
+      "Historical / transition reference: Assist with takeoffs, estimates, home-specific specifications, scopes of work, and construction budget preparation",
+      "Historical / transition reference: Verify materials received against ordered quantities, specifications, and budgets; monitor waste and resolve discrepancies",
+      "Historical / transition reference: Maintain vendor pricing, W-9s, required insurance and license documents, purchasing data, and performance files",
+      "Historical / transition reference: Pursue available discounts, rebates, and purchasing-program benefits; coordinate invoice discrepancies with Accounting",
+      "Historical / transition reference: Coordinate option, upgrade, and change-order pricing with Sales and Design, targeting 24-hour response",
+      "Historical / transition reference: Monitor committed and actual costs against approved project budgets and the established 2% variance target",
+      "Historical / transition reference: Flag anticipated overruns or scope changes promptly; obtain required approval before extra work or cost commitments",
+      "Historical / transition reference: Support projected gross profit through purchasing discipline, scheduling efficiency, and control of avoidable rework",
+      "Historical / transition reference: Confirm required permits, insurance, licenses, and approvals are in place before applicable work starts",
+      "Historical / transition reference: Ensure homeowner-requested changes are priced, documented, approved, and incorporated into plans/budgets before execution",
+      "Historical / transition reference: Communicate project progress, risks, cost variances, and proposed solutions to management and relevant departments",
+      "Historical / transition reference: Document deficiencies, incidents, subcontractor problems, and corrective actions",
+      "Historical / transition reference: Work allocation: approximately 50% Field / 50% Office",
+      "Historical / transition reference: Leander Architectural Plan review (how-to doc in maria leaving folder)",
+      "Historical / transition reference: Vendor GL insurance certificate renewal process — verify certificates, update register and BuildConnect, file PDFs, handoff to Kenneth (procedure doc in maria leaving folder)",
+      "Historical / transition reference: [N/A] Reviews invoices on Friday morning, initials and notes backcharges",
+      "Historical / transition reference: [N/A] Reviews database inbox daily for approved change orders",
+      "Historical / transition reference: [N/A] Logs change orders into change order budget log",
+      "Historical / transition reference: [N/A] Prints log copies weekly for tactical meeting",
+      "Historical / transition reference: [N/A] Receives plan, attaches check set tracking form for president approval",
+      "Historical / transition reference: [N/A] Reviews plan against 2nd redline",
+      "Historical / transition reference: [N/A] Logs overage into budget revision log",
+      "Historical / transition reference: [N/A] Prints budget revision log each week for tactical meeting",
+      "Historical / transition reference: [N/A] Forwards budget revision log to Kenneth",
+      "Historical / transition reference: [N/A] Logs return date into permit/HOA log",
+      "Historical / transition reference: [N/A] Coordinates plan pick up",
+      "Historical / transition reference: [N/A] Reviews precon start log daily",
+      "Historical / transition reference: [N/A] Submits Occ and Sub paperwork to Jim",
+      "Historical / transition reference: [N/A] Calculates appropriate bonus based on job performance",
+      "Historical / transition reference: [N/A] Fills out Bonus Request Form",
+      "Historical / transition reference: [N/A] Fills out start date and super on start memo",
+      "Historical / transition reference: [N/A] Distributes start packet and start memo",
+      "Historical / transition reference: [N/A] Gives measurements for framed mirrors to Pam when house starts",
+      "Historical / transition reference: [N/A] Schedules trim carpenter to install mirrors when ready",
+      "Historical / transition reference: [N/A] Prepares proforma and forwards to Kenneth"
     ]
   },
   {
-    id: "jim",
-    name: "Jim McVaugh",
-    title: "CEO",
-    department: "Executive",
-    color: "#DC2626",
-    email: "jim@mcvaugh.com",
-    absorbs: ["president"],
-    responsibilities: [
+    "id": "jim",
+    "name": "Jim McVaugh",
+    "title": "CEO",
+    "department": "Executive",
+    "color": "#DC2626",
+    "email": "jim@mcvaugh.com",
+    "absorbs": [
+      "president"
+    ],
+    "responsibilities": [
       "Signs purchase contracts (30 days to close)",
       "Decides on house plans and approves them",
       "Decides bank for funding, communicates to Kenneth",
@@ -1629,14 +1907,16 @@ const CURRENT_TEAM = [
     ]
   },
   {
-    id: "teresa",
-    name: "Teresa Teran",
-    title: "Executive Assistant / HR",
-    department: "Administration",
-    color: "#EA580C",
-    email: "tteran@mcvaugh.com",
-    absorbs: ["admin_asst"],
-    responsibilities: [
+    "id": "teresa",
+    "name": "Teresa Teran",
+    "title": "Executive Assistant / HR",
+    "department": "Administration",
+    "color": "#EA580C",
+    "email": "tteran@mcvaugh.com",
+    "absorbs": [
+      "admin_asst"
+    ],
+    "responsibilities": [
       "Handles all HR functions",
       "Coordinates pickup of preliminary plans from architect",
       "Orders checkset plans from architect",
@@ -1673,14 +1953,17 @@ const CURRENT_TEAM = [
     ]
   },
   {
-    id: "james",
-    name: "James McVaugh",
-    title: "Sales / Marketing Coordinator",
-    department: "Sales",
-    color: "#7C3AED",
-    email: "james@mcvaugh.com",
-    absorbs: ["sales_exec", "selection_coordinator"],
-    responsibilities: [
+    "id": "james",
+    "name": "James McVaugh",
+    "title": "Sales / Marketing Coordinator",
+    "department": "Sales",
+    "color": "#7C3AED",
+    "email": "james@mcvaugh.com",
+    "absorbs": [
+      "sales_exec",
+      "selection_coordinator"
+    ],
+    "responsibilities": [
       "Manages all marketing materials and campaigns",
       "Distributes copies of contract, specs, and upgrades to Maria, Teresa, and Kenneth",
       "Submits change order requests (customer or internal)",
@@ -1693,42 +1976,40 @@ const CURRENT_TEAM = [
       "Calls buyer within 24-48 hours to set up consultation with Pam",
       "Guides buyer through initial sales process",
       "Assists with MLS listings and property marketing",
-      "Coordinates with Pam on buyer selections and design consultations"
-    ,
-      "(Purchasing) Sends PO to selected truss company after contract signed",
-      "(Purchasing) Collects bids from subcontractors",
-      "(Purchasing) Enters work orders and purchase orders into database",
-      "(Purchasing) Calls subcontractors for bids if not received within 1 week",
-      "(Purchasing) Requests and manages bid lists from subcontractors",
-      "(Purchasing) Advises team of address, date, and subcontractor details"
-    ,
-      "Enters work orders in database when within budget",
+      "Coordinates with Pam on buyer selections and design consultations",
+      "Earlier allocation — confirm within unresolved purchasing split: (Purchasing) Sends PO to selected truss company after contract signed",
+      "Earlier allocation — confirm within unresolved purchasing split: (Purchasing) Collects bids from subcontractors",
+      "Earlier allocation — confirm within unresolved purchasing split: (Purchasing) Enters work orders and purchase orders into database",
+      "Earlier allocation — confirm within unresolved purchasing split: (Purchasing) Calls subcontractors for bids if not received within 1 week",
+      "Earlier allocation — confirm within unresolved purchasing split: (Purchasing) Requests and manages bid lists from subcontractors",
+      "Earlier allocation — confirm within unresolved purchasing split: (Purchasing) Advises team of address, date, and subcontractor details",
+      "Earlier allocation — confirm within unresolved purchasing split: Enters work orders in database when within budget",
       "Fills out database backcharges completely",
       "Must notify subcontractors of backcharges",
       "(Sales) Makes copies of contract package and distributes to team",
       "(Sales) Reviews status report and distributes contract package",
-      "Handles all permitting coordination (impact fees, rescheck, permit tracking)",
-      "Manages permit card filing and permit rack"
-    ,
-      "GL insurance certificate renewal processing — update register, file PDFs, update BuildConnect, send to Kenneth via Teams (trained from Maria leaving procedure)",
-      "Subcontractor packets — assembles required documents for new subcontractors in start packet process",
-      "Monitors purchasing email inbox for incoming invoices, bids, and vendor communications"
-    ,
-      "(Purchasing) Maintain W-9 on every vendor",
-      "(Purchasing) Maintain contractors liability insurance and keep up to date on all required forms"
-    ,
-      "(Purchasing) Establish and maintain Purchasing Manual"
+      "Monitors purchasing email inbox for incoming invoices, bids, and vendor communications",
+      "Earlier allocation — confirm within unresolved purchasing split: (Purchasing) Maintain W-9 on every vendor",
+      "Earlier allocation — confirm within unresolved purchasing split: (Purchasing) Maintain contractors liability insurance and keep up to date on all required forms",
+      "Earlier allocation — confirm within unresolved purchasing split: (Purchasing) Establish and maintain Purchasing Manual",
+      "Assigned GL insurance and subcontractor packets; access, training and acceptance remain open.",
+      "Initial Purchasing inbox handler for routine receipts/invoices; Lonnie visibility requested. Full bidding/award/entry/dispatch/followup ownership and backup unresolved.",
+      "Permitting lead is Lonnie; do not treat older James permitting allocations as current."
     ]
   },
   {
-    id: "pam",
-    name: "Pamela McVaugh",
-    title: "Sales Broker / Manager",
-    department: "Sales / Design",
-    color: "#C026D3",
-    email: "pam@mcvaugh.com",
-    absorbs: ["dir_sales", "interior_designer", "customer_care"],
-    responsibilities: [
+    "id": "pam",
+    "name": "Pamela McVaugh",
+    "title": "Sales Broker / Manager",
+    "department": "Sales / Design",
+    "color": "#C026D3",
+    "email": "pam@mcvaugh.com",
+    "absorbs": [
+      "dir_sales",
+      "interior_designer",
+      "customer_care"
+    ],
+    "responsibilities": [
       "Reviews change order requests from sales perspective",
       "Communicates upcoming projects to update database",
       "Reviews specs from purchasing/construction",
@@ -1757,14 +2038,17 @@ const CURRENT_TEAM = [
     ]
   },
   {
-    id: "brittany",
-    name: "Brittany McVaugh",
-    title: "Accounting Assistant",
-    department: "IT / Finance",
-    color: "#0891B2",
-    email: "brittany@mcvaugh.com",
-    absorbs: ["acct_asst", "controller"],
-    responsibilities: [
+    "id": "brittany",
+    "name": "Brittany McVaugh",
+    "title": "Accounting Assistant",
+    "department": "IT / Finance",
+    "color": "#0891B2",
+    "email": "brittany@mcvaugh.com",
+    "absorbs": [
+      "acct_asst",
+      "controller"
+    ],
+    "responsibilities": [
       "Manages all IT infrastructure and tech development",
       "Develops and maintains company technology systems",
       "Issues start memo (controller function)",
@@ -1830,25 +2114,26 @@ const CURRENT_TEAM = [
       "LOWES PROCESS: Manual entry into QuickBooks and mark accounting received in database",
       "LOWES PROCESS: Move PO from emailed POs to done folder after entering",
       "LOWES PROCESS: Pay Lowes bill online - largest amount company first, one payment per day",
-      "LOWES PROCESS: Mark Purchase Orders Paid in database"
-    ,
+      "LOWES PROCESS: Mark Purchase Orders Paid in database",
       "Weekly cash flow statement rollover (SOP-FIN-01) — roll dates/formulas forward, clear main tab, preserve Support transactions",
       "Draw schedule updates from BuildConnect available-for-draw items (SOP-FIN-02)",
       "Prepare Outlook draw-request drafts with updated Excel and supporting invoices (SOP-FIN-02)",
-      "Start new houses in BuildConnect database — financial fields and Builders Capital Template #4 draw schedules"
-    ,
-      "Executes vendor GL insurance certificate renewal process via automated skill — updates register, files PDFs, updates BuildConnect, sends handoff to Kenneth"
+      "Start new houses in BuildConnect database — financial fields and Builders Capital Template #4 draw schedules",
+      "Brittany has executed GL skill cases; James is assigned successor, demonstration and accepted handoff pending."
     ]
   },
   {
-    id: "purchasing",
-    name: "Ernesto Vazquez",
-    title: "Purchasing",
-    department: "Operations",
-    color: "#0891B2",
-    email: "evazquez@mcvaugh.com",
-    absorbs: ["dop", "purchasing_mgr"],
-        responsibilities: [
+    "id": "purchasing",
+    "name": "Ernesto Vazquez",
+    "title": "Purchasing",
+    "department": "Operations",
+    "color": "#0891B2",
+    "email": "evazquez@mcvaugh.com",
+    "absorbs": [
+      "dop",
+      "purchasing_mgr"
+    ],
+    "responsibilities": [
       "Monitor slot schedule to stay ahead of construction",
       "Obtain plans from construction for bidding and purchasing",
       "Obtain selections on each house for purchasing and ordering",
@@ -1872,23 +2157,25 @@ const CURRENT_TEAM = [
       "Establish lead times for any purchase orders or work orders not published at start of home",
       "Establish system to ask for and monitor vendor rebate and/or Co-Op advertising",
       "Attend CB/USA meetings",
-                        "Provide Pre-Contract Option Pricing when requested by Sales within 24 hours",
+      "Provide Pre-Contract Option Pricing when requested by Sales within 24 hours",
       "Provide Change Order Pricing when requested by Sales or Buyer within 24 hours"
     ]
   },
   {
-    id: "kenneth",
-    name: "Kenneth Chapman",
-    title: "Senior Accounting Manager",
-    department: "Finance",
-    color: "#2563EB",
-    email: "kchapman@mcvaugh.com",
-    absorbs: ["cfo"],
-    responsibilities: [
+    "id": "kenneth",
+    "name": "Kenneth Chapman",
+    "title": "Senior Accounting Manager",
+    "department": "Finance",
+    "color": "#2563EB",
+    "email": "kchapman@mcvaugh.com",
+    "absorbs": [
+      "cfo"
+    ],
+    "responsibilities": [
       "Manages all accounting and financial operations",
       "Prepares financing and database setup for new projects",
       "Updates QuickBooks with revised budget numbers",
-      "Receives change order log from Maria",
+      "Legacy reference — not current database change-order practice: Receives change order log from Maria",
       "Receives budget revision log from Maria",
       "Receives proforma from Maria",
       "Processes bonus payments toward next scheduled pay period",
@@ -1909,7 +2196,7 @@ const CURRENT_TEAM = [
       "QUARTERLY: GL Audits (reassigned from Kenneth G)",
       "YEARLY: HOA - Bill Annual Assessments (TA, OA, POA, Mitigation)",
       "YEARLY: Update HOA Budgets",
-      "YEARLY: CBUSA Vendor Reporting",
+      "Legacy CBUSA allocation: see current local/national/survey split; do not infer annual-only reporting.",
       "YEARLY: Property Taxes - Update Spreadsheet",
       "YEARLY: Transfer Previous Year QB Files to CPA to file Taxes via BKC website",
       "YEARLY: Finalize and send 1099s (Brittany preps, Kenneth sends)",
@@ -1920,112 +2207,249 @@ const CURRENT_TEAM = [
       "AS NEEDED: Job/Project Reconciliations",
       "AS NEEDED: Loan Tracking / Debt Schedule Update (reassigned from Kenneth G)",
       "AS NEEDED: Review Settlement Statements (reassigned from Kenneth G)",
-      "AS NEEDED: Misc. Insurance Items"
-    ,
-      "Reviews invoices weekly and verifies backcharges were entered"
-    ,
+      "AS NEEDED: Misc. Insurance Items",
+      "Reviews invoices weekly and verifies backcharges were entered",
       "Updates vendor GL insurance expiration dates in QuickBooks after receiving renewed certificate from Maria/Brittany via Teams"
     ]
   },
   {
-    id: "lonnie",
-    name: "Lonnie [Update Last Name]",
-    title: "Construction / Permitting Lead",
-    email: "update@mcvaugh.com",
-    color: "#06B6D4",
-    absorbs: ["superintendent", "doc", "project_mgr", "construction_asst"],
-    responsibilities: [
-      "Takes over as primary construction team lead from Maria (effective November 2026)",
-      "Handles all permitting coordination via iPermits — application, payment, inspection scheduling",
-      "Manages ProjectDox document submissions, comments, and revision cycles",
-      "Maintains per-lot permit inventory and status tracking",
-      "Assigns and manages all construction projects",
-      "Acts as superintendent on all active job sites",
-      "Reviews blueprints, specs, upgrade sheets, and scheduling",
-      "Conducts pre-construction check list and Q&A sessions with clients",
-      "Manages all subcontractor relationships and work orders",
-      "Reviews bid/quotes against budget, forwards to Jim if over budget",
-      "Approves or disapproves work orders",
-      "Notes rework items requiring back charges",
-      "Contacts trades that caused repairs, negotiates pricing",
-      "Clicks complete on backcharges once requirements met",
-      "Approves/denies change order requests with delay days noted",
-      "Clicks back charge approval in database",
-      "Modifies database budget when bid/quote approved",
-      "Prepares budget and specs",
-      "Sends budget to Jim for approval",
-      "Redlines additional items on plans if necessary",
-      "Marks second check set with redline items for reference",
-      "Files redline plan rack with labeled tab",
-      "Returns redlined plans to architect for changes",
-      "Completes final walk through with homebuyer",
-      "Updates construction status with start date",
-      "Verifies HOA approval prior to start of home",
-      "Conducts redline meeting with buyer, reviews specifics, has plans signed",
-      "Reviews budget weekly as processing accounts payable",
-      "Notifies Sales/Jim when change order is 100% complete",
-      "Leander Architectural Plan review (how-to doc in maria leaving folder)",
-      "Attend CBUSA national meetings (intended assignment, pending introduction and eligibility verification)",
-      "Inspect jobsites regularly; identify deficiencies, safety hazards, incomplete work, and schedule risks",
-      "Cross-check plans and specifications against actual site conditions; resolve trade conflicts and sequencing issues",
-      "Coordinate jobsite security and orderly site conditions",
-      "Document subcontractor performance and recommend corrective action or replacement when necessary",
-      "Complete pre-turnover inspections, manage punch lists, ensure homes meet company standards before delivery",
-      "Develop, maintain, and update schedules and milestones for assigned homes (trade work, inspections, material deliveries)",
-      "Identify delays promptly, document scheduling variances, implement approved recovery measures while controlling carrying costs",
-      "Coordinate construction starts and upcoming project requirements with Sales, Design, Purchasing, and Accounting",
-      "Participate in weekly construction and pipeline meetings; keep project status current in company systems",
-      "Assist with takeoffs, estimates, home-specific specifications, scopes of work, and construction budget preparation",
-      "Verify materials received against ordered quantities, specifications, and budgets; monitor waste and resolve discrepancies",
-      "Maintain vendor pricing, W-9s, required insurance and license documents, purchasing data, and performance files",
-      "Pursue available discounts, rebates, and purchasing-program benefits; coordinate invoice discrepancies with Accounting",
-      "Coordinate option, upgrade, and change-order pricing with Sales and Design, targeting 24-hour response",
-      "Monitor committed and actual costs against approved project budgets and the established 2% variance target",
-      "Flag anticipated overruns or scope changes promptly; obtain required approval before extra work or cost commitments",
-      "Support projected gross profit through purchasing discipline, scheduling efficiency, and control of avoidable rework",
-      "Confirm required permits, insurance, licenses, and approvals are in place before applicable work starts",
-      "Ensure homeowner-requested changes are priced, documented, approved, and incorporated into plans/budgets before execution",
-      "Communicate project progress, risks, cost variances, and proposed solutions to management and relevant departments",
-      "Document deficiencies, incidents, subcontractor problems, and corrective actions",
-      "Work allocation: approximately 50% Field / 50% Office"
-    ]
-  },
+    "id": "lonnie",
+    "name": "Lonnie",
+    "title": "Incoming Construction / Permitting Lead — acceptance pending",
+    "email": "",
+    "color": "#06B6D4",
+    "absorbs": [
+      "superintendent",
+      "project_mgr",
+      "construction_asst"
+    ],
+    "responsibilities": [
+      "Incoming construction/permitting lead; assigned November 2, actual access/training/acceptance still open.",
+      "Maintain 11603 and 11607 schedules through completion using one identified shared file per home.",
+      "Review 11603 cabinet drawings with Maria against approved plans/selections before production release.",
+      "Verify 11607 lumber release, staged drops, truss delivery, framer commitment and possible missing HVAC WO.",
+      "Manage address-specific inspection/punch/trade followup and homeowner manual handoff; keep model 11606 and 11602 items separate.",
+      "Continue Houston iPermits/ProjectDox applications and comments with current documents and verified notification access.",
+      "National CBUSA reporting intended; introduction, exact requirements, deadlines and backup open.",
+      "Assist quote/takeoff/selection review; full purchasing split, approval authority and payment responsibilities not automatically assigned.",
+      "Landing: review contract/bank draw crosswalk, specs/meters and portal continuity with Jim/accounting.",
+      "Leander ARC supervised handoff, warranty/HOA duties and other absorbed legacy role duties require explicit acceptance; no blanket transfer."
+    ],
+    "department": "Construction"
+  }
 ];
 
 const CURRENT_DEPARTMENTS = [
-  { id: "Executive", color: "#DC2626", icon: "👔" },
-  { id: "Construction", color: "#059669", icon: "🏗️" },
-  { id: "Operations", color: "#0891B2", icon: "⚙️" },
-  { id: "Administration", color: "#EA580C", icon: "📋" },
-  { id: "Sales", color: "#7C3AED", icon: "📊" },
-  { id: "Sales / Design", color: "#C026D3", icon: "🎨" },
-  { id: "IT / Finance", color: "#0891B2", icon: "💻" },
-  { id: "Finance", color: "#2563EB", icon: "💰" }
-    ];
+  {
+    "id": "Executive",
+    "color": "#DC2626",
+    "icon": "👔"
+  },
+  {
+    "id": "Construction",
+    "color": "#059669",
+    "icon": "🏗️"
+  },
+  {
+    "id": "Operations",
+    "color": "#0891B2",
+    "icon": "⚙️"
+  },
+  {
+    "id": "Administration",
+    "color": "#EA580C",
+    "icon": "📋"
+  },
+  {
+    "id": "Sales",
+    "color": "#7C3AED",
+    "icon": "📊"
+  },
+  {
+    "id": "Sales / Design",
+    "color": "#C026D3",
+    "icon": "🎨"
+  },
+  {
+    "id": "IT / Finance",
+    "color": "#0891B2",
+    "icon": "💻"
+  },
+  {
+    "id": "Finance",
+    "color": "#2563EB",
+    "icon": "💰"
+  }
+];
 
 const VENDOR_RULES = [
-  { vendor: "Johnston Waterproofing LLC", code: "409.0", description: "Membrane/Built-Up Roofing", routing: "Verified individual job", rules: "Separate priced scopes; general sqft/rate blank; scope area/rate in descriptions; preserve package pricing" },
-  { vendor: "Autumn HVAC", code: "610", description: "HVAC System", routing: "Verified job", rules: "Draw breakdown: 60% / 30% / 10% (per WO 39974 precedent); include verified A/C sqft in WO and description; pricing based on equipment, register counts, and system requirements — NOT per sqft; per-SF estimate for budgeting only" },
-  { vendor: "H & H Fence (HOA)", code: "940.0", description: "Maintenance", routing: "ROCVTA; physical site in description", rules: "One 100% row for single priced scope; no inferred sqft; HOA fence-maintenance scope only; file source in community Purchasing → ROCV H & H Fence" },
-  { vendor: "Synergy Roofing", code: "400", description: "Roofing", routing: "Verified individual job", rules: "Draw breakdown: 30% Dry-in / 50% Down Payment-Tile Delivery / 20% Tile Install; include proposal roof area and proposal date" },
-  { vendor: "Electrical Works", code: "620", description: "Electrical System", routing: "Verified individual job", rules: "Used for construction change orders; user-directed code 620" },
-  { vendor: "Reece (Plumbing Fixtures)", code: "601", description: "Plumbing Fixtures", routing: "Verified individual job", rules: "Split valves and trims into separate draws when requested; single draw for standalone quotes (e.g. water heater); PO emailed to vendor with Maria copied" },
-  { vendor: "Lowes Home Centers", code: "996 / 996.0", description: "LOWES & HOME DEPOT RECEIPTS", routing: "CUSTOMER CODE → verified job", rules: "Separate merchandise from tax; mark Complete (not Received); Canon print; Teams Purchasing channel; Kenneth Lowes inbox" },
-  { vendor: "All HOA Work", code: "Trade-specific", description: "Trade-specific", routing: "ROCVTA; full physical site in description", rules: "Approved through Teresa; do NOT charge individual house or use bill-to as work site" },
+  {
+    "vendor": "Johnston Waterproofing LLC",
+    "code": "409.0",
+    "description": "Membrane/Built-Up Roofing",
+    "routing": "Verified individual job",
+    "rules": "Separate priced scopes; general sqft/rate blank; scope area/rate in descriptions; preserve package pricing"
+  },
+  {
+    "vendor": "Autumn HVAC",
+    "code": "610",
+    "description": "HVAC System",
+    "routing": "Verified job",
+    "rules": "Draw breakdown: 60% / 30% / 10% (per WO 39974 precedent); include verified A/C sqft in WO and description; pricing based on equipment, register counts, and system requirements — NOT per sqft; per-SF estimate for budgeting only Applies to all A/C WOs; exact draw descriptions follow WO 39974; recalculate each contract. 2,626 A/C SF is 11603 only."
+  },
+  {
+    "vendor": "H & H Fence (HOA)",
+    "code": "940.0",
+    "description": "Maintenance",
+    "routing": "ROCVTA; physical site in description",
+    "rules": "One 100% row for single priced scope; no inferred sqft; HOA fence-maintenance scope only; file source in community Purchasing → ROCV H & H Fence"
+  },
+  {
+    "vendor": "Synergy Roofing",
+    "code": "400",
+    "description": "Roofing",
+    "routing": "Verified individual job",
+    "rules": "Draw breakdown: 30% Dry-in / 50% Down Payment-Tile Delivery / 20% Tile Install; include proposal roof area and proposal date"
+  },
+  {
+    "vendor": "Electrical Works",
+    "code": "620",
+    "description": "Electrical System",
+    "routing": "Verified individual job",
+    "rules": "Used for construction change orders; user-directed code 620"
+  },
+  {
+    "vendor": "Reece (Plumbing Fixtures)",
+    "code": "601",
+    "description": "Plumbing Fixtures",
+    "routing": "Verified individual job",
+    "rules": "Fixtures code 601; split valves/trims when requested. One-draw water-heater and Maria CC are historical examples; confirm current approved quote, recipients and split for each new PO."
+  },
+  {
+    "vendor": "Lowes Home Centers",
+    "code": "996 / 996.0",
+    "description": "LOWES & HOME DEPOT RECEIPTS",
+    "routing": "CUSTOMER CODE → verified job",
+    "rules": "Separate merchandise from tax; mark Complete (not Received); Canon print; Teams Purchasing channel; Kenneth Lowes inbox"
+  },
+  {
+    "vendor": "All HOA Work",
+    "code": "Trade-specific",
+    "description": "Trade-specific",
+    "routing": "ROCVTA; full physical site in description",
+    "rules": "Approved through Teresa; do NOT charge individual house or use bill-to as work site"
+  }
 ];
 
 const COMPLETED_RECORDS = [
-  { id: "WO 40184", vendor: "Johnston Waterproofing", job: "11603 Royal Parkside", amount: 1935.75, code: "409", notes: "4 rows: waterproofing, door pans, crickets" },
-  { id: "WO 40186", vendor: "H & H Fence", job: "ROCVTA", amount: 3025.00, code: "940", notes: "Invoice 7272; physical site 11507 Royal Ivory Crossing; requested start 10/23 vs saved 10/27; authorized correction and date-policy review open" },
-  { id: "WO 40187", vendor: "M. Reeves", job: "11602 Royal Parkside", amount: 110.00, code: "", notes: "Invoice 658140" },
-  { id: "WO 40188", vendor: "Autumn HVAC", job: "11603 Royal Parkside", amount: 16438.37, code: "610", notes: "60/30/10 draws; 2,626 A/C sq ft" },
-  { id: "WO 40189", vendor: "Synergy", job: "11603 Royal Parkside", amount: 23991.24, code: "400", notes: "30/50/20 draws; 2,542 roof sq ft; proposal date Oct 20, 2026" },
-  { id: "WO 40190", vendor: "Electrical Works CO2", job: "11602 Royal Parkside", amount: 1135.00, code: "620", notes: "Invoice 22923" },
-  { id: "WO 40191", vendor: "Electrical Works CO3", job: "11602 Royal Parkside", amount: 255.00, code: "620", notes: "Invoice 23263" },
-  { id: "PO 21131", vendor: "Lowes", job: "11602 Royal Parkside", amount: 82.27, code: "996", notes: "Receipt 41867; sent to Canon, physical output/handoff unverified; Complete disabled" },
-  { id: "PO 21133", vendor: "Reece", job: "11603 Royal Parkside", amount: 8791.40, code: "601", notes: "Valves $534.16 + trims $8,257.24; email sent" },
-  { id: "PO 21134", vendor: "Reece", job: "11603 Royal Parkside", amount: 1493.65, code: "601", notes: "Quote S124892371-0001; PO emailed to vendor with Maria cc" },
+  {
+    "id": "WO 40184",
+    "vendor": "Johnston Waterproofing",
+    "job": "11603 Royal Parkside",
+    "amount": 1935.75,
+    "code": "409",
+    "notes": "4 rows: waterproofing, door pans, crickets"
+  },
+  {
+    "id": "WO 40186",
+    "vendor": "H & H Fence",
+    "job": "ROCVTA",
+    "amount": 3025,
+    "code": "940",
+    "notes": "Invoice 7272; physical site 11507 Royal Ivory Crossing; requested start 10/23 vs saved 10/27; authorized correction and date-policy review open"
+  },
+  {
+    "id": "WO 40187",
+    "vendor": "M. Reeves",
+    "job": "11602 Royal Parkside",
+    "amount": 110,
+    "code": "",
+    "notes": "Invoice 658140"
+  },
+  {
+    "id": "WO 40188",
+    "vendor": "Autumn HVAC",
+    "job": "11603 Royal Parkside",
+    "amount": 16438.37,
+    "code": "610",
+    "notes": "60/30/10 draws; 2,626 A/C sq ft"
+  },
+  {
+    "id": "WO 40189",
+    "vendor": "Synergy",
+    "job": "11603 Royal Parkside",
+    "amount": 23991.24,
+    "code": "400",
+    "notes": "30/50/20 draws; 2,542 roof sq ft; proposal date Oct 20, 2026"
+  },
+  {
+    "id": "WO 40190",
+    "vendor": "Electrical Works CO2",
+    "job": "11602 Royal Parkside",
+    "amount": 1135,
+    "code": "620",
+    "notes": "Invoice 22923"
+  },
+  {
+    "id": "WO 40191",
+    "vendor": "Electrical Works CO3",
+    "job": "11602 Royal Parkside",
+    "amount": 255,
+    "code": "620",
+    "notes": "Invoice 23263"
+  },
+  {
+    "id": "PO 21131",
+    "vendor": "Lowes",
+    "job": "11602 Royal Parkside",
+    "amount": 82.27,
+    "code": "996",
+    "notes": "Receipt 41867; sent to Canon, physical output/handoff unverified; Complete disabled"
+  },
+  {
+    "id": "PO 21133",
+    "vendor": "Reece",
+    "job": "11603 Royal Parkside",
+    "amount": 8791.4,
+    "code": "601",
+    "notes": "Valves $534.16 + trims $8,257.24; email sent"
+  },
+  {
+    "id": "PO 21134",
+    "vendor": "Reece",
+    "job": "11603 Royal Parkside",
+    "amount": 1493.65,
+    "code": "601",
+    "notes": "Quote S124892371-0001; PO emailed to vendor with Maria cc"
+  }
 ];
+
+
+const CURRENT_ASSIGNMENTS = {
+wo_entry_buildconnect: {owners:[],involved:['james','lonnie','brittany'],label:'Full purchasing owner / backup unresolved'},
+material_po_entry: {owners:[],involved:['james','lonnie','brittany'],label:'Full purchasing owner / backup unresolved'},
+new_work_order: {owners:[],involved:['james','lonnie'],label:'Legacy procedure; use current WO SOP'},
+lowes_po_buildconnect: {owners:[],involved:['james','brittany','kenneth'],label:'Routine inbox James; authorized Complete / office handoff roles to verify'},
+gl_insurance_update: {owners:['james'],involved:['brittany','kenneth'],label:'James assigned; access / training / acceptance pending'},
+permitting_current: {owners:['lonnie'],involved:['maria'],label:'Lonnie assigned; access / notifications / acceptance pending'},
+permitting: {owners:[],involved:[],label:'Legacy 2004 reference'},
+cbusa_current: {owners:['brittany','lonnie'],involved:[],label:'Brittany local; Lonnie intended national; backup / training open'},
+changes_current: {owners:[],involved:['jim','lonnie','james','brittany'],label:'Pricing / approval authority and backup to confirm'},
+change_order_request: {owners:[],involved:[],label:'Unused legacy database module'},
+change_order_budget: {owners:[],involved:[],label:'Unused legacy database module'},
+work_order_ap: {owners:[],involved:['lonnie','kenneth','brittany'],label:'Legacy approval map; successor authority not accepted'}
+};
+function memberOwns(m,p){const a=CURRENT_ASSIGNMENTS[p.id];return a?a.owners.includes(m.id):false;}
+function memberInvolved(m,p){const a=CURRENT_ASSIGNMENTS[p.id];return a?(a.owners.includes(m.id)||a.involved.includes(m.id)):m.absorbs.some(r=>p.participants.includes(r));}
+function assignmentLabel(p){return CURRENT_ASSIGNMENTS[p.id]?.label||'Legacy role reference — confirm current task owner and backup';}
+const REVIEW_DOCUMENTS = [{"title":"Earlier transition followups — open until verified","markdown":"## Earlier transition followups — unresolved items retained\n\n| Priority | Review item | Meeting direction / current owner | Evidence needed to close |\n|---|---|---|---|\n| P1 | Confirm transition cutoff and training attendance | Lonnie is the new hire taking over construction; Maria is transferring knowledge; Brittany coordinates | Maria's last day is November 6, 2026, confirmed by Brittany November 3. Confirm coverage from November 9 and a dated training/signoff plan before departure |\n| P1 | Set the purchasing responsibility split | James handles Purchasing inbox routine receipt/invoice entries; Lonnie needs field context and visibility; full purchasing ownership remains unresolved | Named owner and backup for bid requests, technical/selection review, award decision, PO/WO entry, email dispatch, filing and followup; no two people entering the same request |\n| P1 | Provide urgent early-morning order coverage | Jim expects urgent complete WO requests promptly, about 10 minutes. Maria reports extra lumber POs received before 9 may reach a same-day truck | Monitored queue, primary/backup, source-completeness check and escalation; supplier cutoff/delivery confirmed; Lonnie's initial 8–5 hours do not establish early coverage |\n| P1 | Train James and Lonnie on actual WO/PO cases | Recorded conference-room database training was discussed | Both perform representative labor WO, material PO, Lowe's receipt and extra-lumber case; verify scope, routing, dates, saved IDs, dispatch and source filing; record trainer, result and gaps |\n| P1 | Check bids before entry | Purchasing must compare bids to approved selections/specs, plans/takeoffs, counts, quantities and scope | One reviewed tile/floor/plumbing example showing version, coverage, quantity basis and reviewer. A supplied quote or sole-source vendor is not automatic approval |\n| P1 | Resolve 11603/11607 cabinet readiness | Cabinets and flooring selections prioritized; supplier lead time last reported 18–22 weeks | Per-home selections, signed approval, quote, deposit/funding, actual order acknowledgment, current lead time and delivery date. Unclear spoken addresses/order status cannot establish either home's completion |\n| P1 | Establish current construction schedule and WO dates | Lonnie takes construction; Jim wants Start/completion aligned to the current schedule and agreed trade duration | Current 11603/11607 schedule through completion, framing/inspection issue status, agreed durations, resequencing owner and saved-date checks. Do not auto-enforce discussed penalties |\n| P1 | Resolve PO/WO edit permissions | Meeting reported edit restrictions after first payment; behavior not tested | Role/field/action test before and after relevant status; who changes dates, accounting-only cases, and change audit. Do not change production approvals to test |\n| P1 | Verify permit inventory and aging items | Lonnie assigned permitting; Maria reports applications/folders exist but approvals vary; townhomes separate | Exact lot/address/application ID, portal, status, missing item, expired utility/capacity letters, fee and next action. Do not mark all villas permitted from this discussion |\n| P1 | Demonstrate both permit portals | Maria described iPermits for applications/capacity letters/payments/inspections and ProjectDox for plan documents/comments | New-application how-to reported finished November 3; retrieve/review actual file plus real submission/comment-cycle recording and current permit documents. No paid dummy application |\n| P1 | Preserve permit communications | Maria's old submissions may still notify her email; changeability is unresolved | Authorized, time-bounded mailbox access/forwarding, named monitor, retention review, and real notification test for old/new applications. Decide shared Purchasing versus proposed Construction address; do not delete Maria mailbox prematurely |\n| P1 | Test named database access for Kenneth and Brittany | Jim offered to work on Kenneth's access with maintainer support; Brittany asked not to lose hers | Task/permission matrix for job finance screen, WO/PO entry and budget changes; named logins, before/after test, separation of approvals. Finance data freshness is disputed, not established |\n| P1 | Investigate missing Tax ID field | Participants reported missing field/label and apparent Key Map substitution | Read-only screenshot/schema/source comparison with maintainer; prove whether display or data changed and locate backups. Cause, data loss and AI responsibility are unverified; no real Tax IDs in notes |\n| P2 | Transfer GL insurance and subcontractor packets | James assigned both; Maria said vendor-setup procedure unfinished | Open authoritative GL procedure/register and current update-gl-insurance skill; verify renewals and accounting handoff. Finish packet/setup checklist and duplicate-check rules; James performs one case |\n| P2 | Confirm GL handoff channel | Meeting described print-and-box delivery to Kenneth; installed GL skill specifies authorized direct Teams delivery | Current standard confirmed from the skill supplied November 3: authorized GL certificate handoff goes to Kenneth's direct Teams chat. Verify actual delivery and James's training; QuickBooks update remains separate. Lowe's uses the Purchasing channel |\n| P2 | Transfer CBUSA national reporting | Lonnie named for national reporting; Maria to email CBUSA contact introduction; Brittany continues local reporting; at least two trained people requested | Introduction, portal access, contract/vendor coverage, invoice/payment eligibility, national/local cycles, confirmed next due date and trained backup. January reporting for Oct–Dec and a 15th were mentioned; verify exact requirement |\n| P2 | Assign monthly CBUSA surveys and meeting coverage | Monthly starts survey is distinct from quarterly rebate reporting; James/Lonnie may attend supplier meetings | Named respondent, truthful project/start counts and reporting entity, actual survey receipt, coverage and backup. Do not carry meeting's zero counts into future periods |\n| P2 | Configure Purchasing mailbox and external transition notice | James is initial inbox handler; Lonnie visibility requested; staffing and delegation details remain open | Access on desktop/mobile, send-as/reply identity test with Anna/IT, named triage/backup, and approved vendor notice/auto-reply text before sending |\n| P2 | Capture 11603/11607 generator rough-in decision | Jim requested supplier/electrician coordination; no purchase/placement approved here | Confirm desired homes/scope, equipment/site location, qualified gas/electrical review, quote, permit impacts and approval before changes |\n| P2 | Confirm paint scope and rebate details | Sherwin code reportedly corrected recently; actual paint product unresolved | Current paint specification/product, supplier code, applicable rebate record and current paint decks; no product/price assumed |\n| Carryover | Reconcile Landing scope and schedule | Frank's team GC; McVaugh scope and contractor schedule previously requested | Written scope received November 4; owner-marked work identified. Remaining: ambiguous site/survey boundary, highlighted selections, standards versus allowances, executed contract, bank/contractor draw crosswalk, meter specs and portal access |\n| Carryover | Close remaining service handoffs | Lonnie construction role does not automatically assign all Maria duties | Explicit warranty/HOA repair and walkthrough ownership, open cases, notification routing, Leander ARC successor and example; supervised acceptance |\n| Carryover | Retain existing order exceptions | WO 40186 date mismatch; PO 21131 Complete disabled and physical handoff unverified | Actual saved correction/status, authorized Complete action and named office receipt-handoff confirmation; no closure inferred from this meeting |\n| Carryover | Finish handbook and references | SOW and combined workbook received; vendor/plan references populated | Missing basic-plan/trade quantities, current quotes, door-note ambiguity, document-source/contact paths and training recordings |\n| Carryover | Keep AI/project implementation claims bounded | Existing skills and World definitions are references; no shared bot verification | Installed skill alignment, live World/access test, real monitored queue and authorized end-to-end test; tax-field report investigated separately |\n\n\n"},{"title":"Project handoff and open transition review","markdown":"## November 3 project handoff — reviewed November 4\n\nSource: **James McVaugh.docx**, recording **James McVaugh-20261103_170225**, 1h27m29s. The header displays November 3, 10:02 PM without a timezone; the filename indicates 17:02:25. Meeting date is November 3; local start time is not independently established. Many speakers are combined under James's label, so statements below are attributed to the meeting unless identity is clear. Lonnie and James remain separate people. Personal remarks and physical access codes are excluded. Statements of progress, funding and future delivery are meeting reports, not live verification.\n\n| Project / topic | Latest reported position or direction | Next action / missing evidence |\n|---|---|---|\n| 11606 Royal Parkside — model | Lonnie reportedly has inspection report and punch list; walkthrough/trade contacts to review with Maria. Drywall/paint and appliance fastening/handle items discussed across 11606/11602 | Review address-tagged list with Lonnie; verify actual repairs, appliance model/handle/securement and trade assignments. Avoid swapping model and 11602 work |\n| 11602 Royal Parkside | Active punch-out; structural final planned November 4 with complete plans/permits. Other trade inspections reportedly passed. Painting, cleaning, furniture move, gates and appliance work remain discussed | Verify actual inspection results. Confirm movers' time (speech ambiguous), named supervisor, storage access privately, inventory/destination and garage clear-out. Schedule cleaning after paint and final walkthrough by November 6 if ready; verify courtyard/trash gates and dishwasher manual |\n| 11602 funding | Draw request/funding and bank identity were uncertain during discussion; interest payment was mentioned as a condition | Brittany/Kenneth compare actual bank notice/deposit and interest evidence; do not mark funded from “pretty sure” |\n| 11603 Royal Parkside | Plumbing top-out and HVAC in progress; roof penetrations/roofer coordination needed. Valves expected at office November 4. Electrical/low voltage follows plumbing/HVAC readiness | Lonnie owns current full schedule; verify valves receipt/handoff, trade completion, roof coordination and actual electrical start |\n| 11603 roofing | Synergy dry-in discussed; tile needs deposit and delivery should not be scheduled prematurely | Confirm current quote/WO, deposit/funding, readiness and supplier commitment. Contact Steve for dry-in coordination; retain 30/50/20 precedent, no new price inferred |\n| 11603 cabinet drawings | Drawings reportedly received November 3; Maria to forward to Lonnie and review November 4 against plans and selections before production. Prior pricing comparison reportedly done | Locate actual drawings/revision, signed selections, plan check, justified scope/pricing differences, deposit and production release. Receipt of drawings does not establish order/release |\n| 11607 Royal Parkside | Slab reportedly ready, grading/trash done. Trusses expected November 4; lumber release not confirmed; framer not ready until November 6. Lonnie to take schedule after lumber-drop review | Confirm lumber PO/release, staged drops, actual truss receipt and framer commitment. Three-week framing duration was an estimate subject to weather/inspection |\n| 11607 orders and selections | Existing framing/roof/plumbing/electrical WOs reported; mechanical WO uncertain. Selection completion unclear. Plan 3A modified with upstairs bedroom/full bath | Check Tracking before creating HVAC WO; verify approved plan/revision and selection guide. Historical basic Plan 3A quantities need scope check for this variation |\n| Villa low-voltage scope | Discussion moved toward retaining Cat6/data and eliminating phone/surround-sound and other wired systems in favor of wireless/Ring; alarm/security statements changed during discussion | Obtain one final written scope and applicable homes, Cat6 locations, alarm/camera inclusions, installer capability/quote, buyer commitments and updated specs/marketing before electrical release. No cancellation, saving or equipment price verified |\n| Generators / thermostats / exterior colors | Generator supplier visit and thermostat improvement requested; lighter exterior colors discussed before stucco. No final models/colors documented | Confirm generator site/electrical/gas scope and approvals; choose supported thermostat with HVAC vendor; locate Jim-signed color matrix with Teresa and approve samples/current revision before work |\n| Townhomes | Maria reported both building applications/project numbers exist and **neither approved**; updates required. New application how-to reported finished | Retrieve file, project IDs, exact lots/buildings, submitted plans, deficiencies/fees and notification access. Lonnie to continue; customer pricing/funding discussion is not a verified receivable or approved start |\n| HOA walls | Front/phase-one wall repairs, cracks, expansion joints and repainting discussed; extent/addresses disputed. Alberto quote to transfer to Teresa; phase two depends on budget | Obtain marked scope/map, quote, HOA responsibility/approval, reserves/budget and color decision. Do not turn informal repair suggestions or two-year repaint comment into a technical SOP or approved recurring interval |\n| Landing / Urban Edge | Frank's Buildertrend intended for contractor coordination; McVaugh database still needed for own jobs/draws. Discussion suggests seven contractor draws versus more bank categories; mismatch unresolved | Review signed contract, actual draw exhibits, invoices, McVaugh scope and bank schedule together November 5–6. Build explicit mapping and funding/payment conditions; do not equate contractor price with total bank draw or create WOs from spoken example stages |\n| Landing permits / meters | Permit mail still goes to Maria; ProjectDox invitation access needed. Accurate Meter contact, Badger/Beacon model/spec details to be transferred; contractor purchase/install discussed | Test notification/invitation transfer before November 6. Obtain written meter model, compatibility, supplier, quote, install/commissioning responsibility and specs; Beacon software is distinct from hardware. Villas handheld-reader replacement is a separate issue |\n| FM 1960 — Nancy | Water-line right-of-way as-built needed for Harris County closeout, then meter/occupancy steps. Joseph foundation certificate reportedly $450; retention billing discussed | Confirm exact job/source correspondence, responsible plumber, actual certificate, contractual scope and billing/retainage terms with accounting. Follow up by November 6; no invoice or WO created, markup not established |\n| Glengarry | Not active construction; customer response/rebid or document handoff still pending | Maria/Jim followup November 5–6; retrieve binder and current offer. Spoken pricing/document fee is not an approved contract or new vendor price |\n| Leander / ARC | Builder introduction to Lonnie planned; supervised plan review discussed. Meter/impact-fee posting expected November 4 afternoon | Obtain contact/guidelines/example and accepted reviewer/backup. Verify city fee posting/payment and meter status; weather/rain is not water-service completion |\n| 11623 Bistro — Anna Maria | Remodel needs plans/design funding before reliable bid; Maria's translated proposal/email unanswered | Confirm address spelling against job record, retrieve design proposal/correspondence, name followup owner and assemble folder/binder. No design payment or construction award established |\n| Mitigation pond / Aftonshire | Pond filling investigation proposed for Lonnie from initial notes; Aftonshire permit/code questions unresolved | Obtain site identity, prior calls/notes, current jurisdiction/code/permit requirements and qualified review. Do not authorize fill or assume usable pad; Aftonshire next action requested before departure |\n| Bear Creek | Stalled work: granite/plumbing/electrical trims and A/C incomplete per discussion. Some fixtures reportedly on site; supplier-held goods may have been resold; appliance quote source uncertain | Retrieve status email, physical inventory and vendor confirmation of retained/returned/resold goods and current quote; establish restart authority separately |\n| Benavides | 2027 restart discussed; permit folder exists and fees reportedly unpaid. Bidding completion disputed and pricing needs refresh | Review actual permit status/expiry/fees, selections and outstanding bids; confirm customer timing and approved current budget before restart |\n| Other private/unclear items | Personal-home vendor/WO discussion and a check hold were mentioned without sufficient record identity | Keep separate from standard vendor rules; identify source record and authority before financial action |\n\n### Next review before Maria leaves November 6\n\n1. Open 11603 cabinet drawings, 11607 lumber/truss records and both schedules through completion; confirm actual November 4 outcomes.\n2. Freeze the written low-voltage/electrical scope and address applicability before rough-in.\n3. Reconcile Landing signed contract, bank draw mapping, budget/WO setup, specs, meters and portal invitations with Lonnie/accounting.\n4. Retrieve the completed initial-permit how-to, per-building open applications, current-vendor list and document-location guide.\n5. Resolve James/Lonnie full purchasing split, backup, access and demonstrated handoffs; prior GL, CBUSA, warranty/HOA and order exceptions remain open without new evidence.\n6. Close or assign every paused-project item with its folder/contact, next action and owner. A November 4, 4 PM followup was agreed in the transcript; no calendar booking or occurrence verified. Brittany to send review material beforehand.\n\n### Handbook / website implications\n\nKeep **current vendor list** from Maria's workflow folder distinct from Brittany's **historical three-house vendor/area workbook**. Compare and reconcile rather than replace one with the other. A source-location guide is still needed even where a path is reportedly written inside a procedure.\n\nSchedules should be one identified shared authoritative file per home, with owner, update time and tested team access. AI-assisted updates and Teams/mobile access were discussed; neither a Project license nor an automated scheduling integration was verified. Link the file rather than letting separately posted copies become competing schedules.\n\nHome completion needs an address-specific inspection/punch record, trade assignments, photo/repair evidence, current permit/plan set, appliance manuals and final walkthrough acceptance. Meeting progress alone does not close tasks.\n\nLanding contractor draws, bank funding categories and McVaugh commitments require separate records and an explicit crosswalk. Future specs must identify meter hardware/software and responsibility. Record revised villa low-voltage and color standards only after the final approved scope is available.\n\nWebsite documentation updated November 4; no operational database, payment, mailbox, order or vendor message changed.\n"},{"title":"Landing scope — McVaugh work and missing evidence","markdown":"## Landing scope and specifications received — November 4\n\n**Source received:** revised scope of work and specs ROL (1).docx. Maria identifies this as the latest Frank/Maria version, almost complete; highlights await further information, and **“by owner” means McVaugh's scope**. Document cover is dated October 14, 2026, for Urban Edge Builders / Frank Martin, Royal Oaks Landing **Plan 1A, two story, 2,035.39 A/C SF** (889.71 Level 1 + 1,145.68 Level 2). This establishes the written scope is available, replacing “not supplied.” It does not establish execution or approval: lot/block, plan revision and acceptance date are blank; no executed agreement/draw exhibit was supplied with this file. These quantities belong to this Landing plan only, not Royal Parkside basic-plan references.\n\n### McVaugh scope identified by Maria's “by owner” instruction\n\n| Source | McVaugh responsibility / interpretation | Remaining verification |\n|---|---|---|\n| Section Six item 1 | Geotechnical investigation and soil report | Current approved report, lot applicability, procurement/cost owner |\n| Section Six item 2 | Form survey and final survey explicitly precede “(by owner)” | Reconcile with Section Two survey/form-board/foundation-check language. Title insurance, appraisal and lender/closing costs follow the same sentence; confirm full cost boundary |\n| Section Six item 3 | Water, sewer and wastewater impact fees | Exact applications, amounts, due dates and payment evidence; distinguish meter purchase/install fees |\n| Section Two site and permitting | “Survey and form-board survey, foundation check, HOA and ARC submittal, (by owner) excavation, select fill…” | Placement is ambiguous. Confirm whether “by owner” applies to preceding survey/HOA/ARC group, following excavation, or another boundary. Do not assign all excavation/sitework to McVaugh or Urban Edge by punctuation alone |\n| Section Seven conditions | Owner supplies approved subdivision fencing plan before walls/gates takeoff; owner selects finishes where stated | Named approver, current plan/color/selection revision and deadlines. Selection authority does not itself mean McVaugh furnishes/installs the trade |\n\nOther exclusions are not automatically McVaugh purchase commitments. Maintain contractor, owner, excluded, option and unresolved as separate responsibility states.\n\n### Highlighted items awaiting information\n\n- **Doors/windows:** garage-door style TBD; front-door selection TBD.\n- **Plumbing:** highlighted McClure toilet specification to confirm; master freestanding-tub SKU and deck-mount valve SKU are question marks. Confirm mounting compatibility and final finishes.\n- **Appliances:** dishwasher, oven, microwave, cooktop and refrigerator models/SKUs remain blank/TBD.\n- **Tile:** floor/wall, shower-floor and accent selections/options remain highlighted; master 24×48 shower-wall options and tub-wall coverage need final selection/layout.\n- **Section Four:** all eleven listed categories are highlighted—cabinetry/vanities, countertops (waterfall question), masonry/stone, stucco, landscape/sod, stair rail/balusters, irrigation, mirrors/shower enclosures, decorative lighting, door/cabinet hardware and carpet. Intro says “ten” despite eleven rows and says highlighted categories were agreed **STANDARD, not allowances**, while still describing an allowance process. Confirm fixed included specification and contractor price effect per line; do not simply add these as extra costs.\n\n### Additional unhighlighted gaps and conflicts to resolve\n\n| Priority | Item | Evidence / decision required |\n|---|---|---|\n| P1 | Allowances/pricing reconciliation | Individual allowance amounts and total table are blank; acceptance still states **$98,700 allowances**. Reconcile with newly standard items and final contract sum; do not treat $98,700 as total construction price |\n| P1 | Plan/house applicability | Fill lot/block, exact plan revision, elevation and address. Two-story cover conflicts with carpet on “second to third floor” stairs/landings. Do not apply this Plan 1A sheet to all Landing homes without review |\n| P1 | Flooring conflict / deadline | Engineered wood is specified in standard schedule; later clause allows default waterproof vinyl plank after a blank owner-selection deadline. Approve actual material/areas, samples, substitution authority and deadline |\n| P1 | Appliance inclusion | Section Two lists four appliances, but standard schedule also lists refrigerator. Confirm inclusion, models, finishes, supplied/installed responsibility and ventilation/cabinet interfaces |\n| P1 | Contractor versus bank draws | Section Seven refers to Construction Agreement draw schedule but includes no draw exhibit. Obtain signed agreement, contractor milestones/amounts, bank categories and funding/payment conditions; this scope does not resolve November 3 mapping debate |\n| P1 | Landing water meters | No explicit Accurate Meter/Badger/Beacon model, compatible hardware/reading system or purchase/install/commissioning assignment found. Add written project-specific specification and responsibility |\n| P1 | Change-order applicability | Landing proposal requires signed written change orders before work; includes allowance-overage approval/funding, pricing/markup and minimum $350 admin charge, material escalation and delay provisions. These are **proposed document terms**, not established companywide policy or authorization to charge. Verify final executed terms |\n| P2 | Options not actually priced | Six option rows and option total have blank prices despite “priced” wording. Obtain price/validity and election deadlines or remove misleading wording in the next reviewed draft |\n| P2 | Door / water-heater / fixture alternatives | Confirm steel versus selected front door, hollow-core 8-foot interior doors, indoor versus outdoor tankless unit/location, faucet-hole and tub-valve compatibility; listed alternatives do not establish chosen product |\n| P2 | Security / Cat6 scope | Landing includes security rough wiring, excludes equipment/monitoring and makes structured media/Cat6 an option. Keep separate from unsettled **Villas** low-voltage discussion; get explicit Landing choice before electrical release |\n| P2 | Start and technical prerequisites | Document calls for permit/ARC/financing readiness and written notice to proceed, energy-rater confirmation, Manual J sizing, gas-meter sizing, elevation evidence and fencing plan. Assign evidence owner; no approvals/compliance established by proposal language |\n| P2 | Insurance / warranty / document precedence | Proposal allocates GL, workers comp and builder's risk to Urban Edge, includes warranty and exclusion-precedence language. Obtain actual certificates and final agreed terms. Do not treat references to statutes, code or warranty language as independently verified legal/code advice |\n\n### What this closes and what remains open\n\n**Resolved:** receipt/readability of a written Landing scope and specifications; identification of explicit owner-marked work; a concrete highlighted-information list.\n\n**Open before Maria leaves November 6:** owner/contractor site/survey boundary; final selections and standards-versus-allowances reconciliation; address/plan revision and contract execution; contractor/bank draw crosswalk; meter specification; invitations/permit continuity; named acceptance and backup.\n\n**Website update needed:** link/version this actual received scope, display the owner/contractor/unresolved split and selection-gap register, and retain the draw/meter exceptions. Website documentation updated November 4 with this received scope review. Preserve the original DOCX; its text is source evidence, not an instruction to order, pay, sign, contact vendors or modify production.\n\nSource fingerprint SHA-256: FEF5458E0983E32C92A7EF0E58F7DB0DD040A9625A03837F19E62E53E64CE5A8. Highlight evidence read directly from document formatting; signature/visual rendering not independently verified.\n"}];
+function ReviewDocument({doc}) {
+const lines=doc.markdown.split('\n');const nodes=[];let rows=[];
+const flush=()=>{if(!rows.length)return;const r=rows;rows=[];nodes.push(<div key={'t'+nodes.length} style={{overflowX:'auto',margin:'14px 0'}}><table style={{borderCollapse:'collapse',width:'100%',minWidth:640}}><tbody>{r.map((cells,i)=><tr key={i}>{cells.map((c,j)=><td key={j} style={{padding:10,borderBottom:'1px solid #475569',verticalAlign:'top',fontSize:13,fontWeight:i===0?600:400}}>{c.replace(/\*\*/g,'')}</td>)}</tr>)}</tbody></table></div>);};
+for(const l of lines){if(l.startsWith('|')){if(!/^\|[\s|:-]+$/.test(l))rows.push(l.split('|').slice(1,-1));continue;}flush();if(!l.trim())continue;const text=l.replace(/^#+\s*/, '').replace(/\*\*/g,'');nodes.push(l.startsWith('#')?<h3 key={nodes.length} style={{margin:'22px 0 10px',color:'#FBBF24'}}>{text}</h3>:<p key={nodes.length} style={{lineHeight:1.6,margin:'8px 0',fontSize:14}}>{text}</p>);}flush();
+return <details open style={{marginBottom:22,border:'1px solid #475569',borderRadius:12,padding:20}}><summary style={{cursor:'pointer',fontSize:19,fontWeight:600}}>{doc.title}</summary>{nodes}</details>;
+}
+function CurrentReview(){return <section><h2>Current review — November 4, 2026</h2><p style={{lineHeight:1.6,color:'#CBD5E1',margin:'12px 0 22px'}}>Maria's last day: November 6. Assigned, access-ready, trained and accepted are separate states. Unverified actions stay open. Source: November 2/3 transcripts, user-confirmed order and GL rules, and the received revised Landing scope. No live financial/status audit.</p>{REVIEW_DOCUMENTS.map((d,i)=><ReviewDocument key={i} doc={d}/>)}</section>;}
 
 // ─── Main App ────────────────────────────────────────
 function MCHOpsHub() {
@@ -2176,7 +2600,8 @@ function MCHOpsHub() {
               { id: "dashboard", label: "Dashboard", icon: "◉" },
               { id: "roles", label: "Team", icon: "◎" },
               { id: "processes", label: "SOPs", icon: "◈" },
-              { id: "matrix", label: "Matrix", icon: "◇" }
+              { id: "matrix", label: "Matrix", icon: "◇" },
+              { id: "review", label: "Current review", icon: "☑" }
     ].map(tab => (
               <button
                 key={tab.id}
@@ -2203,6 +2628,8 @@ function MCHOpsHub() {
       </header>
 
       <main style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 24px 80px" }}>
+        <div style={{padding:'12px 16px',marginBottom:18,background:'#1E293B',borderLeft:'4px solid #F59E0B',lineHeight:1.6}}>Updated November 4, 2026 · Maria leaves November 6 · <button onClick={()=>setView('review')} style={{background:'transparent',color:'#FBBF24',border:0,textDecoration:'underline',cursor:'pointer'}}>Open transition and Landing review</button><br/><span style={{fontSize:12,color:'#CBD5E1'}}>Assignments are not accepted handoffs. Open items require evidence. Name edits in this page are session-only; they do not save to the shared file.</span></div>
+        {view === 'review' && <CurrentReview/>}
         {/* Mode Banner */}
         <div style={{
           marginBottom: 20, padding: "10px 16px", borderRadius: 10,
@@ -2220,7 +2647,7 @@ function MCHOpsHub() {
             </span>
             <span style={{ fontSize: 12, color: "#64748B" }}>
               {orgMode === "current"
-                ? "— 8 employees covering all responsibilities"
+                ? "— current assignments and legacy role references; handoff acceptance pending"
                 : "— 16 positions at full staffing"}
             </span>
           </div>
@@ -2277,7 +2704,7 @@ function MCHOpsHub() {
         {orgMode === "current" && view === "roles" && !selectedCurrentMember && (
           <div>
             {/* Org Chart Visual */}
-            <CurrentOrgChart team={currentTeam} onSelectMember={setSelectedCurrentMember} showROCC={showROCC} />
+            <CurrentOrgChart team={currentTeam} onSelectMember={setSelectedCurrentMember} showROCC={showROCC} showRolesCovered={showRolesCovered} setShowRolesCovered={setShowRolesCovered} />
           </div>
         )}
         {orgMode === "current" && view === "roles" && selectedCurrentMember && (
@@ -2501,7 +2928,7 @@ function DashboardView({ roles, processes, onSelectRole, onSelectProcess }) {
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "#E2E8F0", marginBottom: 6 }}>{p.name}</div>
                 <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.4 }}>
-                  Owner: {roles.find(r => r.id === p.owner)?.title || p.owner}
+                  Owner: {assignmentLabel(p)}
                 </div>
               </button>
             );
@@ -2790,7 +3217,7 @@ function ProcessGrid({ processes, roles, onSelect }) {
             </p>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 11, color: "#64748B" }}>
-                Owner: <span style={{ color: owner?.color || "#94A3B8" }}>{owner ? owner.title.split("(")[0].trim() : "—"}</span>
+                Owner: <span style={{ color: owner?.color || "#94A3B8" }}>{assignmentLabel(p)}</span>
               </div>
               <div style={{ display: "flex", gap: -6 }}>
                 {p.participants.slice(0, 5).map(pid => {
@@ -2885,7 +3312,7 @@ function ProcessDetail({ process, roles, onBack, onSelectRole, showROCC, showNA 
             <h2 style={{ margin: "12px 0 8px", fontSize: 24, fontWeight: 700, color: "#F8FAFC" }}>{process.name}</h2>
             <p style={{ margin: "0 0 16px", fontSize: 14, color: "#94A3B8", lineHeight: 1.6 }}>{process.description}</p>
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13, color: "#64748B" }}>
-              <span>Owner: <span style={{ color: owner?.color }}>{owner?.title || "—"}</span></span>
+              <span>Owner: <span style={{ color: owner?.color }}>{assignmentLabel(process)}</span></span>
               {process.date && <span>Date: {process.date}</span>}
               <span>{displaySteps.length} steps</span>
             </div>
@@ -3537,7 +3964,7 @@ function CurrentTeamGrid({ team, roles, processes, onSelect }) {
 function CurrentMemberDetail({ member, team, roles, processes, onBack, onSelectProcess, showROCC, showNA }) {
   const [activeFilter, setActiveFilter] = useState(null);
   const memberProcesses = processes.filter(p =>
-    p.participants.some(pid => member.absorbs.includes(pid))
+    memberInvolved(member,p)
   );
   const absorbedRoles = (member.absorbs || []).map(rid => roles.find(r => r.id === rid)).filter(Boolean);
 
@@ -3810,7 +4237,7 @@ function CurrentMatrixView({ team, processes, roles, onSelectMember, onSelectPro
         Current Team × Process Matrix
       </h2>
       <p style={{ fontSize: 13, color: "#94A3B8", marginBottom: 20 }}>
-        Shows which current employee covers each process based on their absorbed roles. Green = involved, Gold = covers the process owner role.
+        Gold = explicitly named current assignment; green = involved or legacy role association. Assignment is not accepted handoff. Legacy role coverage alone does not establish ownership.
       </p>
       <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 800 }}>
         <thead>
@@ -3849,8 +4276,8 @@ function CurrentMatrixView({ team, processes, roles, onSelectMember, onSelectPro
                 {member.name}
               </td>
               {processes.map(p => {
-                const isParticipant = p.participants.some(pid => member.absorbs.includes(pid));
-                const isOwner = member.absorbs.includes(p.owner);
+                const isParticipant = memberInvolved(member,p);
+                const isOwner = memberOwns(member,p);
                 return (
                   <td key={p.id} style={{
                     padding: 4, textAlign: "center",
@@ -3880,7 +4307,7 @@ function CurrentMatrixView({ team, processes, roles, onSelectMember, onSelectPro
 }
 
 // ─── Current Org Chart (Visual Hierarchy) ────────────
-function CurrentOrgChart({ team, onSelectMember }) {
+function CurrentOrgChart({ team, onSelectMember, showRolesCovered = false, setShowRolesCovered = () => {} }) {
   if (!team || team.length === 0) return <div style={{ color: "#94A3B8", padding: 40, textAlign: "center" }}>No team data loaded</div>;
 
   const Card = ({ member, subtitle, vacant }) => {
@@ -3947,7 +4374,8 @@ function CurrentOrgChart({ team, onSelectMember }) {
 
   var jim = team.find(function(m) { return m.id === "jim"; });
   var directReports = [
-    { member: team.find(function(m) { return m.id === "maria"; }), subtitle: "DOC · Super · PM · CA", vacant: false },
+    { member: team.find(m => m.id === "lonnie"), subtitle: "Construction / permitting — handoff pending", vacant: false },
+    { member: team.find(function(m) { return m.id === "maria"; }), subtitle: "Outgoing — November 6; historical coverage", vacant: false },
     { member: team.find(function(m) { return m.id === "purchasing"; }), subtitle: "DOP · Purchasing Mgr", vacant: false },
     { member: team.find(function(m) { return m.id === "teresa"; }), subtitle: "HR · Admin", vacant: false },
     { member: team.find(function(m) { return m.id === "kenneth"; }), subtitle: "CFO · Finance", vacant: false },

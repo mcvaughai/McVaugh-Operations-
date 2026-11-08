@@ -274,3 +274,12 @@ a.bvendor { color: var(--brand-dark); text-decoration: none; border-bottom: 1px 
 #viewInsurance tr.soon td { background: #fff8e6; }
 #viewInsurance td .src { display: block; }
 .cp-age { float: right; font-size: 11px; font-weight: 400; color: var(--muted); }
+#viewOpen { display: flex; flex-direction: column; min-height: 0; }
+#viewOpen h3 { margin: 14px 0 8px; font-size: 14px; }
+.opencard { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--amber);
+  border-radius: var(--radius); padding: 10px 14px; margin: 0 0 8px; }
+.opencard.mine { border-left-color: var(--purple); }
+.oc-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.oc-head b { font-size: 13.5px; }
+.opencard p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.opencard .actions { margin-top: 10px; }

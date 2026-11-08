@@ -484,7 +484,8 @@ function importOpsHub(db, { filename, content }, role) {
   const idFor = t => { const byId = people.find(p => p.id === t.id); if (byId) return byId.id; const first = String(t.name || '').split(' ')[0].toLowerCase(); return people.find(p => p.name.toLowerCase() === first)?.id || slug(t.name || t.id); };
   const roleOwner = {}; // legacy role id → current person id
   const roleTitle = Object.fromEntries(hub.roles.map(r => [r.id, r.title]));
-  let peopleUpdated = 0, tasks = 0, docs = 0; const skippedPeople = [];
+  let peopleUpdated = 0, tasks = 0, docs = 0; const skippedPeople = [];   // people whose list the import refused to touch
+  const changed = [];        // people whose list this import shortened, so a stale file is visible
   for (const t of hub.team) {
     const pid = idFor(t); const ex = db.prepare('SELECT id FROM people WHERE id = ?').get(pid);
     for (const r of t.absorbs || []) roleOwner[r] = pid;
@@ -497,18 +498,21 @@ function importOpsHub(db, { filename, content }, role) {
     const deliberatelyEmptied = cur && JSON.parse(cur.responsibilities || '[]').length === 0 && JSON.parse(cur.crossed_off || '[]').length > 0;
     const keepAsIs = departed || deliberatelyEmptied;
     const row = { id: pid, legacy_roles: JSON.stringify((t.absorbs || []).map(r => roleTitle[r] || r)) };
-    if (keepAsIs) skippedPeople.push(pid);
+    if (keepAsIs) skippedPeople.push(pid);   // never hand work back to someone who has left
     else {
-      // Merge rather than replace. Lines added since the snapshot — a handover, a reassignment — stay,
-      // and anything already struck off is not resurrected by an older export.
-      const existing = JSON.parse(cur?.responsibilities || '[]');
+      // The hub is edited by people, so what it says a person holds replaces what was there, deletions
+      // included. Anything already struck off stays struck off: a removal is a decision, not an omission.
       const struck = new Set([...JSON.parse(cur?.crossed_off || '[]'), ...crossed].map(x => String(x).toLowerCase().slice(0, 60)));
       const key = x => String(x).toLowerCase().replace(/\s*\(from [^)]*\)\s*$/, '').slice(0, 60);
-      const out = existing.filter(x => !struck.has(key(x)));
-      const seen = new Set(out.map(key));
-      for (const r of all.filter(r => !/^\s*\[N\/A\]/i.test(r)))
-        if (!seen.has(key(r)) && !struck.has(key(r))) { out.push(r); seen.add(key(r)); }
-      Object.assign(row, { responsibilities: JSON.stringify(out), crossed_off: JSON.stringify([...new Set([...JSON.parse(cur?.crossed_off || '[]'), ...crossed])]) });
+      const incoming = all.filter(r => !/^\s*\[N\/A\]/i.test(r)).filter(r => !struck.has(key(r)));
+      // An import that silently drops work somebody assigned last week is how a handover gets undone.
+      // The override still happens — it is what the file is for — but the damage is reported back.
+      const had = JSON.parse(cur?.responsibilities || '[]');
+      const incomingKeys = new Set(incoming.map(key));
+      const lost = had.filter(x => !incomingKeys.has(key(x)));
+      if (lost.length) changed.push({ id: pid, removed: lost.length, added: incoming.filter(r => !new Set(had.map(key)).has(key(r))).length, examples: lost.slice(0, 3) });
+      Object.assign(row, { responsibilities: JSON.stringify(incoming),
+        crossed_off: JSON.stringify([...new Set([...JSON.parse(cur?.crossed_off || '[]'), ...crossed])]) });
     }
     if (!ex) Object.assign(row, { name: String(t.name || t.id).split(' ')[0], full_name: t.name, title: t.title, confirmed: 0, review_status: 'not_reviewed', departments: [normalizeDept(t.department, db.prepare('SELECT id, name, short FROM departments').all())].filter(d => db.prepare('SELECT 1 FROM departments WHERE id = ?').get(d)), source: src, notes: 'Imported from the old ops hub; not in the handoff or org chart.' });
     upsert(db, 'people', row); peopleUpdated++;
@@ -536,7 +540,7 @@ function importOpsHub(db, { filename, content }, role) {
     tasks++;
   }
   addEvent(db, { entity_type: 'integration', entity_id: 'dashboard', kind: 'import', status: 'info', label: `Snapshot import: old ops hub (${tasks} SOPs, ${hub.roles.length} legacy roles, ${hub.team.length} people)`, source: 'import', actor: role, external_id: 'hub-' + crypto.randomUUID() });
-  return { imported: tasks + docs + peopleUpdated, tasks, legacy_roles: hub.roles.length, people: peopleUpdated, unassigned_roles: hub.roles.filter(r => !roleOwner[r.id]).map(r => r.title), imported_at: ts , responsibilities_kept: skippedPeople };
+  return { imported: tasks + docs + peopleUpdated, tasks, legacy_roles: hub.roles.length, people: peopleUpdated, unassigned_roles: hub.roles.filter(r => !roleOwner[r.id]).map(r => r.title), imported_at: ts , responsibilities_kept: skippedPeople, responsibilities_replaced: changed };
 }
 function personNameFromDb(db, id) { return db.prepare('SELECT name FROM people WHERE id = ?').get(id)?.name || id; }
 
@@ -870,7 +874,10 @@ function regenerateOpsHub(db, templateHtml) {
   const team = base.team.map(bt => {
     const p = people.find(x => x.id === bt.id) || people.find(x => (x.full_name || '').toLowerCase() === String(bt.name || '').toLowerCase()); if (!p) return bt;
     return { ...bt, name: p.full_name || bt.name, title: p.title || bt.title, email: p.email || bt.email, absorbs: personLegacy(p).length ? personLegacy(p) : bt.absorbs,
-      responsibilities: [...JSON.parse(p.responsibilities || '[]'), ...JSON.parse(p.crossed_off || '[]').map(r => '[N/A] ' + r)], review_status: p.review_status, leaving: /LEAVING/.test(p.notes || '') };
+      // Only what the person actually holds. Work that was struck off is removed from the published hub —
+      // it stays in the world against whoever used to hold it, which is where the history belongs.
+      responsibilities: JSON.parse(p.responsibilities || '[]'), removed: JSON.parse(p.crossed_off || '[]').length,
+      review_status: p.review_status, departed: /\bDEPARTED\b/i.test(p.notes || ''), leaving: /LEAVING/.test(p.notes || '') };
   });
   for (const p of people) if (!team.find(t => t.id === p.id) && JSON.parse(p.responsibilities || '[]').length) team.push({ id: p.id, name: p.full_name || p.name, title: p.title || '', department: '', color: '#64748B', email: p.email || '', absorbs: personLegacy(p), responsibilities: JSON.parse(p.responsibilities || '[]') });
   const lit = v => JSON.stringify(v, null, 2);

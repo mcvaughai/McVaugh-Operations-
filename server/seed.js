@@ -1461,6 +1461,42 @@ const UPDATES = [
       label: `Responsibilities reassigned: ${(add[L] || []).length} to Lonnie, ${(add[J] || []).length} to James, ${(add[T] || []).length} to Teresa, ${(add[M] || []).length} to Jim, ${(add[K] || []).length} to Kenneth, ${dropped.length} removed. Maria and the purchasing list are both empty.`,
       source: 'manual', actor: 'brittany', external_id: 'responsibility-handover-2026-11-08' });
   } },
+  { key: 'sop-decisions-from-transcripts-2026-11-08', apply(db) {
+    const ts = nowIso();
+    const SRC = 'The three handover transcripts, 5 and 6 November 2026';
+
+    // Maria described the back-charge process in full, so this one is rewritten rather than put to a vote.
+    upsert(db, 'tasks', { id: 'hub-back_charge', owner_id: 'james', backup_id: 'lonnie', documented: 1, verified: 0,
+      title: 'Back charge a subcontractor',
+      trigger: 'A subcontractor broke something, left a mess they were asked to clear and did not, or failed to finish work somebody else then had to finish. It is judged case by case — cutting sheetrock to reach a pipe is not a back charge.',
+      steps: '1. Whoever runs the job decides there is a back charge, because they know what actually happened and why.\n2. Tell the vendor first. "There is nothing worse than a vendor receiving a cheque that says minus $400 and they have zero idea why." Give them a chance to put it right: tell them if it is not cleaned within three days you will get someone else and charge it back.\n3. Create a new back charge in the database. It works like a work order — fill in all the information.\n4. Fill in who was notified and the date they were notified. The field exists and it is the most important part of the record.\n5. Click approved as soon as it is entered, so it lands on the back-charge report Kenneth checks before cutting cheques.',
+      approval_rules: 'The builder decides it, James enters it, and it must be approved in the database before cheques run. The vendor is told before any money is withheld.',
+      missing_info: 'Maria said she would add back-charge instructions to the same document as the budget workflow. Check whether that was done before she left.',
+      next_action: 'Find the written version in the workflow folder; if it is not there, this is the record.',
+      review_note: 'Rewritten 8 November from Maria’s own description [M 11/05]. The 2004 version is superseded. Volume is about $2,000 to $3,000 a year, so it is rare.',
+      source: 'Maria, purchasing review 5 November 2026', updated_at: ts });
+
+    // The rest contradict what the transcripts say, so they go to Brittany as decisions rather than being
+    // rewritten on my judgement. This is what the world is for.
+    const D = (id, title, reason) => upsert(db, 'decisions', { id, date: '2026-11-08', title, reason,
+      decided_by: 'Brittany to approve', status: 'proposed', source: SRC, created_at: ts });
+    D('dec-sop-change-order-log', 'Change Order Budget Entry (2022) refers to a log that does not exist',
+      'The SOP has steps for logging change orders into a change order budget log and printing it weekly for the tactical meeting. Maria on 6 November: "68 is gone. We don’t do that. There’s no change order log." Proposal: cut the logging and printing steps, keep the pricing and approval steps, and record that change orders are priced, approved by the customer and paid for before the work is executed.');
+    D('dec-sop-weekly-budget-review', 'Weekly Budget Review (2005) describes something nobody does',
+      'The SOP has the budget reviewed weekly while processing accounts payable. Maria on item 26: "we haven’t done that." She also said budget against actual is really Lonnie and Kenneth but "none of these are being done on a regular basis on every single job." Proposal: either retire the SOP, or keep it and name who does it and how often. Do not leave it describing a routine that does not happen.');
+    D('dec-sop-bonus-request', 'Bonus Request Submittal (2005) — nobody has run it in years',
+      'Maria on items 79 and 80: "we haven’t done bonuses in so long and I don’t know how long he was set up, to be completely honest. Those are a question for Jim." Proposal: ask Jim whether the bonus scheme still exists. If it does, it needs an owner; if not, retire the SOP rather than leave it looking live.');
+    D('dec-sop-framed-mirrors', 'Framed Mirror Purchase Process (2004) — Maria said to drop it',
+      'Her words on item 83: "I really don’t know why we have a framed mirror purchasing process. That can go away. That’s dumb." The two responsibilities behind it are already struck off. Proposal: retire the SOP. Mirrors are measured and installed as part of ordinary trade coordination.');
+    D('dec-sop-budget-revision-log', 'Budget Revision Update Process (2005) — the revision log was struck off',
+      'Items 72, 73 and 74 covered logging the overage, printing the log weekly and forwarding it to Kenneth. All three were struck off on 6 November. The SOP still describes them. Proposal: replace the log with what actually happens now — a budget increase is requested in the database and needs two approvals, the Director of Operations and Jim, with the approver emailed because the database notifies nobody.');
+    D('dec-sop-start-packet', 'Start Packet Process — nobody assembles one any more',
+      'Maria on item 38: "nobody puts together a construction start package anymore. Everything is digital, so that one can go away." The Start Packet Process SOP is 47 steps. Proposal: check what in it is still done digitally and keep only that, or retire it and point at the job files in Public.');
+
+    addEvent(db, { entity_type: 'task', entity_id: 'hub-back_charge', kind: 'setup', status: 'info',
+      label: 'Back charge rewritten from Maria’s description; six more 2004-2022 SOPs raised as decisions because the transcripts contradict them',
+      source: 'manual', actor: 'brittany', external_id: 'sop-decisions-2026-11-08' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

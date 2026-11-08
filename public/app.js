@@ -73,7 +73,7 @@
     $('#demoToggle').checked = S.demo; $('#demoBanner').hidden = !S.demo;
     $('#addBtn').hidden = !S.permissions.write;
     $('#stagePill').textContent = 'Stage: ' + (S.checkpoint?.stage || 'gather');
-    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderWorkOrders(); renderInsurance(); renderApprovals(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
+    renderStartHere(); World.render(S); renderLegend(); renderBoard(); renderReview(); renderHandover(); renderProcedures(); renderBuild(); renderWorkOrders(); renderInsurance(); renderOpen(); renderOpenCount(); renderApprovals(); renderRegistry(); renderIntegrations(); renderAi(); renderHistory();
     const fs = $('#focusSelect'); const cur = fs.value;
     fs.innerHTML = '<option value="">Focus department…</option>' + S.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('') + '<option value="neighborhood">Active jobs</option><option value="snapshot">Job list snapshot</option>';
     fs.value = cur;
@@ -485,6 +485,66 @@
       $('#iText').value = ''; $('#iResult').scrollIntoView({ behavior: 'smooth', block: 'start' }); refresh(); };
   }
 
+  // ---------- Open: what needs Brittany, and what nobody has answered ----------
+  function renderOpenCount() {
+    const n = S.decisions.filter(d => d.status === 'proposed').length;
+    const c = $('#openCount'); if (c) { c.textContent = n || ''; c.style.display = n ? '' : 'none'; }
+  }
+  function renderOpen() {
+    const v = $('#viewOpen'); if (v.hidden) return;
+    const proposed = S.decisions.filter(d => d.status === 'proposed');
+    const waiting = S.decisions.filter(d => d.status === 'open');
+    const tasks = S.tasks.filter(t => !t.archived && !t.restricted);
+    const blocked = tasks.filter(t => String(t.blocker || '').trim());
+    const gaps = tasks.filter(t => !blocked.includes(t) && String(t.missing_info || '').trim());
+    const openHo = (S.handover_items || []).filter(h => h.status === 'open');
+    const agents = S.agents.filter(a => a.proposed || !a.enabled);
+
+    const decCard = (d, mine) => `<div class="opencard ${mine ? 'mine' : ''}">
+      <div class="oc-head"><b>${esc(d.title)}</b>${chip(mine ? 'needs you' : 'waiting on ' + (d.decided_by || 'someone'), mine ? 'purple' : 'amber')}
+        <small class="src">${esc(d.date || '')} · ${esc(d.source || '')}</small></div>
+      <p>${esc(d.reason)}</p>
+      ${mine && S.permissions.write ? `<div class="actions" data-dec="${esc(d.id)}">
+        <button class="primary small" data-dact="accepted">Approve</button>
+        <button class="small" data-dact="open">Needs someone else</button>
+        <button class="small ghost" data-dact="rejected">No</button></div>` : ''}</div>`;
+
+    const taskRow = (t, why) => `<tr><td><a href="#" data-open="task:${esc(t.id)}">${esc(t.title)}</a>
+        <small class="src">${esc(personName(t.owner_id))}${t.backup_id ? ' · backup ' + esc(personName(t.backup_id)) : ' · no backup'}</small></td>
+      <td>${esc(String(why).slice(0, 260))}</td></tr>`;
+
+    v.innerHTML = `<div class="world-toolbar"><b>Open</b><span class="hint">Everything waiting on a decision, and everything the handover meetings did not answer. This is the list to work through, not the whole registry.</span></div>
+      <div class="bscroll">
+        <div class="bstats">
+          <div class="${proposed.length ? 'purple' : ''}"><b>${proposed.length}</b><span>decisions needing you</span></div>
+          <div class="${waiting.length ? 'amber' : ''}"><b>${waiting.length}</b><span>waiting on someone else</span></div>
+          <div class="${blocked.length ? 'red' : ''}"><b>${blocked.length}</b><span>procedures with a blocker</span></div>
+          <div><b>${gaps.length}</b><span>with something still missing</span></div>
+        </div>
+        <h3>Decisions needing you <span class="chip purple">${proposed.length}</span></h3>
+        ${proposed.map(d => decCard(d, true)).join('') || '<p class="empty">Nothing waiting on you.</p>'}
+        ${waiting.length ? `<h3 style="margin-top:16px">Waiting on someone else <span class="chip amber">${waiting.length}</span></h3>${waiting.map(d => decCard(d, false)).join('')}` : ''}
+        ${blocked.length ? `<h3 style="margin-top:16px">Blocked <span class="chip red">${blocked.length}</span></h3>
+          <div class="table-wrap"><table><thead><tr><th>Procedure</th><th>What is in the way</th></tr></thead><tbody>${blocked.map(t => taskRow(t, t.blocker)).join('')}</tbody></table></div>` : ''}
+        ${gaps.length ? `<h3 style="margin-top:16px">Not answered in the meetings <span class="chip gray">${gaps.length}</span></h3>
+          <div class="table-wrap"><table><thead><tr><th>Procedure</th><th>What is still missing</th></tr></thead><tbody>${gaps.map(t => taskRow(t, t.missing_info)).join('')}</tbody></table></div>` : ''}
+        ${openHo.length ? `<h3 style="margin-top:16px">Handover items still open <span class="chip amber">${openHo.length}</span></h3>
+          <div class="table-wrap"><table><tbody>${openHo.map(h => `<tr><td><a href="#" data-open="handover:${esc(h.id)}">${esc(h.item)}</a></td><td><small>${esc(String(h.capture || '').slice(0, 200))}</small></td></tr>`).join('')}</tbody></table></div>` : ''}
+        <h3 style="margin-top:16px">Agents, none switched on yet <span class="chip gray">${agents.length}</span></h3>
+        <div class="table-wrap"><table><thead><tr><th>Agent</th><th>What it would take over</th><th>Stage</th></tr></thead><tbody>
+          ${agents.map(a => `<tr><td><a href="#" data-open="agent:${esc(a.id)}">${esc(a.name)}</a></td>
+            <td><small>${esc(String(a.purpose || '').slice(0, 180))}</small></td><td>${setupChip(a.setup_stage)}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>`;
+    v.querySelectorAll('[data-dec]').forEach(box => box.querySelectorAll('[data-dact]').forEach(b => b.onclick = async () => {
+      const id = box.dataset.dec, status = b.dataset.dact;
+      if (status === 'rejected' && !confirm('Mark this decision as no? The procedure stays as it is.')) return;
+      await api('POST', '/api/decisions', { id, status });
+      toast(status === 'accepted' ? 'Approved' : status === 'open' ? 'Moved to waiting' : 'Marked no');
+      refresh();
+    }));
+  }
+
   // ---------- Build view: Maria's "How to build a house" as an ordered, filterable sequence ----------
   let buildFilter = localStorage.getItem('mow_buildfilter') || 'all';
   const PHASE_HUE = { 'Site & slab': 28, 'Frame & dry-in': 200, 'Exterior envelope': 265, 'Interior trim & mechanical trim': 150, 'Floors, cabinets & fixtures': 330, 'Landscape, final trims & finals': 95 };
@@ -885,13 +945,14 @@
   // ---------- views & global events ----------
   function showView(v) {
     document.querySelectorAll('.views button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
-    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', build: '#viewBuild', workorders: '#viewWo', insurance: '#viewInsurance', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
+    for (const [k, el] of Object.entries({ world: '#viewWorld', board: '#viewBoard', review: '#viewReview', handover: '#viewHandover', procedures: '#viewProcedures', build: '#viewBuild', workorders: '#viewWo', insurance: '#viewInsurance', open: '#viewOpen', registry: '#viewRegistry', integrations: '#viewIntegrations', ai: '#viewAi', history: '#viewHistory' })) $(el).hidden = k !== v;
     if (v === 'world') World.overview();
     if (v === 'handover') renderHandover(true);
     if (v === 'procedures') renderProcedures();
     if (v === 'build') renderBuild();
     if (v === 'workorders') renderWorkOrders();
     if (v === 'insurance') renderInsurance();
+    if (v === 'open') renderOpen();
     localStorage.setItem('mow_view', v);
   }
   document.querySelectorAll('.views button').forEach(b => b.onclick = () => showView(b.dataset.view));

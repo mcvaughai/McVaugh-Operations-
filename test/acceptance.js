@@ -138,7 +138,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   });
   await check('succession pass: meetings stored with provenance, step reviews, flows, job status, handover sorted no-backup first, agenda', async () => {
     const s = (await call('GET', '/api/state')).body;
-    const m = s.documents.filter(d => d.kind === 'meeting'); assert.equal(m.length, 4); assert.ok(m.every(d => d.meeting_date && JSON.parse(d.attendees).length >= 2 && d.source));
+    const m = s.documents.filter(d => d.kind === 'meeting'); assert.equal(m.length, 5); assert.ok(m.every(d => d.meeting_date && JSON.parse(d.attendees).length >= 2 && d.source));
     const wo = s.tasks.find(t => t.id === 'hub-work_order_ap'); const rev = JSON.parse(wo.step_review); assert.equal(rev.length, 10); assert.ok(rev.every(r => r.verdict !== 'match' || r.cite)); assert.match(wo.verification_result, /Reconciled against meetings/); assert.match(wo.missing_info, /Not mentioned/); assert.ok(JSON.parse(wo.flow).nodes.length > 5);
     assert.ok(s.tasks.find(t => t.id === 'tr-leander-arc-review' && t.proposed === 0 && t.backup_id === 'teresa'));
     const h = s.homes.find(h => h.address === '11603 Royal Parkside Place'); assert.match(h.stage, /Framing/);
@@ -163,7 +163,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   });
   await check('meeting 3 applied: third transcript, merged step reviews, supersedes links, 11607 active, new handover item', async () => {
     const s = (await call('GET', '/api/state')).body;
-    assert.equal(s.documents.filter(d => d.kind === 'meeting').length, 4);
+    assert.equal(s.documents.filter(d => d.kind === 'meeting').length, 5);
     const co = s.tasks.find(t => t.id === 'hub-change_order_budget'); const rows = JSON.parse(co.step_review); assert.ok(rows.some(r => String(r.n) === '2–3' && r.verdict === 'no_longer' && /M3/.test(r.cite))); assert.ok(!rows.some(r => String(r.n) === '2'), 'earlier per-step rows replaced by the later finding'); assert.match(co.verification_result, /2026-10-20 call/);
     const tco = s.tasks.find(t => t.id === 'tr-change-orders'); assert.deepEqual(JSON.parse(tco.supersedes), ['hub-change_order_request', 'hub-change_order_budget']);
     assert.ok(JSON.parse(s.tasks.find(t => t.id === 'tr-permit-per-address').supersedes).includes('hub-permitting'));

@@ -829,17 +829,44 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(legacy.step_review, 'the legacy SOP carries its reconciliation');
     assert.equal(t.step_review, null, 'the current one does not');
   });
-  await check('what the purchasing rewrites dropped is recorded against each procedure', async () => {
+  await check('the merge is recorded on each procedure, with what was put back and what is still open', async () => {
     const s = (await call('GET', '/api/state')).body;
     const wo = s.tasks.find(t => t.id === 'sop-pur-01-wo-entry-buildconnect');
-    assert.match(wo.missing_info, /changing it reloads the form/);
-    assert.match(wo.missing_info, /calendar-persistence workaround/);
-    assert.match(wo.next_action, /Merge/);
+    assert.match(wo.missing_info, /^Merged 8 November/);
+    assert.match(wo.missing_info, /calendar-persistence workaround/, 'names what was restored');
+    assert.match(wo.missing_info, /Not yet walked through with James/, 'and what is still unverified');
+    assert.equal(wo.verified, 0);
     const po = s.tasks.find(t => t.id === 'sop-pur-02-material-po-entry');
-    assert.match(po.missing_info, /996 for Lowe/);
-    assert.match(po.missing_info, /Complete, Received, Pay and Paid In Full/);
+    assert.match(po.missing_info, /^Merged 8 November/);
+    assert.match(po.missing_info, /996/);
     assert.match(po.blocker, /no spending authority boundary has been set/);
-    // the question the rewrite deleted is now an open decision rather than gone
+    // the question the rewrite deleted survives both as a step and as a decision
+    assert.ok(s.decisions.some(d => d.id === 'dec-material-po-authority' && d.status === 'open'));
+  });
+  await check('both purchasing procedures are merged: mechanics restored, 4 November caveats kept', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const wo = s.tasks.find(t => t.id === 'sop-pur-01-wo-entry-buildconnect');
+    const po = s.tasks.find(t => t.id === 'sop-pur-02-material-po-entry');
+    assert.equal(wo.documented, 1); assert.equal(po.documented, 1);
+    assert.equal(wo.steps.split(/\n(?=\d+\. )/).length, 15);
+    assert.equal(po.steps.split(/\n(?=\d+\. )/).length, 14);
+    // the mechanics the rewrite dropped are back
+    for (const bit of ['New Work Order in the BuildConnect frame', 'reloads the form', 'passcode-box Enter step',
+      'completion and payment flags unset', 'Never create a duplicate', 'failed to persist',
+      'Synergy roofing: 30/50/20', 'code 620', 'code 601'])
+      assert.ok(wo.steps.includes(bit), 'work order kept: ' + bit);
+    for (const bit of ['New Purchase Order', '996 for Lowe', 'single draw for a standalone',
+      'recalculates after blur', 'proposal date for proposal-based orders', 'and the cost code',
+      'separate thing from Received'])
+      assert.ok(po.steps.includes(bit), 'material PO kept: ' + bit);
+    // and the caveats the rewrite added are still there
+    for (const bit of ['not spending approval', 'Do not substitute the bill-to address', 'never agreed as a standing commitment'])
+      assert.ok(wo.steps.includes(bit), 'work order kept the new caveat: ' + bit);
+    for (const bit of ['rather than copying Maria out of habit', 'does not establish that a PO was delivered', 'before 9 AM'])
+      assert.ok(po.steps.includes(bit), 'material PO kept the new caveat: ' + bit);
+    // the question the rewrite deleted is visible in the procedure, not just in a decision
+    assert.match(po.steps, /STILL OPEN/);
+    assert.match(po.blocker, /no spending authority boundary/);
     assert.ok(s.decisions.some(d => d.id === 'dec-material-po-authority' && d.status === 'open'));
   });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });

@@ -1298,6 +1298,24 @@ const UPDATES = [
       label: `Merged: work-order entry now ${WO.length} steps, material PO ${PO.length} — the 4 November caveats kept, the dropped mechanics restored`,
       source: 'manual', actor: 'brittany', external_id: 'purchasing-merged-2026-11-08' });
   } },
+  { key: 'meeting-purchasing-2026-11-05', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Meeting recording: Maria, Brittany and James reviewing purchasing responsibilities — 5 November 2026, 31m';
+    const { docxText } = require('./imports');
+    const fp = path.join(__dirname, '..', 'seed', 'meetings', 'purchasing-review-2026-11-05.docx');
+    const text = docxText(fs.readFileSync(fp)).replace(/&apos;/g, '’');
+    // Stored now so the transcript is not lost. The responsibility moves it decides are applied once all
+    // three transcripts are in, so Ernesto's list is emptied in one pass rather than three.
+    upsert(db, 'documents', { id: 'doc-meeting-purchasing-2026-11-05', title: 'Purchasing responsibilities reviewed line by line — 5 November 2026',
+      kind: 'meeting', kind_reason: 'Teams recording; Maria answering every remaining purchasing line', sensitive: 0,
+      meeting_date: '2026-11-05', cite_key: 'M 11/05', attendees: JSON.stringify(['maria', 'brittany', 'james']),
+      summary: 'Went through Ernesto’s remaining job items and the purchasing lines under James. Every line was answered: to James (back charges, signing up subcontractors and vendors, the purchasing mailbox, entering work orders, POs and approved budgets), to Lonnie (permitting, bids out and in, estimating, budgets, CBUSA, lead times, invoice receiving, material waste), or struck off (permit rack, obtaining plans, detailed scopes, supplementing takeoffs, licence checks, the vendor feedback system, the slot schedule). Nothing remained with Ernesto. Also: lumber is the only genuinely time-critical PO and must be entered before the morning truck window; store purchases need no approval while bids go to Lonnie first; the Landing is one work order to Frank Martin Development with seven draws, not per-trade orders.',
+      content: text, size: text.length, source: SRC, imported_at: ts,
+      file_path: fp, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', underlying_status: 'extracted' });
+    addEvent(db, { entity_type: 'document', entity_id: 'doc-meeting-purchasing-2026-11-05', kind: 'import', status: 'info',
+      label: 'Purchasing review transcript stored (5 November). Responsibility moves held until all three transcripts are in.',
+      source: 'import', actor: 'brittany', external_id: 'meeting-purchasing-2026-11-05' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

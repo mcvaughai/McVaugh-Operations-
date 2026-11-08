@@ -1199,6 +1199,28 @@ const UPDATES = [
       label: 'Landing scope of work received from Maria — McVaugh’s four (by owner) items recorded; allowance-or-standard contradiction raised',
       source: 'import', actor: 'brittany', external_id: 'rol-scope-2026-11-04' });
   } },
+  { key: 'permitting-provenance-2026-11-08', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Comparison of the 3 and 4 November hub exports, 2026-11-08';
+    // Three permitting procedures exist and only one has ever been checked against what Maria said.
+    // The 14-step "current" version was drafted from review notes in the same session that created it and
+    // names jurisdictions McVaugh does not build in, so it is not a record of how permits are actually pulled.
+    upsert(db, 'tasks', { id: 'sop-permitting-ipermits-projectdox', documented: 0, verified: 0,
+      title: 'Permitting Process — iPermits / ProjectDox (current, not yet verified)',
+      missing_info: 'Not a record of how McVaugh actually permits. The 14-step version in the 3 November hub was drafted from review notes and told the reader to "log into iPermits for the applicable jurisdiction (Leander, Cedar Park, etc.)". Cedar Park appears nowhere in any McVaugh record; Leander exists as a builder name and an ARC plan review, not a jurisdiction. McVaugh builds in Houston and Harris County, and Maria’s own build document names the real portal: the City of Houston iPermits site. The 4 November rewrite is shorter but more honest — it says "the Houston workflow described by Maria" and points at her completed new-application how-to.',
+      blocker: 'The real source material is Maria’s new-application document, which has not been attached here, plus the City of Houston steps already captured in her build sequence. Until one of those is written up, this procedure is a placeholder.',
+      next_action: 'Get Maria’s completed new-application how-to, then rebuild this from it and from the city inspection steps in "How to build a house". Do not restore the 14-step version.',
+      source: SRC, updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-permitting-source-of-truth', date: '2026-11-08',
+      title: 'Which permitting procedure is the real one',
+      reason: 'Three exist. The 2004 legacy SOP (42 steps) is the only one reconciled against Maria’s transcripts, but it describes the process as it was twenty-two years ago. The 14-step "current" version drafted on 3 November was never checked and names jurisdictions McVaugh does not build in. The 4 November rewrite (7 steps) is accurate about what is unknown but is not yet a procedure anyone can follow. The material to build a real one exists: Maria’s new-application document, and the City of Houston permit and inspection steps already recorded in her build sequence. Lonnie owns permitting and Maria has left, so this needs doing rather than deciding.',
+      decided_by: 'open — Brittany and Lonnie', status: 'open', source: SRC, created_at: ts });
+
+    addEvent(db, { entity_type: 'task', entity_id: 'sop-permitting-ipermits-projectdox', kind: 'setup', status: 'info',
+      label: 'Correction: the 14-step permitting procedure was drafted from review notes, not from Maria, and named jurisdictions McVaugh does not build in',
+      source: 'manual', actor: 'brittany', external_id: 'permitting-provenance-2026-11-08' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

@@ -59,14 +59,42 @@ assume you already know.
 - **Material PO** lost the most: selecting `Jobs → New Purchase Order`, separating merchandise from tax,
   verifying the form recalculates after blur, and the distinction between Complete, Received, Pay and
   Paid In Full. Eight steps will not get someone through their first PO.
-- **Permitting** is the biggest loss. The old version was a how-to: log into iPermits for the
-  jurisdiction, create the application, upload plans and reports, pay the fees, track status, answer
-  ProjectDox comments, schedule inspections, file the approved permit. The new version is mostly things
-  to verify and confirm. It reads as an audit checklist rather than a procedure.
+- **Permitting is the exception — see the correction below.** On first reading the shorter version looked
+  like a loss. It is not.
 
-**My recommendation: merge rather than choose.** Keep the old step-by-step as the body and fold the new
-caveats and vendor rules into it. Permitting especially — Lonnie takes it over and Maria's last day was
-6 November, so a checklist of things to confirm is the wrong artefact for him right now.
+**My recommendation: merge rather than choose, for the two purchasing procedures.** Keep the old
+step-by-step as the body and fold the new caveats and vendor rules into it. Every original step is still
+held, so nothing is lost either way.
+
+## Correction — permitting
+
+I first described the 14-step version as "the old how-to" and said to restore it. That was wrong, and
+the detail matters because there are **three** permitting procedures, not two.
+
+| Version | Steps | Dated | Where it came from | Checked against Maria? |
+|---|---|---|---|---|
+| Legacy | 42 | 30 December 2004 | the original SOP | **yes** — reconciled against the transcripts |
+| "Current" | 14 | November 2026 | drafted in the 3 November hub session from review notes | no |
+| "Current", rewritten | 7 | 4 November, marked *evidence reconciled* | Codex | partly — it points back at Maria's own document |
+
+The 14-step version was **not** a transcript of how McVaugh actually permits. It was drafted from review
+notes in the same session that created it, and it shows:
+
+> "Log into iPermits portal for the applicable jurisdiction (**Leander, Cedar Park**, etc.)"
+
+McVaugh builds in Houston and Harris County. *Cedar Park* appears nowhere in any McVaugh record.
+*Leander* exists, but as a builder name and an ARC plan review, not a permitting jurisdiction. Maria's own
+"How to build a house" names the real portal: the City of Houston iPermits site at
+`pdinet.pd.houstontx.gov/iPermits/`.
+
+So the 14 steps were generic permitting, not yours. Codex's 7 steps are thinner but more honest — they
+say "for the Houston workflow described by Maria", point at her completed new-application how-to, and
+note that both townhome applications were submitted on 3 November with neither approved.
+
+**Revised recommendation for permitting:** do not restore the 14. The real source material is Maria's own
+new-application document plus the City of Houston steps already captured in her build sequence. Build the
+current procedure from those, and treat the 2004 legacy version as the only one that has actually been
+checked against what she said.
 
 ## What this means for your review transcripts
 

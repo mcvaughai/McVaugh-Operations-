@@ -24,7 +24,7 @@ Optional environment variables:
 | `MOW_DATA_DIR` | Where the sqlite file and credentials live (default `./data`) — point it at a backed-up drive |
 | `MOW_N8N_SECRET` | Shared secret n8n must send in `X-MOW-Secret`; webhook refuses everything until set |
 | `MOW_IMPORT_DIR` | Default folder for Option 3 bulk import (e.g. your Obsidian vault) |
-| `MOW_OPSHUB_PATH` | Path of the old `mch-ops-hub.html`; when set, the file is rewritten from the world's data after every change. A file that this app did not generate is **never** overwritten, and the previous version is kept as `.bak` |
+| `MOW_OPSHUB_PATH` | Path of your `mch-ops-hub.html`; when set, the file is rewritten from the world's data after every change. It is rebuilt from `seed/mch-ops-hub.template.html`, which is your 3 November hub, so the toggles, vendor-rules and history panels survive. A file this app did not generate is **never** overwritten, and the previous version is kept as `.bak` |
 | `MOW_PUBLIC_URL` | The address Teams links should point at (default `http://localhost:<port>`); set this before turning on the work-order approval workflow |
 | `MOW_MCHDB_URL` | Page used for the read-only reachability check (default `http://db.mcvaugh.com/buildconnect/NewStuff/wotracking.html`) |
 

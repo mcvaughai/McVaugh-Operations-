@@ -86,7 +86,7 @@ const INITIAL_ROLES = [
       "Places original start memo in job file outbox",
       "Updates construction status with start date"
     ],
-    processes: ["preconstruction_planning", "preconstruction_spec", "change_order_budget", "change_order_request", "back_charge", "budget_revision", "budget_spec", "preconstruction_redline", "work_order_ap", "bonus_request", "permitting"]
+    processes: ["preconstruction_planning", "preconstruction_spec", "change_order_budget", "change_order_request", "back_charge", "budget_revision", "budget_spec", "preconstruction_redline", "work_order_ap", "bonus_request", "permitting", "gl_insurance_update"]
   },
   {
     id: "dop",
@@ -247,7 +247,7 @@ const INITIAL_ROLES = [
       "Enters work orders in database",
       "Calls subcontractors for bids if not received within 1 week"
     ],
-    processes: ["change_order_request", "start_packet", "new_work_order", "work_order_ap", "lowes_bill_process"]
+    processes: ["change_order_request", "start_packet", "new_work_order", "work_order_ap", "lowes_bill_process", "wo_entry_buildconnect", "material_po_entry"]
   },
   {
     id: "project_mgr",
@@ -280,7 +280,7 @@ const INITIAL_ROLES = [
       "Logs budget into QuickBooks",
       "Processes Actual to Budget reports weekly into Excel"
     ],
-    processes: ["back_charge", "budget_spec", "budget_review", "lowes_bill_process", "accounting_weekly", "accounting_monthly", "accounting_quarterly_yearly"]
+    processes: ["back_charge", "budget_spec", "budget_review", "lowes_bill_process", "accounting_weekly", "accounting_monthly", "accounting_quarterly_yearly", "lowes_po_buildconnect", "cash_report_weekly", "draw_schedule_update", "start_house_database"]
   },
   {
     id: "construction_asst",
@@ -831,7 +831,7 @@ const INITIAL_PROCESSES = [
   },
   {
     id: "new_work_order",
-    name: "New Work Order Process",
+    name: "New Work Order Process (Legacy — October 2006, archived)",
     owner: "purchasing_mgr",
     date: "October 18, 2006",
     category: "Operations",
@@ -849,7 +849,7 @@ const INITIAL_PROCESSES = [
   },
   {
     id: "work_order_ap",
-    name: "Work Order Accounts Payable Process",
+    name: "Work Order Accounts Payable Process (Legacy — October 2006, archived)",
     owner: "purchasing_mgr",
     date: "October 19, 2006",
     category: "Financial",
@@ -1086,7 +1086,7 @@ const INITIAL_PROCESSES = [
   },
   {
     id: "permitting",
-    name: "Permitting Process",
+    name: "Permitting Process (Legacy — December 2004, archived)",
     owner: "doc",
     date: "December 30, 2004",
     category: "Preconstruction",
@@ -1276,6 +1276,216 @@ const INITIAL_PROCESSES = [
     ],
     participants: ["cfo", "acct_asst"]
   }
+,
+  {
+    id: "wo_entry_buildconnect",
+    name: "Work Order Entry in BuildConnect (SOP-PUR-01)",
+    owner: "purchasing_mgr",
+    date: "October 2026",
+    category: "Operations",
+    description: "Detailed procedure for entering labor work orders in the BuildConnect database through logged-in Chrome. Covers source document reading, job routing (including HOA/ROCVTA routing through Teresa), duplicate checking, vendor-specific rules (Johnston Waterproofing, HVAC, H&H Fence), payment period setup, submission via passcode, and post-save verification.",
+    steps: [
+      "Read the source estimate/invoice — extract vendor, verified job/routing, reference number, date, scope, quantities, rates, total, work site, schedule, and approval context",
+      "Apply routing first: HOA work approved through Teresa goes to ROCVTA; keep ROCVTA as database job and put actual full work address in description",
+      "In logged-in Chrome, check Work Order Tracking for the selected job — use All and include voided records to prevent duplicates",
+      "Open Jobs → correctly routed job → New Work Order in the BuildConnect frame",
+      "Set payment-period count FIRST — changing it reloads the form",
+      "Apply current vendor/scope rule: Johnston (409.0, separate priced scopes, blank general sqft); HVAC — 60%/30%/10% draw breakdown per WO 39974 precedent, recalculate dollar amounts from each new contract total, use WO 39974 draw descriptions, pricing based on equipment/register counts/system requirements NOT per-sqft, enter verified A/C sqft in WO field AND description (2,626 sqft applies ONLY to 11603 Royal Parkside); H&H HOA (940.0, Maintenance, ROCVTA); Synergy roofing (30%/50%/20% draws); Electrical Works COs (code 620); Reece plumbing fixtures (code 601, split valves/trims when requested)",
+      "Verify line amounts after blur, confirm sum matches contract total, percentages sum to 100%",
+      "Use authorized schedule — invoice/estimate date is NOT automatically the Start Date; leave completion/payment flags unset for new work",
+      "Submit using passcode-box Enter step within current authorization; keep passcode private",
+      "If white screen appears after submit — this is uncertain result, NOT proof of failure; do NOT retry immediately",
+      "Verify saved WO ID, routed job, vendor, reference, rows, total, and dates in Work Order Tracking",
+      "If verification inconclusive, stop and report uncertainty — never create a duplicate",
+      "Use proposal dates in Invoice Date fields for proposal-based orders; use invoice dates for invoices — Start and scheduled completion dates are separate",
+      "Calendar selections have sometimes failed to persist — if date does not apply, report requested vs saved date and preserve existing record",
+      "After verifying saved order, file original proposal/estimate/invoice in Public → matching job → Purchasing → vendor folder (create vendor folder if missing)"
+    ],
+    participants: ["purchasing_mgr", "superintendent", "doc"]
+  },
+  {
+    id: "lowes_po_buildconnect",
+    name: "Lowe's Receipt PO Entry and Handoff (SOP-PUR-03)",
+    owner: "acct_asst",
+    date: "October 26, 2026 (User-confirmed)",
+    category: "Financial",
+    description: "Confirmed procedure for entering job-specific Lowe's receipt purchase orders in BuildConnect, including CUSTOMER CODE matching, tax separation, Complete vs Received status distinction, Canon printing, Microsoft Teams Purchasing channel notification, and physical receipt handoff to Kenneth's Lowe's inbox.",
+    steps: [
+      "Obtain original readable receipt with CUSTOMER CODE, verified full job address, invoice/receipt number, purchase date, goods, quantities, net merchandise subtotal, tax, and total",
+      "In logged-in Chrome, check Purchase Order Tracking for exact job and Lowe's — use All, compare reference/date/amount to prevent duplicates",
+      "Select Jobs → correct job by CUSTOMER CODE → New Purchase Order",
+      "Select existing vendor Lowes Home Centers, Inc. and cost code 996 — LOWES & HOME DEPOT RECEIPTS",
+      "Set payment-row count before other fields (single receipt = one row at 100%); no sqft input required",
+      "Enter net merchandise amount SEPARATELY from tax — do not add tax twice or subtract discount twice; verify form recalculation after blur",
+      "Save actual invoice/receipt number and purchase date — use Invoice Update if needed; reopen saved record to verify persistence",
+      "Verify saved PO number, full job, vendor, reference/date, cost code, merchandise, tax, and total in Tracking",
+      "Mark Complete (NOT just Received/Rcvd — they are different statuses); if Complete is disabled, flag for authorized person",
+      "Print one copy of verified saved PO to office Canon (iR-ADV C5840 on MCH-DCFS01); check print preview first",
+      "Post notification in Purchasing channel in Microsoft Teams (NOT Kenneth's direct chat) — include PO number, job, receipt reference, print outcome, and Complete status",
+      "Office person must staple printed PO to original receipt and place in Kenneth's office Lowe's inbox",
+      "Final report: saved PO number, job, receipt number/date, total, cost code, Complete/Received status, print outcome, Teams notification, and outstanding physical handoff",
+      "File verified PO and receipt copy in Public → matching job → Purchasing → Lowes folder"
+    ],
+    participants: ["acct_asst", "purchasing_mgr"]
+  },
+  {
+    id: "material_po_entry",
+    name: "Material Purchase Order Entry (SOP-PUR-02)",
+    owner: "purchasing_mgr",
+    date: "October 2026 (Draft)",
+    category: "Operations",
+    description: "Procedure for entering material purchase orders in BuildConnect from approved quotes, proposals, or invoices. Covers selection/spec/quantity review against budget, supplier dispatch with acknowledgment, proper filing, and draw splitting. Owner and approval boundary pending confirmation.",
+    steps: [
+      "Obtain approved quote, proposal, or invoice — verify vendor, job address, items, selections, specifications, quantities, and pricing against the approved scope/budget",
+      "Verify job address and match to correct BuildConnect job",
+      "Check Purchase Order Tracking for duplicates before entry",
+      "Review selections, specifications, and quantities against the approved budget and takeoff — flag discrepancies before proceeding",
+      "Select Jobs → correct job → New Purchase Order",
+      "Select vendor and appropriate cost code for the material type (e.g. 601 for plumbing fixtures, 996 for Lowe's/HD)",
+      "Set payment rows — split into separate draws when scope requires it (e.g. Reece valves vs trims); use single draw for standalone quotes",
+      "Enter amounts — separate merchandise from tax where applicable; verify form recalculation after blur",
+      "Enter invoice/proposal number and actual date; use proposal date for proposal-based orders, invoice date for invoices",
+      "Submit and verify saved PO in Tracking — confirm PO number, job, vendor, reference, amounts, and cost code",
+      "For supplier-dispatched POs: prepare verified proposal/PO for email to supplier contact, CC Maria (or designated construction lead), confirm supplier acknowledgment",
+      "Mark Complete when authorized — note: Complete is separate from Received/Pay/Paid In Full",
+      "File original quote/proposal/invoice in Public → matching job → Purchasing → accepted-bid or work-order folder → vendor folder (create vendor folder if missing)",
+      "NOTE: Early lumber/material coverage may require expedited PO entry — about-ten-minute urgent-ready expectation is job-specific, not a universal SLA",
+      "NOTE: Material PO procedure owner and backup to be confirmed; approval boundary for spending authority to be established"
+    ],
+    participants: ["purchasing_mgr", "superintendent", "acct_asst"]
+  },
+  {
+    id: "cash_report_weekly",
+    name: "Weekly Cash Flow Statement Rollover (SOP-FIN-01)",
+    owner: "acct_asst",
+    date: "October 2026",
+    category: "Financial",
+    description: "Procedure for rolling the 2026 Cash Flow Statement forward each week. Involves copying Week tabs in Excel, rolling dates and formulas forward, clearing copied main-report details while PRESERVING all Support-tab transactions. Uses the Python helper script for preview, apply, and verify steps. Works in Brittany's active OneDrive file.",
+    steps: [
+      "Fetch the active 2026 Cash Flow Statement.xlsx from OneDrive — record drive/item identity, eTag/version, and modified time; retain original backup",
+      "Identify the next week number from the latest main tab (Week NN format)",
+      "If new tabs are missing, copy prior main/support tabs using native Excel worksheet-copy tools and rename them",
+      "CRITICAL: Preserve ALL Support-tab transactions, dates, amounts, notes, headings, and formatting — never clear Support entries without explicit user instruction",
+      "Run Python helper to generate preview: plan command with input file, week number, and plan output path",
+      "Review cleared_cells coordinates and prior values, preserved differing values, formula changes, dates, and bank checks",
+      "Clear copied constants ONLY on new MAIN tab: rows 11-18, 21-29, 32-39, and 42-49, account columns B through grand total",
+      "Preserve column A, formulas, total columns, and MCH Frost formula column",
+      "Roll formulas: main sheet references to N-2 become N-1; Support N-1 becomes N; Support N-2 becomes N-1",
+      "Update A3 to 'Reporting Week #N' and A4 to new Monday-Sunday date range (prior + 7 days)",
+      "Compare account headers against prior complete week — stop if banks are missing or moved",
+      "Apply changes via coauthoring or full-file upload fallback; verify eTag before upload",
+      "Verify recalculation, opening balances against prior closing balances BY BANK ACCOUNT, Support entries preserved, and saved state",
+      "Report: week/date range, main details cleared, Support entries preserved, live-file verification status"
+    ],
+    participants: ["acct_asst"]
+  },
+  {
+    id: "draw_schedule_update",
+    name: "Draw Schedule Update and Bank Request (SOP-FIN-02)",
+    owner: "acct_asst",
+    date: "October 2026",
+    category: "Financial",
+    description: "Procedure for updating McVaugh home loan draw schedule Excel workbooks from BuildConnect available-for-draw items and preparing an Outlook draw-request draft. Covers workbook location on M: drive, BuildConnect reconciliation, percentage calculations, and bank email preparation with supporting invoices.",
+    steps: [
+      "Identify property and requested scope (update only vs update + bank request)",
+      "Open the authoritative Excel workbook from M:/Accounting/DRAW SCHEDULES/<property address>/",
+      "Read all existing draw entries, formulas, budget percentages, dates, and summary balances; save working copy and record original hash",
+      "Open matching BuildConnect project → Accounting → Draw Summary → Draw Schedule",
+      "Read checked Available for Draw items and Current Avail percentages — use Current Avail, not full remaining allocation",
+      "Reconcile workbook and database — if discrepancy found, show conflicting values and STOP for user direction",
+      "Enter available percentages in next draw column using numeric fractions (0.50% = 0.005)",
+      "Recalculate and verify: new draw percentage, amount, remaining allocations, funded balance, availability after draw",
+      "Save to authoritative path after verifying original hash unchanged; keep backup available",
+      "If email requested: search Outlook for same property's prior draw request to recover To/CC, tone, subject, and signature",
+      "Draft email with property, draw number, total requested, included phases/percentages",
+      "Attach updated Excel and supporting invoices; verify recipients, body, and attachments",
+      "Save as Outlook draft — do NOT send; user reviews and sends",
+      "Report: workbook save location, draw amount, draft link, attachments, and unsent status"
+    ],
+    participants: ["acct_asst", "cfo"]
+  },
+  {
+    id: "start_house_database",
+    name: "Start House in BuildConnect Database",
+    owner: "acct_asst",
+    date: "October 2026",
+    category: "Operations",
+    description: "Procedure for starting new MCH houses in the MIGVA/BuildConnect database, including financial loan amounts (building cost, land loan, construction loan, total loan) and creating Builders Capital Template #4 draw schedules from Excel files. Requires explicit confirmation before submitting financial information.",
+    steps: [
+      "Get explicit confirmation identifying: MIGVA/BuildConnect as destination, each property address/job ID, land loan amount, construction/building budget, total loan amount, and whether Builders Capital template #4 draw schedule will be created",
+      "Navigate to Jobs in BuildConnect and find or create the job entry",
+      "Set financial fields: Building Cost (estimated), Construction Loan Amount, Land Loan Amount, Total Loan Amount",
+      "Verify the draw schedule header shows correct amounts: LOAN AMOUNT (LESS LOT) = construction budget, LOT = land loan, TOTAL LOAN = construction + land",
+      "Open Draw Schedule page → select Builders Capital bank → Template #4 → Use Template",
+      "Wait until 48 draw rows are present",
+      "Calculate % OF DRAW for each row: line_amount / construction_budget * 100 using 6 decimal places",
+      "Adjust percentages so all 48 sum to exactly 100.000000 while each row's calculated dollar matches Excel",
+      "Click CALCULATE and verify all 48 $ PER DRAW values match Excel",
+      "Stop before submitting if any row differs by more than one cent or total percentage is not 100.000",
+      "Click Update Information to save",
+      "Verify: correct address/job ID, financial header, 48 rows, 100.000 total, draw total = construction budget, every line matches Excel"
+    ],
+    participants: ["acct_asst"]
+  }
+,
+  {
+    id: "gl_insurance_update",
+    name: "Vendor GL Insurance Certificate Renewal Process",
+    owner: "doc",
+    date: "October 2026",
+    category: "Operations",
+    description: "Procedure for updating vendor/subcontractor general liability insurance records when renewal certificates are received. Covers certificate verification, Excel register update (L: drive), PDF filing with archive of superseded cert, BuildConnect contact GL date update, and handoff to Kenneth for QuickBooks update via Teams. Authoritative procedure doc is in Maria Leaving folder.",
+    steps: [
+      "Receive renewed insurance certificate PDF from vendor",
+      "Read certificate as evidence — verify insured legal/business name, certificate holder, GL effective and expiration dates; do NOT mistake issue date or another policy's expiration",
+      "Match existing vendor across the register, certificate folder, and BuildConnect database",
+      "Open the GL Insurance register: L:/COMPANY INFORMATION/MCH/PURCHASING/Vendor.Subcontractors - GL Insurance/Copy of GL Insurance and workers comp - current.xls",
+      "Inspect all register tabs to locate the vendor: GL INSURANCE, OLD-GL INSURANCE, and NOT ACTIVE GL INSURANCE",
+      "Preserve a backup before editing; verify the fresh target cell",
+      "Update ONLY the applicable expiration date — preserve contacts, formulas, formatting, hidden rows, and other vendors; keep legacy .xls format",
+      "Save register, then independently reread the saved file to verify vendor identity, date, and that unrelated values remain unchanged",
+      "File the supplied PDF in the vendor's certificate folder: L:/COMPANY INFORMATION/MCH/PURCHASING/Vendor.Subcontractors - GL Insurance/Certificates of Liability Insurance/<vendor>",
+      "Name the file clearly with vendor and expiration, e.g. 'FirePro Tech - GL expires 2027-11-01.pdf'",
+      "Move the superseded certificate into the vendor's Archive folder without overwriting existing archives",
+      "In logged-in Chrome, navigate BuildConnect Contacts to the correct existing subcontractor (do NOT create a duplicate)",
+      "In the editable record frame, update only the GL expiration field (liabilityexpdate)",
+      "Press Enter as procedure requires — blue text is UI success signal but not sufficient persistence evidence",
+      "If Enter errors with 'reading elements' or 'reading form', stop; use browser Back then Forward to reload the helper, then recheck before retrying",
+      "Independently reopen the same contact after saving and verify the persisted GL date",
+      "Compare other fields against pre-edit snapshot (especially TaxID/SSN) — report only whether unchanged; if any differ, stop for human resolution",
+      "Send renewed certificate copy to Kenneth Chapman via Teams direct chat — include vendor name, GL expiration, and confirmation of register/database updates; request QuickBooks update",
+      "Do NOT claim QuickBooks itself was updated — Kenneth handles that separately",
+      "Save and close the Excel insurance workbook after verification — handle any save prompt by saving authorized changes",
+      "Final report: vendor, new expiration, saved register verification, database verification, certificate filing/archive, Teams handoff status, and workbook closed confirmation"
+    ],
+    participants: ["doc", "acct_asst", "cfo"]
+  }
+,
+  {
+    id: "permitting_current",
+    name: "Permitting Process — iPermits / ProjectDox (Current)",
+    owner: "superintendent",
+    date: "November 2026",
+    category: "Preconstruction",
+    description: "Current permitting workflow using iPermits for permit applications, payments, and inspection scheduling, and ProjectDox for document submissions and revision cycles. Replaces the legacy 2004 permitting process. Owned by Lonnie as construction/permitting lead.",
+    steps: [
+      "Review approved plans and confirm all required documents are ready for submission",
+      "Log into iPermits portal for the applicable jurisdiction (Leander, Cedar Park, etc.)",
+      "Create new permit application — enter property address, lot number, permit type, and contractor information",
+      "Upload required documents: approved plans, engineering reports, soils reports, energy compliance",
+      "Pay permit application fees through iPermits payment system",
+      "Track application status in iPermits — monitor for reviewer comments or hold notices",
+      "Log into ProjectDox for document review cycles — respond to reviewer comments, upload revised documents",
+      "Track ProjectDox comment threads and ensure all items are addressed before resubmission",
+      "Schedule required inspections through iPermits as construction phases complete",
+      "Maintain per-lot permit inventory: track which permits are applied, approved, paid, and which inspections are scheduled/completed",
+      "Coordinate with Maria (through Nov 6) on email continuity for any in-progress permit communications",
+      "If permit is denied or requires revision, coordinate with architect/engineer for plan changes and resubmit",
+      "File approved permits and inspection results in Public → job → Permits folder",
+      "Update construction status and start packet when permit is approved and ready for construction release"
+    ],
+    participants: ["superintendent", "doc", "project_mgr"]
+  }
 ];
 
 const DEPARTMENTS = [
@@ -1295,7 +1505,8 @@ const CURRENT_TEAM = [
   {
     id: "maria",
     name: "Maria Abney",
-    title: "Senior Project Manager",
+    title: "Senior Project Manager (Last day: Nov 6, 2026 — transitioning to Lonnie)",
+    departing: "2026-11-06",
     department: "Construction",
     color: "#059669",
     email: "mabney@mcvaugh.com",
@@ -1365,6 +1576,7 @@ const CURRENT_TEAM = [
       "Work allocation: approximately 50% Field / 50% Office"
     ,
       "Leander Architectural Plan review (how-to doc in maria leaving folder)",
+      "Vendor GL insurance certificate renewal process — verify certificates, update register and BuildConnect, file PDFs, handoff to Kenneth (procedure doc in maria leaving folder)",
       "[N/A] Reviews invoices on Friday morning, initials and notes backcharges",
       "[N/A] Reviews database inbox daily for approved change orders",
       "[N/A] Logs change orders into change order budget log",
@@ -1497,6 +1709,15 @@ const CURRENT_TEAM = [
       "(Sales) Reviews status report and distributes contract package",
       "Handles all permitting coordination (impact fees, rescheck, permit tracking)",
       "Manages permit card filing and permit rack"
+    ,
+      "GL insurance certificate renewal processing — update register, file PDFs, update BuildConnect, send to Kenneth via Teams (trained from Maria leaving procedure)",
+      "Subcontractor packets — assembles required documents for new subcontractors in start packet process",
+      "Monitors purchasing email inbox for incoming invoices, bids, and vendor communications"
+    ,
+      "(Purchasing) Maintain W-9 on every vendor",
+      "(Purchasing) Maintain contractors liability insurance and keep up to date on all required forms"
+    ,
+      "(Purchasing) Establish and maintain Purchasing Manual"
     ]
   },
   {
@@ -1610,6 +1831,13 @@ const CURRENT_TEAM = [
       "LOWES PROCESS: Move PO from emailed POs to done folder after entering",
       "LOWES PROCESS: Pay Lowes bill online - largest amount company first, one payment per day",
       "LOWES PROCESS: Mark Purchase Orders Paid in database"
+    ,
+      "Weekly cash flow statement rollover (SOP-FIN-01) — roll dates/formulas forward, clear main tab, preserve Support transactions",
+      "Draw schedule updates from BuildConnect available-for-draw items (SOP-FIN-02)",
+      "Prepare Outlook draw-request drafts with updated Excel and supporting invoices (SOP-FIN-02)",
+      "Start new houses in BuildConnect database — financial fields and Builders Capital Template #4 draw schedules"
+    ,
+      "Executes vendor GL insurance certificate renewal process via automated skill — updates register, files PDFs, updates BuildConnect, sends handoff to Kenneth"
     ]
   },
   {
@@ -1644,10 +1872,7 @@ const CURRENT_TEAM = [
       "Establish lead times for any purchase orders or work orders not published at start of home",
       "Establish system to ask for and monitor vendor rebate and/or Co-Op advertising",
       "Attend CB/USA meetings",
-      "Develop new product or construction processes for presentation to management committee",
-      "Enhance Purchase Order system working towards goal of paperless process including invoices",
-      "Establish and maintain Purchasing Manual",
-      "Provide Pre-Contract Option Pricing when requested by Sales within 24 hours",
+                        "Provide Pre-Contract Option Pricing when requested by Sales within 24 hours",
       "Provide Change Order Pricing when requested by Sales or Buyer within 24 hours"
     ]
   },
@@ -1698,8 +1923,73 @@ const CURRENT_TEAM = [
       "AS NEEDED: Misc. Insurance Items"
     ,
       "Reviews invoices weekly and verifies backcharges were entered"
+    ,
+      "Updates vendor GL insurance expiration dates in QuickBooks after receiving renewed certificate from Maria/Brittany via Teams"
     ]
-  }
+  },
+  {
+    id: "lonnie",
+    name: "Lonnie [Update Last Name]",
+    title: "Construction / Permitting Lead",
+    email: "update@mcvaugh.com",
+    color: "#06B6D4",
+    absorbs: ["superintendent", "doc", "project_mgr", "construction_asst"],
+    responsibilities: [
+      "Takes over as primary construction team lead from Maria (effective November 2026)",
+      "Handles all permitting coordination via iPermits — application, payment, inspection scheduling",
+      "Manages ProjectDox document submissions, comments, and revision cycles",
+      "Maintains per-lot permit inventory and status tracking",
+      "Assigns and manages all construction projects",
+      "Acts as superintendent on all active job sites",
+      "Reviews blueprints, specs, upgrade sheets, and scheduling",
+      "Conducts pre-construction check list and Q&A sessions with clients",
+      "Manages all subcontractor relationships and work orders",
+      "Reviews bid/quotes against budget, forwards to Jim if over budget",
+      "Approves or disapproves work orders",
+      "Notes rework items requiring back charges",
+      "Contacts trades that caused repairs, negotiates pricing",
+      "Clicks complete on backcharges once requirements met",
+      "Approves/denies change order requests with delay days noted",
+      "Clicks back charge approval in database",
+      "Modifies database budget when bid/quote approved",
+      "Prepares budget and specs",
+      "Sends budget to Jim for approval",
+      "Redlines additional items on plans if necessary",
+      "Marks second check set with redline items for reference",
+      "Files redline plan rack with labeled tab",
+      "Returns redlined plans to architect for changes",
+      "Completes final walk through with homebuyer",
+      "Updates construction status with start date",
+      "Verifies HOA approval prior to start of home",
+      "Conducts redline meeting with buyer, reviews specifics, has plans signed",
+      "Reviews budget weekly as processing accounts payable",
+      "Notifies Sales/Jim when change order is 100% complete",
+      "Leander Architectural Plan review (how-to doc in maria leaving folder)",
+      "Attend CBUSA national meetings (intended assignment, pending introduction and eligibility verification)",
+      "Inspect jobsites regularly; identify deficiencies, safety hazards, incomplete work, and schedule risks",
+      "Cross-check plans and specifications against actual site conditions; resolve trade conflicts and sequencing issues",
+      "Coordinate jobsite security and orderly site conditions",
+      "Document subcontractor performance and recommend corrective action or replacement when necessary",
+      "Complete pre-turnover inspections, manage punch lists, ensure homes meet company standards before delivery",
+      "Develop, maintain, and update schedules and milestones for assigned homes (trade work, inspections, material deliveries)",
+      "Identify delays promptly, document scheduling variances, implement approved recovery measures while controlling carrying costs",
+      "Coordinate construction starts and upcoming project requirements with Sales, Design, Purchasing, and Accounting",
+      "Participate in weekly construction and pipeline meetings; keep project status current in company systems",
+      "Assist with takeoffs, estimates, home-specific specifications, scopes of work, and construction budget preparation",
+      "Verify materials received against ordered quantities, specifications, and budgets; monitor waste and resolve discrepancies",
+      "Maintain vendor pricing, W-9s, required insurance and license documents, purchasing data, and performance files",
+      "Pursue available discounts, rebates, and purchasing-program benefits; coordinate invoice discrepancies with Accounting",
+      "Coordinate option, upgrade, and change-order pricing with Sales and Design, targeting 24-hour response",
+      "Monitor committed and actual costs against approved project budgets and the established 2% variance target",
+      "Flag anticipated overruns or scope changes promptly; obtain required approval before extra work or cost commitments",
+      "Support projected gross profit through purchasing discipline, scheduling efficiency, and control of avoidable rework",
+      "Confirm required permits, insurance, licenses, and approvals are in place before applicable work starts",
+      "Ensure homeowner-requested changes are priced, documented, approved, and incorporated into plans/budgets before execution",
+      "Communicate project progress, risks, cost variances, and proposed solutions to management and relevant departments",
+      "Document deficiencies, incidents, subcontractor problems, and corrective actions",
+      "Work allocation: approximately 50% Field / 50% Office"
+    ]
+  },
 ];
 
 const CURRENT_DEPARTMENTS = [
@@ -1712,6 +2002,30 @@ const CURRENT_DEPARTMENTS = [
   { id: "IT / Finance", color: "#0891B2", icon: "💻" },
   { id: "Finance", color: "#2563EB", icon: "💰" }
     ];
+
+const VENDOR_RULES = [
+  { vendor: "Johnston Waterproofing LLC", code: "409.0", description: "Membrane/Built-Up Roofing", routing: "Verified individual job", rules: "Separate priced scopes; general sqft/rate blank; scope area/rate in descriptions; preserve package pricing" },
+  { vendor: "Autumn HVAC", code: "610", description: "HVAC System", routing: "Verified job", rules: "Draw breakdown: 60% / 30% / 10% (per WO 39974 precedent); include verified A/C sqft in WO and description; pricing based on equipment, register counts, and system requirements — NOT per sqft; per-SF estimate for budgeting only" },
+  { vendor: "H & H Fence (HOA)", code: "940.0", description: "Maintenance", routing: "ROCVTA; physical site in description", rules: "One 100% row for single priced scope; no inferred sqft; HOA fence-maintenance scope only; file source in community Purchasing → ROCV H & H Fence" },
+  { vendor: "Synergy Roofing", code: "400", description: "Roofing", routing: "Verified individual job", rules: "Draw breakdown: 30% Dry-in / 50% Down Payment-Tile Delivery / 20% Tile Install; include proposal roof area and proposal date" },
+  { vendor: "Electrical Works", code: "620", description: "Electrical System", routing: "Verified individual job", rules: "Used for construction change orders; user-directed code 620" },
+  { vendor: "Reece (Plumbing Fixtures)", code: "601", description: "Plumbing Fixtures", routing: "Verified individual job", rules: "Split valves and trims into separate draws when requested; single draw for standalone quotes (e.g. water heater); PO emailed to vendor with Maria copied" },
+  { vendor: "Lowes Home Centers", code: "996 / 996.0", description: "LOWES & HOME DEPOT RECEIPTS", routing: "CUSTOMER CODE → verified job", rules: "Separate merchandise from tax; mark Complete (not Received); Canon print; Teams Purchasing channel; Kenneth Lowes inbox" },
+  { vendor: "All HOA Work", code: "Trade-specific", description: "Trade-specific", routing: "ROCVTA; full physical site in description", rules: "Approved through Teresa; do NOT charge individual house or use bill-to as work site" },
+];
+
+const COMPLETED_RECORDS = [
+  { id: "WO 40184", vendor: "Johnston Waterproofing", job: "11603 Royal Parkside", amount: 1935.75, code: "409", notes: "4 rows: waterproofing, door pans, crickets" },
+  { id: "WO 40186", vendor: "H & H Fence", job: "ROCVTA", amount: 3025.00, code: "940", notes: "Invoice 7272; physical site 11507 Royal Ivory Crossing; requested start 10/23 vs saved 10/27; authorized correction and date-policy review open" },
+  { id: "WO 40187", vendor: "M. Reeves", job: "11602 Royal Parkside", amount: 110.00, code: "", notes: "Invoice 658140" },
+  { id: "WO 40188", vendor: "Autumn HVAC", job: "11603 Royal Parkside", amount: 16438.37, code: "610", notes: "60/30/10 draws; 2,626 A/C sq ft" },
+  { id: "WO 40189", vendor: "Synergy", job: "11603 Royal Parkside", amount: 23991.24, code: "400", notes: "30/50/20 draws; 2,542 roof sq ft; proposal date Oct 20, 2026" },
+  { id: "WO 40190", vendor: "Electrical Works CO2", job: "11602 Royal Parkside", amount: 1135.00, code: "620", notes: "Invoice 22923" },
+  { id: "WO 40191", vendor: "Electrical Works CO3", job: "11602 Royal Parkside", amount: 255.00, code: "620", notes: "Invoice 23263" },
+  { id: "PO 21131", vendor: "Lowes", job: "11602 Royal Parkside", amount: 82.27, code: "996", notes: "Receipt 41867; sent to Canon, physical output/handoff unverified; Complete disabled" },
+  { id: "PO 21133", vendor: "Reece", job: "11603 Royal Parkside", amount: 8791.40, code: "601", notes: "Valves $534.16 + trims $8,257.24; email sent" },
+  { id: "PO 21134", vendor: "Reece", job: "11603 Royal Parkside", amount: 1493.65, code: "601", notes: "Quote S124892371-0001; PO emailed to vendor with Maria cc" },
+];
 
 // ─── Main App ────────────────────────────────────────
 function MCHOpsHub() {
@@ -1728,7 +2042,8 @@ function MCHOpsHub() {
   const [showOrgChart, setShowOrgChart] = useState(false);
   const [orgMode, setOrgMode] = useState("current");
   const [showROCC, setShowROCC] = useState(false);
-  const [showNA, setShowNA] = useState(false); // "current" or "full"
+  const [showNA, setShowNA] = useState(false);
+  const [showRolesCovered, setShowRolesCovered] = useState(false); // "current" or "full"
   const [currentTeam, setCurrentTeam] = useState(CURRENT_TEAM);
   const [selectedCurrentMember, setSelectedCurrentMember] = useState(null);
   const [editingCurrentMember, setEditingCurrentMember] = useState(null);
@@ -2072,11 +2387,13 @@ function DashboardView({ roles, processes, onSelectRole, onSelectProcess }) {
           { label: "Departments", value: DEPARTMENTS.length, accent: "#10B981" },
           { label: "Total Process Steps", value: processes.reduce((a, p) => a + p.steps.length, 0), accent: "#8B5CF6" }
     ].map((stat, i) => (
-          <div key={i} style={{
+          <div key={i} onClick={stat.onClick || null} style={{
             background: "rgba(30, 41, 59, 0.6)",
             border: "1px solid rgba(148, 163, 184, 0.08)",
             borderRadius: 14, padding: "20px 24px",
             borderLeft: `3px solid ${stat.accent}`,
+            cursor: stat.clickable ? "pointer" : "default",
+            transition: "all 0.15s",
           }}>
             <div style={{ fontSize: 32, fontWeight: 700, color: stat.accent, fontFamily: "'Space Mono', monospace" }}>
               {stat.value}
@@ -2838,7 +3155,71 @@ function ProcessDetail({ process, roles, onBack, onSelectRole, showROCC, showNA 
             })}
           </div>
         </div>
-      </div>
+      
+      {/* Vendor Rules - show for WO and PO SOPs */}
+      {(process.id === "wo_entry_buildconnect" || process.id === "lowes_po_buildconnect" || process.id === "material_po_entry" || process.id === "work_order_ap" || process.id === "new_work_order") && (
+        <div style={{
+          background: "rgba(30, 41, 59, 0.6)", borderRadius: 14, padding: 24, marginTop: 24,
+          border: "1px solid rgba(148, 163, 184, 0.08)",
+        }}>
+          <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 600, color: "#F59E0B" }}>
+            Vendor-Specific Rules
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {VENDOR_RULES.map(function(rule, i) {
+              return React.createElement("div", {
+                key: i,
+                style: {
+                  background: "rgba(15, 23, 42, 0.5)", borderRadius: 10, padding: 14,
+                  borderLeft: "3px solid #F59E0B",
+                }
+              },
+                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 6 } },
+                  React.createElement("span", { style: { fontSize: 13, fontWeight: 600, color: "#F8FAFC" } }, rule.vendor),
+                  React.createElement("span", { style: { fontSize: 11, color: "#F59E0B", fontFamily: "'Space Mono', monospace" } }, "Code: " + rule.code)
+                ),
+                React.createElement("div", { style: { fontSize: 11, color: "#94A3B8", marginBottom: 4 } }, rule.description),
+                React.createElement("div", { style: { fontSize: 11, color: "#64748B" } }, rule.rules)
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {/* Completed Records - show for WO and PO SOPs */}
+      {(process.id === "wo_entry_buildconnect" || process.id === "lowes_po_buildconnect" || process.id === "material_po_entry") && (
+        <div style={{
+          background: "rgba(30, 41, 59, 0.6)", borderRadius: 14, padding: 24, marginTop: 24,
+          border: "1px solid rgba(148, 163, 184, 0.08)",
+        }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600, color: "#8B5CF6" }}>
+            Historical Record Register
+          </h3>
+          <p style={{ margin: "0 0 16px", fontSize: 11, color: "#EF4444" }}>
+            Historical entry results from this chat — not a current payment/status audit or new authorization
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {COMPLETED_RECORDS.map(function(rec, i) {
+              return React.createElement("div", {
+                key: i,
+                style: {
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  background: "rgba(15, 23, 42, 0.5)", borderRadius: 8, padding: "10px 14px",
+                  borderLeft: "3px solid #8B5CF6",
+                }
+              },
+                React.createElement("div", { style: { flex: 1 } },
+                  React.createElement("span", { style: { fontSize: 12, fontWeight: 600, color: "#F8FAFC" } }, rec.id),
+                  React.createElement("span", { style: { fontSize: 11, color: "#64748B", marginLeft: 8 } }, rec.vendor + " — " + rec.job),
+                  React.createElement("div", { style: { fontSize: 10, color: "#475569", marginTop: 2 } }, rec.notes)
+                ),
+                React.createElement("span", { style: { fontSize: 12, fontWeight: 600, color: "#10B981", fontFamily: "'Space Mono', monospace", flexShrink: 0 } }, "$" + rec.amount.toLocaleString())
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+    </div>
     </div>
   );
 }
@@ -2926,8 +3307,9 @@ function MatrixView({ roles, processes, onSelectRole, onSelectProcess }) {
 }
 
 // ─── Current Dashboard ───────────────────────────────
-function CurrentDashboard({ team, processes, roles, onSelectMember, onSelectProcess }) {
-  const totalResponsibilities = team.reduce((a, m) => a + m.responsibilities.length, 0);
+function CurrentDashboard({ team, processes, roles, onSelectMember, onSelectProcess, onShowRolesCovered, showNA, showROCC }) {
+  const filterResps = (resps) => resps.filter(r => (showROCC || !r.startsWith("[ROCC]")) && (showNA || !r.startsWith("[N/A]")));
+  const totalResponsibilities = team.reduce((a, m) => a + filterResps(m.responsibilities).length, 0);
   const totalAbsorbed = team.reduce((a, m) => a + m.absorbs.length, 0);
 
   return (
@@ -2936,16 +3318,18 @@ function CurrentDashboard({ team, processes, roles, onSelectMember, onSelectProc
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 32 }}>
         {[
           { label: "Current Employees", value: team.length, accent: "#10B981" },
-          { label: "Original Roles Covered", value: totalAbsorbed, accent: "#3B82F6" },
+          { label: "Original Roles Covered", value: totalAbsorbed, accent: "#3B82F6", clickable: true, onClick: onShowRolesCovered },
           { label: "Total Responsibilities", value: totalResponsibilities, accent: "#F59E0B" },
           { label: "SOPs Active", value: processes.length, accent: "#8B5CF6" },
           { label: "Avg Roles per Person", value: (totalAbsorbed / team.length).toFixed(1), accent: "#EC4899" }
     ].map((stat, i) => (
-          <div key={i} style={{
+          <div key={i} onClick={stat.onClick || null} style={{
             background: "rgba(30, 41, 59, 0.6)",
             border: "1px solid rgba(148, 163, 184, 0.08)",
             borderRadius: 14, padding: "20px 24px",
             borderLeft: `3px solid ${stat.accent}`,
+            cursor: stat.clickable ? "pointer" : "default",
+            transition: "all 0.15s",
           }}>
             <div style={{ fontSize: 32, fontWeight: 700, color: stat.accent, fontFamily: "'Space Mono', monospace" }}>
               {stat.value}
@@ -2969,8 +3353,9 @@ function CurrentDashboard({ team, processes, roles, onSelectMember, onSelectProc
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {team.sort((a, b) => b.responsibilities.length - a.responsibilities.length).map(member => {
-            const maxResp = Math.max(...team.map(m => m.responsibilities.length));
-            const pct = (member.responsibilities.length / maxResp) * 100;
+            const maxResp = Math.max(...team.map(m => filterResps(m.responsibilities).length));
+            const filteredCount = filterResps(member.responsibilities).length;
+            const pct = (filteredCount / maxResp) * 100;
             return (
               <button
                 key={member.id}
@@ -3000,7 +3385,7 @@ function CurrentDashboard({ team, processes, roles, onSelectMember, onSelectProc
                       <span style={{ fontSize: 12, color: "#64748B", marginLeft: 8 }}>{member.title}</span>
                     </div>
                     <div style={{ fontSize: 12, color: "#94A3B8", flexShrink: 0 }}>
-                      {member.responsibilities.length} tasks · {member.absorbs.length} roles
+                      {filteredCount} tasks · {member.absorbs.length} roles
                     </div>
                   </div>
                   <div style={{ height: 6, background: "rgba(148, 163, 184, 0.08)", borderRadius: 3, overflow: "hidden" }}>
@@ -3645,7 +4030,72 @@ function CurrentOrgChart({ team, onSelectMember }) {
           );
         })}
       </div>
-    </div>
+    
+        {/* ═══ ROLES COVERED MODAL ═══ */}
+        {showRolesCovered && (
+          <div style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.7)", zIndex: 1000,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20,
+          }} onClick={() => setShowRolesCovered(false)}>
+            <div style={{
+              background: "#1E293B", borderRadius: 16, padding: 32,
+              maxWidth: 700, width: "100%", maxHeight: "80vh", overflowY: "auto",
+              border: "1px solid rgba(148, 163, 184, 0.15)",
+            }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#F8FAFC" }}>
+                  Original Roles Covered by Current Team
+                </h2>
+                <button onClick={() => setShowRolesCovered(false)} style={{
+                  background: "none", border: "none", color: "#94A3B8", fontSize: 20, cursor: "pointer",
+                }}>x</button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {currentTeam.map(member => (
+                  <div key={member.id} style={{
+                    background: "rgba(15, 23, 42, 0.5)", borderRadius: 10, padding: 16,
+                    borderLeft: "3px solid " + member.color,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 8,
+                        background: member.color + "20", border: "2px solid " + member.color,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 12, fontWeight: 700, color: member.color,
+                      }}>
+                        {(member.name || member.title).split(" ").map(function(w) { return w[0]; }).join("").slice(0, 2)}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#F8FAFC" }}>{member.name}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{member.title}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {member.absorbs.map(function(roleId) {
+                        var role = roles.find(function(r) { return r.id === roleId; });
+                        return React.createElement("span", {
+                          key: roleId,
+                          style: {
+                            padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 500,
+                            background: "rgba(59, 130, 246, 0.15)", color: "#60A5FA",
+                            border: "1px solid rgba(59, 130, 246, 0.2)",
+                          }
+                        }, role ? role.title : roleId);
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 20, padding: "12px 16px", background: "rgba(15, 23, 42, 0.5)", borderRadius: 10, fontSize: 12, color: "#94A3B8" }}>
+                {currentTeam.length} employees covering {currentTeam.reduce(function(a, m) { return a + m.absorbs.length; }, 0)} original roles from the full {roles.length}-position org chart
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
   );
 }
 

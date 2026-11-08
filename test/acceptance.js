@@ -138,7 +138,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   });
   await check('succession pass: meetings stored with provenance, step reviews, flows, job status, handover sorted no-backup first, agenda', async () => {
     const s = (await call('GET', '/api/state')).body;
-    const m = s.documents.filter(d => d.kind === 'meeting'); assert.equal(m.length, 5); assert.ok(m.every(d => d.meeting_date && JSON.parse(d.attendees).length >= 2 && d.source));
+    const m = s.documents.filter(d => d.kind === 'meeting'); assert.equal(m.length, 6); assert.ok(m.every(d => d.meeting_date && JSON.parse(d.attendees).length >= 2 && d.source));
     const wo = s.tasks.find(t => t.id === 'hub-work_order_ap'); const rev = JSON.parse(wo.step_review); assert.equal(rev.length, 10); assert.ok(rev.every(r => r.verdict !== 'match' || r.cite)); assert.match(wo.verification_result, /Reconciled against meetings/); assert.match(wo.missing_info, /Not mentioned/); assert.ok(JSON.parse(wo.flow).nodes.length > 5);
     assert.ok(s.tasks.find(t => t.id === 'tr-leander-arc-review' && t.proposed === 0 && t.backup_id === 'teresa'));
     const h = s.homes.find(h => h.address === '11603 Royal Parkside Place'); assert.match(h.stage, /Framing/);
@@ -163,7 +163,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   });
   await check('meeting 3 applied: third transcript, merged step reviews, supersedes links, 11607 active, new handover item', async () => {
     const s = (await call('GET', '/api/state')).body;
-    assert.equal(s.documents.filter(d => d.kind === 'meeting').length, 5);
+    assert.equal(s.documents.filter(d => d.kind === 'meeting').length, 6);
     const co = s.tasks.find(t => t.id === 'hub-change_order_budget'); const rows = JSON.parse(co.step_review); assert.ok(rows.some(r => String(r.n) === '2–3' && r.verdict === 'no_longer' && /M3/.test(r.cite))); assert.ok(!rows.some(r => String(r.n) === '2'), 'earlier per-step rows replaced by the later finding'); assert.match(co.verification_result, /2026-10-20 call/);
     const tco = s.tasks.find(t => t.id === 'tr-change-orders'); assert.deepEqual(JSON.parse(tco.supersedes), ['hub-change_order_request', 'hub-change_order_budget']);
     assert.ok(JSON.parse(s.tasks.find(t => t.id === 'tr-permit-per-address').supersedes).includes('hub-permitting'));
@@ -868,6 +868,28 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.match(po.steps, /STILL OPEN/);
     assert.match(po.blocker, /no spending authority boundary/);
     assert.ok(s.decisions.some(d => d.id === 'dec-material-po-authority' && d.status === 'open'));
+  });
+  await check('the 6 November all-office handover is stored with its follow-ups and the portal identity gap', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const d = s.documents.find(x => x.id === 'doc-meeting-alloffice-2026-11-06');
+    assert.ok(d); assert.equal(d.cite_key, 'ALL 11/06');
+    assert.equal(JSON.parse(d.attendees).length, 6);
+    assert.match(d.summary, /speaker labels in this transcript are wrong/i, 'the transcript\'s reliability is stated');
+    // six follow-ups, each with an owner
+    const f = s.tasks.filter(t => t.id.startsWith('a1106-'));
+    assert.equal(f.length, 6); assert.ok(f.every(t => t.owner_id && t.next_action));
+    assert.equal(f.find(t => t.id === 'a1106-hub-access').board, 'working');
+    // the portal identity problem is now high risk and names the cause
+    const ho = (await call('GET', '/api/handover?person=maria')).body.items.find(i => i.id === 'ho-portal-logins');
+    assert.equal(ho.risk, 'high'); assert.equal(ho.status, 'open');
+    assert.match(ho.why, /registered to M\. Abney/);
+    assert.match(ho.capture, /single most urgent item/);
+    // the GL check Maria described is on the procedure
+    const gl = s.tasks.find(t => t.id === 'sop-update-gl-insurance');
+    assert.match(gl.trigger, /every other week/); assert.match(gl.trigger, /yellow/);
+    assert.match(gl.evidence, /builder.s risk only/);
+    // and the two-approval rule is recorded
+    assert.ok(s.decisions.some(x => x.id === 'dec-budget-increase-approvals' && x.status === 'accepted'));
   });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {

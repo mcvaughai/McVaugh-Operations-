@@ -1316,6 +1316,75 @@ const UPDATES = [
       label: 'Purchasing review transcript stored (5 November). Responsibility moves held until all three transcripts are in.',
       source: 'import', actor: 'brittany', external_id: 'meeting-purchasing-2026-11-05' });
   } },
+  { key: 'meeting-allofficE-2026-11-06', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Meeting recording: all-office document walkthrough on Maria’s last day — 6 November 2026, 39m';
+    const CITE = '[ALL 11/06]';
+    const { docxText } = require('./imports');
+    const fp = path.join(__dirname, '..', 'seed', 'meetings', 'all-office-handover-2026-11-06.docx');
+    const text = docxText(fs.readFileSync(fp)).replace(/&apos;/g, '’');
+    upsert(db, 'documents', { id: 'doc-meeting-alloffice-2026-11-06', title: 'All-office document walkthrough, Maria’s last day — 6 November 2026',
+      kind: 'meeting', kind_reason: 'Teams recording; Maria walking the office through every document she wrote', sensitive: 0,
+      meeting_date: '2026-11-06', cite_key: 'ALL 11/06', attendees: JSON.stringify(['maria', 'brittany', 'james', 'teresa', 'kenneth', 'lonnie']),
+      summary: 'Maria walked everyone through the documents she created: how to build a house, the SOW pricing workbook, Leander master approvals, signing up subcontractors and vendors, Lowe’s and card purchases, insurance certificates, the permit set, and entering budgets and increases. Every login sits inside its document. New facts: check the GL spreadsheet every other week (yellow means within 30 days); a budget increase now needs two approvals, Director of Operations and Jim, with no notification so the approver must be emailed; the purchasing mailbox goes to both James and Brittany; and Maria put the whole purchasing load at about an hour and a half a week. NOTE the speaker labels in this transcript are wrong — almost everything attributed to James is Maria.',
+      content: text, size: text.length, source: SRC, imported_at: ts,
+      file_path: fp, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', underlying_status: 'extracted' });
+
+    // The portal identity problem, which is the same shape as the utility logins and now urgent.
+    { const h = db.prepare('SELECT * FROM handover_items WHERE id = ?').get('ho-portal-logins');
+      if (h) upsert(db, 'handover_items', { id: 'ho-portal-logins', risk: 'high', status: 'open',
+        item: 'Logins and account identity for the city permit portal, the utility builder sites and the City of Houston payment system',
+        why: (h.why || '') + ' Confirmed again on 6 November: every City of Houston portal account is registered to M. Abney and Maria said she does not know how to change the email inside the portal ' + CITE + '. She has now left, so permit applications, water capacity requests and shopping-cart payments all still run through a departed employee’s identity.',
+        capture: 'Call the City of Houston and ask what is needed to transfer the contractor account to a current employee. Do the same for Reliant and the CenterPoint builder portal. This is the single most urgent item left.',
+        doc_ids: [...new Set([...JSON.parse(h.doc_ids || '[]'), 'doc-meeting-alloffice-2026-11-06'])], updated_at: ts }); }
+
+    // GL insurance: Maria's manual cadence, which the Insurance view now does automatically.
+    { const t = db.prepare('SELECT steps FROM tasks WHERE id = ?').get('sop-update-gl-insurance');
+      if (t) upsert(db, 'tasks', { id: 'sop-update-gl-insurance',
+        trigger: 'Either the world raises it at 60, 30 or zero days, or the fortnightly check Maria described: open the GL spreadsheet every other week and chase anything showing yellow, which means within 30 days of expiry ' + CITE + '. Send one email covering everyone who is yellow.',
+        evidence: 'Register row saved and re-read, certificate filed with the superseded one archived, BuildConnect date re-opened and confirmed, and a copy to Kenneth for QuickBooks. The point of the whole thing: do not pay a subcontractor who is not currently insured. MCH carries builder’s risk only, which covers the house and not the people working on it.',
+        updated_at: ts }); }
+
+    // Things the meeting left for someone to do.
+    const T = (id, o) => upsert(db, 'tasks', { id, department_id: o.dept, owner_id: o.owner, backup_id: o.backup || null,
+      title: o.title, trigger: o.trigger, steps: null, documented: 0, automated: 0, verified: 0, board: o.board || 'next',
+      proposed: 0, missing_info: o.missing || null, next_action: o.next, source: SRC + ' ' + CITE, updated_at: ts });
+    T('a1106-hub-access', { dept: 'executive', owner: 'brittany', backup: 'james', board: 'working',
+      title: 'Give everyone access to the operations hub and introduce it', 
+      trigger: 'Raised on 6 November: the hub exists but nobody has access and nobody has been shown it. "It needs to be accessible and everybody needs to be aware of it" — by Monday.',
+      next: 'Put it somewhere everyone can open, then walk the office through it the way Maria walked them through her documents.' });
+    T('a1106-wo-po-recording', { dept: 'purchasing', owner: 'brittany', backup: 'james', board: 'working',
+      title: 'Record how to create a work order and a purchase order, for Lonnie',
+      trigger: 'The one document Maria did not write. The old video could not be found.',
+      missing: 'Brittany has the transcript of the earlier walkthrough and knows the process.',
+      next: 'Record it and file it with Maria’s other documents.' });
+    T('a1106-shopping-cart-warning', { dept: 'accounting', owner: 'lonnie', backup: 'teresa',
+      title: 'Bold the "verify with accounting before paying" line in the shopping-cart document',
+      trigger: 'Teresa raised it and Maria agreed: nobody pays the city without accounting confirming first. Maria’s words were "do not press go."',
+      next: 'Find the line in the document and make it impossible to miss.' });
+    T('a1106-doc-numbering', { dept: 'executive', owner: 'lonnie', backup: 'brittany',
+      title: 'Number Maria’s documents in the order you would actually use them',
+      trigger: 'Teresa asked for step 1, step 2 and so on in the filenames; the folder is alphabetical, which is not the order anything happens in. Maria agreed, at least for permitting.',
+      next: 'Rename the permit documents first, since that is the set with a real sequence.' });
+    T('a1106-qb-template-phone', { dept: 'accounting', owner: 'brittany', backup: 'kenneth',
+      title: 'Fix the office number on the QuickBooks water-billing template',
+      trigger: 'Homeowners are still calling and emailing Maria and James about water bills because the template carries the main office number.',
+      next: 'Update the template to the ROCVTA and ROL accounting contacts.' });
+    T('a1106-database-training', { dept: 'executive', owner: 'brittany', backup: 'lonnie',
+      title: 'Database training — nothing exists for it',
+      trigger: 'Acknowledged in the meeting as a separate gap that none of Maria’s documents cover.',
+      missing: 'Maria’s documents cover individual procedures but assume you can already drive the database.',
+      next: 'Decide whether this is a document, a recording, or time with Ernesto and Lonnie.' });
+
+    upsert(db, 'decisions', { id: 'dec-budget-increase-approvals', date: '2026-11-06',
+      title: 'A budget increase needs two approvals; a standard budget needs one',
+      reason: 'Stated on 6 November ' + CITE + '. A standard budget goes to the Director of Operations alone. An increase needs the Director of Operations and Jim, because Teresa now holds that role. The database sends no notification either way, so whoever submits has to email Teresa and Kenneth and tell them it is waiting.',
+      decided_by: 'Maria, confirming current practice', status: 'accepted', source: SRC, created_at: ts });
+
+    addEvent(db, { entity_type: 'document', entity_id: 'doc-meeting-alloffice-2026-11-06', kind: 'import', status: 'info',
+      label: 'All-office handover stored (6 November, Maria’s last day): eight document sets inventoried, six follow-ups raised, portal identity flagged as the most urgent gap',
+      source: 'import', actor: 'brittany', external_id: 'meeting-alloffice-2026-11-06' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

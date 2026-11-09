@@ -876,7 +876,14 @@ function regenerateOpsHub(db, templateHtml) {
     const t = tasks.find(x => x.id === 'hub-' + bp.id); const by = tasks.filter(x => JSON.parse(x.supersedes || '[]').includes('hub-' + bp.id));
     if (t && t.lifecycle === 'retired') continue;   // retired means gone from the hub, not greyed out in it
     const stale = t && t.lifecycle === 'stale';
-    processes.push({ ...bp, status: stale ? 'stale' : by.length ? 'superseded' : 'legacy', supersededBy: by.map(x => x.id),
+    // A legacy SOP rewritten here on purpose is not "superseded by" the procedures that corrected it —
+    // it IS the corrected procedure, and the ones pointing at it are the detail. Publish it as current,
+    // owned by whoever holds it now, or the page goes on showing the old owner beside the new steps.
+    const rewritten = t && t.content_locked && !stale && t.lifecycle !== 'retired';
+    processes.push({ ...bp, ...(rewritten && t.owner_id ? { owner: ownerRole(t.owner_id), participants: [ownerRole(t.owner_id), ...(t.backup_id ? [ownerRole(t.backup_id)] : [])] } : {}),
+      status: stale ? 'stale' : rewritten ? 'current' : by.length ? 'superseded' : 'legacy',
+      ...(rewritten ? { detailed_by: by.map(x => x.id), rewritten_on: String(t.updated_at || '').slice(0, 10), missing: t.missing_info || '' } : {}),
+      supersededBy: rewritten ? [] : by.map(x => x.id),
       reviewed: t?.step_review ? 'reviewed against meetings' : 'not reviewed',
       ...(stale ? { stale_reason: 'Somebody should be doing this and nobody is. Not current — correct the process before following it.' } : {}),
       ...(t && t.title && t.title !== bp.name ? { name: t.title } : {}),

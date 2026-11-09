@@ -1608,6 +1608,28 @@ const UPDATES = [
       label: 'Struck off "Receives proforma from Maria" — Kenneth creates the proformas; the 2004 SOP step that says otherwise is flagged',
       source: 'manual', actor: 'brittany', external_id: 'kenneth-proforma-2026-11-09' });
   } },
+
+  // Brittany wants the proforma on her own review list, not parked as waiting on somebody else, and
+  // reviewed across the SOPs rather than as one bad step. Nothing in the three handover transcripts
+  // covers it — the final Maria meeting of 6 November does not mention a proforma at all — so what
+  // she passed to Kenneth to build it was never written down anywhere.
+  { key: 'proforma-review-2026-11-09', apply(db) {
+    const ts = nowIso();
+    upsert(db, 'decisions', { id: 'dec-sop-proforma-direction', date: '2026-11-09',
+      title: 'Proforma: review it across the SOPs — what does Kenneth need, and who gives it to him now',
+      reason: 'Kenneth creates the proformas, so "Receives proforma from Maria" came off his list [Brittany 11/09]. What is left open is the input: Brittany believes some of what Kenneth needs to build a proforma came from Maria, but not what. It is not in any transcript — the final Maria review of 6 November never mentions a proforma — and it is not on her struck-off list either, so it was never written down. The 2004 preconstruction SOP has it backwards at step 38 ("DOC prepares proforma and forwards to CFO"), and that is the only SOP that mentions a proforma at all, which is its own problem: a document the banks need appears once, in the wrong direction, in a twenty-year-old procedure. Review needed across the SOPs, not just that step: what inputs Kenneth needs, at what point in the job, who produces each one now, and where the procedure for it lives.',
+      status: 'proposed', decided_by: null, source: 'Brittany, 2026-11-09' });
+
+    const pre = db.prepare('SELECT missing_info FROM tasks WHERE id = ?').get('hub-preconstruction_planning');
+    if (pre && !/only SOP that mentions/.test(pre.missing_info || ''))
+      upsert(db, 'tasks', { id: 'hub-preconstruction_planning',
+        missing_info: [pre.missing_info, 'This is also the only SOP that mentions a proforma anywhere, so there is no written procedure for producing one.'].filter(Boolean).join(' '),
+        updated_at: ts });
+
+    addEvent(db, { entity_type: 'task', entity_id: 'hub-preconstruction_planning', kind: 'setup', status: 'info',
+      label: 'Proforma raised for Brittany to review across the SOPs: what Kenneth needs to build one, and who supplies it now Maria has gone',
+      source: 'manual', actor: 'brittany', external_id: 'proforma-review-2026-11-09' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

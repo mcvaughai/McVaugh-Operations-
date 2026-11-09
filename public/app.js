@@ -232,6 +232,8 @@
     const LEAVING = S.people.filter(x => /LEAVING/i.test(x.notes || '')).map(x => x.id);
     const gapsOf = t => {
       const g = [];
+      if (t.lifecycle === 'stale') g.push(['Stale — nobody is doing this', 'red']);
+      if (t.lifecycle === 'retired') g.push(['Retired', 'gray']);
       if (!String(t.steps || '').trim()) g.push(['No steps written down', 'red']);
       if (LEAVING.includes(t.owner_id) && !t.backup_id) g.push(['Owner is leaving, no backup', 'red']);
       else if (!t.backup_id) g.push(['No backup', 'amber']);
@@ -249,7 +251,12 @@
       ${side === 'old' && (supersededBy[t.id] || []).length ? `<small>Superseded by: ${supersededBy[t.id].map(id => `<a href="#" data-open="task:${id}">${esc(byId[id]?.title || id)}</a>`).join(' · ')}</small>` : side === 'old' ? `<small class="src">No confirmed replacement yet — still the only description of this process.</small>` : ''}</div>`;
     const news = tasks.filter(isNew).sort((a, b) => a.title.localeCompare(b.title)), olds = tasks.filter(isOld).sort((a, b) => a.title.localeCompare(b.title));
     let body = '';
-    if (procFilter === 'todo') {
+    if (procFilter === 'stale') {
+      const st = tasks.filter(t => t.lifecycle === 'stale');
+      body = `<p class="hint" style="margin:6px 0 10px">Somebody should be doing these and nobody is. They are not retired — the need is real — but the written procedure describes a routine that is not happening. Correct the process first, then rewrite the procedure to match.</p>
+        <div class="board" style="grid-template-columns:1fr"><div class="col">${st.map(t => card(t, isNew(t) ? 'new' : 'old')).join('') || '<p class="empty">Nothing marked stale.</p>'}</div></div>`;
+    }
+    else if (procFilter === 'todo') {
       const todo = tasks.filter(t => gapsOf(t).length).sort((a, b) => severity(b) - severity(a) || a.title.localeCompare(b.title));
       const worst = todo.filter(t => gapsOf(t).some(([, c]) => c === 'red'));
       body = `<p class="hint" style="margin:6px 0 10px">${todo.length} of ${tasks.length} procedures are missing something. ${worst.length} are urgent: no steps written down, or the person who owns them is leaving and nobody is named to take over.</p>
@@ -266,7 +273,7 @@
       body = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="col"><h3>New (confirmed) <span>${news.length}</span></h3>${paired.map(t => card(t, 'new')).join('')}<h4>New with no old counterpart</h4>${news.filter(t => !JSON.parse(t.supersedes || '[]').length).map(t => card(t, 'new')).join('') || '<p class="empty">—</p>'}</div>
         <div class="col"><h3>Old (SOP / handoff) <span>${olds.length}</span></h3>${paired.map(t => JSON.parse(t.supersedes).map(id => byId[id] ? card(byId[id], 'old') : '').join('')).join('')}<h4>Old with no confirmed replacement</h4>${olds.filter(t => !pairedOld.has(t.id)).map(t => card(t, 'old')).join('') || '<p class="empty">—</p>'}</div></div>`;
     }
-    v.innerHTML = `<div class="world-toolbar"><b>Procedures</b>${S.permissions.write ? '<button class="primary small" id="pasteProc">+ Paste a procedure</button><button class="small" id="pasteLog">Paste the running log</button>' : ''}<span class="views">${[['todo', 'Needs work'], ['new', 'New'], ['old', 'Old'], ['both', 'Both']].map(([k, l]) => `<button class="${procFilter === k ? 'active' : ''}" data-procfilter="${k}">${l}</button>`).join('')}</span><span class="hint">Needs work = what is missing, worst first. New = confirmed in a meeting transcript (tr-). Old = hub SOP (2004–2022) or handoff placeholder. "Supersedes" links a new procedure to the old one it replaces; edit a task to change it.</span></div><div style="overflow:auto;flex:1">${body}</div>`;
+    v.innerHTML = `<div class="world-toolbar"><b>Procedures</b>${S.permissions.write ? '<button class="primary small" id="pasteProc">+ Paste a procedure</button><button class="small" id="pasteLog">Paste the running log</button>' : ''}<span class="views">${[['todo', 'Needs work'], ['stale', `Stale (${tasks.filter(t => t.lifecycle === 'stale').length})`], ['new', 'New'], ['old', 'Old'], ['both', 'Both']].map(([k, l]) => `<button class="${procFilter === k ? 'active' : ''}" data-procfilter="${k}">${l}</button>`).join('')}</span><span class="hint">Needs work = what is missing, worst first. New = confirmed in a meeting transcript (tr-). Old = hub SOP (2004–2022) or handoff placeholder. "Supersedes" links a new procedure to the old one it replaces; edit a task to change it.</span></div><div style="overflow:auto;flex:1">${body}</div>`;
     v.querySelectorAll('[data-procfilter]').forEach(b => b.onclick = () => { procFilter = b.dataset.procfilter; localStorage.setItem('mow_procfilter', procFilter); renderProcedures(); });
     const pp = $('#pasteProc'); if (pp) pp.onclick = () => pasteModal('procedure');
     const pl = $('#pasteLog'); if (pl) pl.onclick = () => pasteModal('log');

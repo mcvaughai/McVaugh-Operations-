@@ -858,7 +858,7 @@ function matchVendorRows(db, name) {
 // stays in step with the world: SOPs (old + confirmed new, with supersedes), current-team responsibilities, cross-offs.
 function regenerateOpsHub(db, templateHtml) {
   const base = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8'));
-  const people = db.prepare('SELECT * FROM people').all(), tasks = db.prepare('SELECT * FROM tasks WHERE archived = 0').all();
+  const people = db.prepare('SELECT * FROM people').all(), tasks = db.prepare('SELECT * FROM tasks').all();   // archived included so a retired SOP can be dropped on purpose
   const roleIdByTitle = Object.fromEntries(base.roles.map(r => [r.title, r.id]));
   const personLegacy = p => JSON.parse(p.legacy_roles || '[]').map(t => roleIdByTitle[t]).filter(Boolean);
   const ownerRole = id => { const p = people.find(x => x.id === id); return p ? (personLegacy(p)[0] || p.id) : 'doc'; };
@@ -866,9 +866,15 @@ function regenerateOpsHub(db, templateHtml) {
   const processes = [];
   for (const bp of base.processes) { // old SOPs keep their original structure; steps/description refreshed from the task if edited
     const t = tasks.find(x => x.id === 'hub-' + bp.id); const by = tasks.filter(x => JSON.parse(x.supersedes || '[]').includes('hub-' + bp.id));
-    processes.push({ ...bp, status: by.length ? 'superseded' : 'legacy', supersededBy: by.map(x => x.id), reviewed: t?.step_review ? 'reviewed against meetings' : 'not reviewed', ...(t && t.steps && steps(t).length ? { steps: steps(t) } : {}) });
+    if (t && t.lifecycle === 'retired') continue;   // retired means gone from the hub, not greyed out in it
+    const stale = t && t.lifecycle === 'stale';
+    processes.push({ ...bp, status: stale ? 'stale' : by.length ? 'superseded' : 'legacy', supersededBy: by.map(x => x.id),
+      reviewed: t?.step_review ? 'reviewed against meetings' : 'not reviewed',
+      ...(stale ? { stale_reason: 'Somebody should be doing this and nobody is. Not current — correct the process before following it.' } : {}),
+      ...(t && t.title && t.title !== bp.name ? { name: t.title } : {}),
+      ...(t && t.steps && steps(t).length ? { steps: steps(t) } : {}) });
   }
-  for (const t of tasks.filter(x => x.id.startsWith('tr-') || x.id.startsWith('sop-'))) {
+  for (const t of tasks.filter(x => !x.archived && x.lifecycle !== 'retired' && (x.id.startsWith('tr-') || x.id.startsWith('sop-')))) {
     processes.push({ id: t.id, name: t.title, owner: ownerRole(t.owner_id), date: (t.source || '').replace(/\s*\(transcript\)/, ''), category: 'Current (confirmed)', description: t.trigger ? 'Trigger: ' + t.trigger : (t.verification_result || ''), steps: steps(t), participants: [ownerRole(t.owner_id), ...(t.backup_id ? [ownerRole(t.backup_id)] : [])], status: 'current', supersedes: JSON.parse(t.supersedes || '[]').map(id => id.replace(/^hub-/, '')), missing: t.missing_info || '' });
   }
   const team = base.team.map(bt => {

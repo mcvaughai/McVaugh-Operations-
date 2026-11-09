@@ -1497,6 +1497,57 @@ const UPDATES = [
       label: 'Back charge rewritten from Maria’s description; six more 2004-2022 SOPs raised as decisions because the transcripts contradict them',
       source: 'manual', actor: 'brittany', external_id: 'sop-decisions-2026-11-08' });
   } },
+  { key: 'sop-outcomes-2026-11-09', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Brittany, 2026-11-09';
+
+    // Gone for good. Not done at all any more.
+    upsert(db, 'tasks', { id: 'hub-framed_mirror_purchase', lifecycle: 'retired', archived: 1, board: 'done',
+      review_note: 'Retired 9 November: "framed mirrors can be completely removed, we don’t do that anymore at all" [Brittany 11/09]. Maria had already called it dumb on her last day. Kept here so the history is visible; it is out of the published hub.',
+      next_action: null, updated_at: ts });
+    upsert(db, 'decisions', { id: 'dec-sop-framed-mirrors', status: 'accepted', decided_by: 'Brittany',
+      reason: 'Retired. McVaugh does not do this at all any more, so there is nothing to correct and nothing to keep. [Brittany 11/09]' });
+
+    // The log is gone, but change orders are still tracked — by a different mechanism, which is the useful part.
+    upsert(db, 'tasks', { id: 'hub-change_order_budget', lifecycle: 'current', owner_id: 'james', backup_id: 'lonnie',
+      title: 'Change order costs on a job',
+      trigger: 'A change order has been approved by the buyer and the extra cost has to land against the job.',
+      steps: '1. The change order is approved by the buyer.\n2. The extra cost goes on the job as a work order or purchase order against the extra cost code for that trade — the .2 and .3 extensions, so the base code stays the original scope and the change sits beside it.\n3. That is the tracking. There is no change order log, no weekly print and nothing forwarded for a tactical meeting.',
+      missing_info: 'Worth writing down once: which extension is used when (.2 for the first change on a trade, .3 for the second, and so on), and whether anything beyond .3 has ever been needed.',
+      review_note: 'Rewritten 9 November [Brittany 11/09]. The 2022 version had the change order logged into a change order budget log, printed weekly, reviewed by the President, forwarded to the CFO and entered in two systems. Maria: "there’s no change order log." Brittany: change orders are tracked by adding a work order or purchase order at the .2 and .3 extra cost codes.',
+      next_action: 'Confirm the extension convention with James, then mark it verified.',
+      documented: 1, verified: 0, source: SRC, updated_at: ts });
+    upsert(db, 'decisions', { id: 'dec-sop-change-order-log', status: 'accepted', decided_by: 'Brittany',
+      reason: 'The log is removed. Change orders are tracked by adding a work order or purchase order against the extra cost codes, the .2 and .3 extensions, so the cost sits on the job beside the original scope. [Brittany 11/09]' });
+
+    // Somebody should, nobody does. Not retired, not current — and saying so is the point.
+    const STALE = [
+      ['hub-budget_review', 'Weekly Budget Review', 'Maria: "we haven’t done that." Budget against actual is really Lonnie and Kenneth, but "none of these are being done on a regular basis on every single job."'],
+      ['hub-bonus_request', 'Bonus Request Submittal', 'Maria: "we haven’t done bonuses in so long and I don’t know how long he was set up, to be completely honest. Those are a question for Jim."'],
+      ['hub-budget_revision', 'Budget Revision Update', 'The overage log, the weekly print and forwarding it to Kenneth were all struck off on 6 November. What happens now is a budget increase request in the database needing two approvals, the Director of Operations and Jim, with the approver emailed because nothing notifies them.'],
+      ['hub-start_packet', 'Start Packet Process', 'Maria: "nobody puts together a construction start package anymore. Everything is digital."'],
+    ];
+    for (const [id, name, why] of STALE) {
+      const t = db.prepare('SELECT review_note FROM tasks WHERE id = ?').get(id); if (!t) continue;
+      upsert(db, 'tasks', { id, lifecycle: 'stale', verified: 0, board: 'next',
+        missing_info: `STALE: somebody should be doing this and nobody is. ${why} It is not retired — the need is real — but the written procedure describes a routine that is not happening, so following it would not reflect the company. [Brittany 11/09]`,
+        next_action: 'Correct the process first, then rewrite the procedure to match. Until then do not treat this as current.',
+        review_note: [t.review_note, 'Marked stale 9 November: "something someone should do but doesn’t. Those are stale until we get processes corrected." [Brittany 11/09]'].filter(Boolean).join('\n'),
+        updated_at: ts });
+    }
+    for (const id of ['dec-sop-weekly-budget-review', 'dec-sop-bonus-request', 'dec-sop-budget-revision-log', 'dec-sop-start-packet'])
+      upsert(db, 'decisions', { id, status: 'accepted', decided_by: 'Brittany',
+        reason: 'Marked stale rather than retired: somebody should be doing this and nobody is. The procedure stays on the books as a known gap until the process itself is corrected, and is not to be treated as current in the meantime. [Brittany 11/09]' });
+
+    // How change orders are really costed now, where a work order gets raised.
+    upsert(db, 'wo_specifics', { id: 'ws-change-order-cost-codes', vendor_name: 'ALL — change orders',
+      detail: 'A change order is costed by raising a work order or purchase order against the extra cost code for that trade, using the .2 and .3 extensions. The base code keeps the original scope and the change sits beside it. There is no separate change order log.',
+      scope: 'vendor', task_id: 'tr-wo-entry-from-bid', source: SRC, noted_on: '2026-11-09', updated_at: ts });
+
+    addEvent(db, { entity_type: 'task', entity_id: 'hub-change_order_budget', kind: 'setup', status: 'info',
+      label: 'Framed mirrors retired; change order log replaced by .2/.3 extra cost codes; four procedures marked stale pending process correction',
+      source: 'manual', actor: 'brittany', external_id: 'sop-outcomes-2026-11-09' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

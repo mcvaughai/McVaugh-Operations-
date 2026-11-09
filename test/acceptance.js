@@ -78,7 +78,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   await check('review: duplicates found, merge archives source and fills target, decisions survive re-import', async () => {
     const d = (await call('POST', '/api/review/duplicates', { id: 'dash-maria-issue-purchase-orders' })).body; assert.ok(d.some(x => x.id === 'obs-issue-a-purchase-order'));
     await call('POST', '/api/review/merge', { source_id: 'dash-maria-issue-purchase-orders', target_id: 'obs-issue-a-purchase-order' });
-    let s = (await call('GET', '/api/state')).body; assert.ok(!s.tasks.find(t => t.id === 'dash-maria-issue-purchase-orders')); assert.equal(s.archived_count, 1);
+    let s = (await call('GET', '/api/state')).body; assert.ok(!s.tasks.find(t => t.id === 'dash-maria-issue-purchase-orders')); assert.equal(s.archived_count, 2, 'the merged duplicate, plus the framed-mirror SOP retired on 9 November');
     await call('POST', '/api/tasks/obs-issue-a-purchase-order', { proposed: 0, review_note: 'ok' });
     await call('POST', '/api/import/obsidian', { files: [{ name: 'PO.md', content: '# Issue a purchase order\n## Steps\nchanged' }] });
     const t = (await call('GET', '/api/state')).body.tasks.find(t => t.id === 'obs-issue-a-purchase-order'); assert.equal(t.proposed, 0); assert.equal(t.reviewed_by, 'admin'); assert.equal(t.steps, 'changed'); assert.equal(t.owner_id, 'maria', 'owner kept');
@@ -127,7 +127,10 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
   });
   await check('ops hub seeded: SOPs owned by absorbing people, responsibilities on people, legacy roles as documents', async () => {
     const s = (await call('GET', '/api/state')).body;
-    const hub = s.tasks.filter(t => t.id.startsWith('hub-')); assert.equal(hub.length, 25);
+    // 24 of the 25 are live; the framed-mirror one is retired and archived, so it drops out of the board
+    // and out of the published hub without being deleted.
+    const hub = s.tasks.filter(t => t.id.startsWith('hub-')); assert.equal(hub.length, 24);
+    assert.equal(hub.filter(t => t.lifecycle === 'stale').length, 4, 'somebody should, nobody does');
     const nwo = s.tasks.find(t => t.id === 'hub-new_work_order'); assert.equal(nwo.owner_id, 'ernesto'); assert.equal(nwo.department_id, 'purchasing'); assert.match(nwo.steps, /^1\. Red-lined plans/); assert.equal(nwo.documented, 1); assert.equal(nwo.proposed, 1);
     // Maria's list was emptied on 8 November once all three handover transcripts were applied.
     assert.equal(JSON.parse(s.people.find(p => p.id === 'maria').responsibilities).length, 0);

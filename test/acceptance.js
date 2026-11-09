@@ -131,15 +131,22 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     // and out of the published hub without being deleted.
     const hub = s.tasks.filter(t => t.id.startsWith('hub-')); assert.equal(hub.length, 24);
     assert.equal(hub.filter(t => t.lifecycle === 'stale').length, 4, 'somebody should, nobody does');
-    const nwo = s.tasks.find(t => t.id === 'hub-new_work_order'); assert.equal(nwo.owner_id, 'ernesto'); assert.equal(nwo.department_id, 'purchasing'); assert.match(nwo.steps, /^1\. Red-lined plans/); assert.equal(nwo.documented, 1); assert.equal(nwo.proposed, 1);
+    // Rewritten 9 November from the meetings: the 2006 text is gone, nothing points at the purchasing list,
+    // and the two steps nobody confirmed are recorded as dropped rather than published as fact.
+    const nwo = s.tasks.find(t => t.id === 'hub-new_work_order');
+    assert.equal(nwo.owner_id, 'lonnie'); assert.equal(nwo.backup_id, 'james'); assert.equal(nwo.department_id, 'purchasing');
+    assert.ok(!/Red-lined plans are received by CA/.test(nwo.steps), 'the 2006 steps are not published any more');
+    assert.match(nwo.steps, /approved master plans/); assert.match(nwo.steps, /Lonnie reviews the price/);
+    assert.equal(nwo.documented, 1); assert.equal(nwo.proposed, 0); assert.equal(nwo.content_locked, 1);
+    assert.ok(!s.tasks.some(t => t.owner_id === 'ernesto' || t.backup_id === 'ernesto'), 'no procedure is left pointing at the purchasing list');
     // Maria's list was emptied on 8 November once all three handover transcripts were applied.
     assert.equal(JSON.parse(s.people.find(p => p.id === 'maria').responsibilities).length, 0);
     assert.equal(JSON.parse(s.people.find(p => p.id === 'maria').crossed_off).length, 24, 'what she struck off on her last day'); assert.deepEqual(JSON.parse(s.people.find(p => p.id === 'kenneth').legacy_roles), ['CFO']);
     assert.equal(s.documents.filter(d => d.id.startsWith('doc-legacy-role')).length, 16);
     const dbp = s.tasks.find(t => t.id === 'obs-procedures-for-the-mch-database'); assert.match(dbp.steps, /Work orders must be in the database prior to work commencing/); assert.equal(dbp.owner_id, 'maria');
     await call('POST', '/api/tasks/hub-new_work_order', { proposed: 0, owner_id: 'maria' });
-    const r = (await call('POST', '/api/import/opshub', { filename: 'hub.json', content: fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8') })).body; assert.equal(r.tasks, 19, 'the 19 the snapshot may refresh');
-    assert.equal(r.procedures_kept.length, 6, 'the 6 decided here — one retired, four stale, one rewritten — are not overwritten by the old file');
+    const r = (await call('POST', '/api/import/opshub', { filename: 'hub.json', content: fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8') })).body; assert.equal(r.tasks, 18, 'the 18 the snapshot may refresh');
+    assert.equal(r.procedures_kept.length, 7, 'the 7 decided here — one retired, four stale, two rewritten — are not overwritten by the old file');
     assert.ok(r.procedures_kept.some(x => x.id === 'hub-framed_mirror_purchase' && x.lifecycle === 'retired'));
     const again = (await call('GET', '/api/state')).body.tasks.find(t => t.id === 'hub-new_work_order'); assert.equal(again.proposed, 0, 'review kept'); assert.equal(again.owner_id, 'maria', 'owner change kept');
   });

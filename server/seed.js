@@ -1630,6 +1630,66 @@ const UPDATES = [
       label: 'Proforma raised for Brittany to review across the SOPs: what Kenneth needs to build one, and who supplies it now Maria has gone',
       source: 'manual', actor: 'brittany', external_id: 'proforma-review-2026-11-09' });
   } },
+
+  // The hub still published the 2006 New Work Order steps — red-lined plans to a Construction Assistant,
+  // a bid list from the PM, a start package — although every one of those steps was gone through in the
+  // meetings and found to be wrong. The step-by-step review was sitting in the world and never reached
+  // the page. Publish what the meetings established, and keep the two steps nobody confirmed out of it.
+  { key: 'new-work-order-rewrite-2026-11-09', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Rewritten from the Maria and Jim meetings, 2026-11-09';
+    upsert(db, 'tasks', { id: 'hub-new_work_order', title: 'New work order: pricing a trade and raising the order',
+      owner_id: 'lonnie', backup_id: 'james', proposed: 0, documented: 1, verified: 0,
+      content_locked: 1, department_id: 'purchasing',
+      trigger: 'A lot and plan are known and a trade has to be priced and put on the job.',
+      steps: [
+        '1. The plan is known as soon as the lot is assigned — the villas build from approved master plans (3, 3A, 4, 4A). Nobody receives red-lined plans and there is no Construction Assistant. [M 15:13–16:30]',
+        '2. Who to send to is vendor knowledge, not a document. What exists is the list Maria left of people to send bids to; it has no owner yet and no current rates against it. [M 18:59]',
+        '3. Square-foot trades are not bid: framing, concrete, stucco, sheetrock, paint and trim are priced at the agreed $/sq ft × that trade\'s square footage. The square footage differs by trade — framer is the total including garage and patios, sheetrock excludes balconies, trim is the A/C area. [M 12:41–13:36, 57:54–59:32]',
+        '4. Electrical, plumbing and mechanical do go out to bid, but come back consistent per plan. Interior finishes cannot be priced at all until selections are done. [M 12:41–13:36]',
+        '5. Send bids close to the start. Bid too early and the price rises before slab. [M 16:30–17:35]',
+        '6. What each trade needs in order to bid is listed on the SOW spreadsheet, under "necessary documents to provide". Where each of those documents comes from was asked of Maria and never answered. [M 13:36–14:18]',
+        '7. Lonnie reviews the price and agrees it. [M-chat 11/04]',
+        '8. James then raises the work order in the database. A work order is labor only and paperless. [M-chat 11/04] [M 36:37–39:20]',
+        '9. A per-square-foot work order is built from square footage × rate, split over that trade\'s draw schedule. [M 57:54–59:32]',
+        '10. Entering it is what emails the subcontractor. The subcontractor accepting it in the portal is the agreed price — there is no signed document. [M 36:37–39:20] [M-chat 10/24]',
+        '11. There is no handoff to a start package: no Construction Assistant exists and start packet distribution was struck off. [HUB 10/20]',
+      ].join('\n'),
+      missing_info: 'Two steps of the 2006 procedure were dropped because nobody confirmed them in any meeting: the Construction Assistant advising Purchasing of the address, date and subcontractor, and calling subcontractors if a bid has not arrived within a week. The hub of 20 October put that second one on James, unconfirmed — decide whether chasing a late bid is anybody\'s job. Still open: who owns the vendor list and its current $/sq ft rates, the square footage per plan per trade, and where each bidding document comes from.',
+      next_action: 'Walk steps 7 to 10 with Lonnie and James together — that is the join between pricing and entry, and it is the part that changed hands.',
+      review_note: 'Rewritten 9 November [Brittany 11/09]: "the new work order process is not correct in the hub, and this was discussed so many times in previous transcripts." It was. The step-by-step review against the meetings was already stored here — five of the seven 2006 steps marked changed or no longer done — but the hub went on publishing the 2006 text. This is that review turned into the procedure. The detailed database mechanics live in SOP-PUR-01; this is the process around it.',
+      source: SRC, updated_at: ts });
+
+    // Nothing is supposed to point at the purchasing list any more. The responsibilities were cleared on
+    // 8 November, but seven procedures still named Ernesto as owner or backup.
+    const REHOME = [
+      ['hub-new_work_order', null, null],
+      ['hub-work_order_ap', 'jim', 'lonnie'],
+      ['hub-start_packet', 'lonnie', 'james'],
+      ['tr-bid-requests', null, 'james'],
+      ['sop-pur-01-wo-entry-buildconnect', null, 'lonnie'],
+      ['sop-pur-02-material-po-entry', null, 'lonnie'],
+      ['obs-procedures-for-the-mch-database', null, 'james'],
+    ];
+    const rehomed = [];
+    for (const [id, owner, backup] of REHOME) {
+      const t = db.prepare('SELECT id, owner_id, backup_id FROM tasks WHERE id = ?').get(id); if (!t) continue;
+      const row = { id };
+      if (t.owner_id === 'ernesto' && owner) row.owner_id = owner;
+      if (t.backup_id === 'ernesto' && backup) row.backup_id = backup;
+      if (Object.keys(row).length === 1) continue;
+      upsert(db, 'tasks', { ...row, updated_at: ts }); rehomed.push(id);
+    }
+
+    upsert(db, 'decisions', { id: 'dec-late-bid-chasing', date: '2026-11-09',
+      title: 'Is chasing a late bid anybody\'s job now?',
+      reason: 'The 2006 procedure had the Purchasing Manager call subcontractors if a bid had not arrived within a week. The hub of 20 October put it on James, but it was never confirmed in any meeting, so it came out of the rewritten procedure rather than being published as fact. If a bid going quiet should still be chased, say by whom and after how long. [Brittany 11/09]',
+      status: 'proposed', decided_by: null, source: SRC });
+
+    addEvent(db, { entity_type: 'task', entity_id: 'hub-new_work_order', kind: 'setup', status: 'info',
+      label: `New work order process rewritten from the meetings; ${rehomed.length} procedures taken off the purchasing list`,
+      source: 'manual', actor: 'brittany', external_id: 'new-work-order-rewrite-2026-11-09' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

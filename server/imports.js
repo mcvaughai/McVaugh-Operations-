@@ -485,6 +485,7 @@ function importOpsHub(db, { filename, content }, role) {
   const roleOwner = {}; // legacy role id → current person id
   const roleTitle = Object.fromEntries(hub.roles.map(r => [r.id, r.title]));
   let peopleUpdated = 0, tasks = 0, docs = 0; const skippedPeople = [];   // people whose list the import refused to touch
+  const lockedTasks = [];    // procedures the import refused to overwrite: retired, stale, or rewritten here
   const changed = [];        // people whose list this import shortened, so a stale file is visible
   for (const t of hub.team) {
     const pid = idFor(t); const ex = db.prepare('SELECT id FROM people WHERE id = ?').get(pid);
@@ -522,7 +523,14 @@ function importOpsHub(db, { filename, content }, role) {
     docs++;
   }
   for (const p of hub.processes) {
-    const id = 'hub-' + p.id; const ex = db.prepare('SELECT id, proposed, board, owner_id, missing_info, verification_result, next_action, step_review FROM tasks WHERE id = ?').get(id);
+    const id = 'hub-' + p.id; const ex = db.prepare('SELECT id, proposed, board, owner_id, missing_info, verification_result, next_action, step_review, lifecycle, content_locked FROM tasks WHERE id = ?').get(id);
+    // A procedure retired, marked stale or rewritten here was a decision. Re-importing an old snapshot of
+    // the hub must not quietly put the 2007 text back, so those keep their content and only note the import.
+    if (ex && (ex.content_locked || ex.lifecycle === 'retired' || ex.lifecycle === 'stale')) {
+      lockedTasks.push({ id, title: p.name, lifecycle: ex.lifecycle || 'current' });
+      addEvent(db, { entity_type: 'task', entity_id: id, kind: 'import', status: 'info', label: `Hub snapshot skipped: "${p.name}" was ${ex.lifecycle === 'retired' ? 'retired' : ex.lifecycle === 'stale' ? 'marked stale' : 'rewritten'} here, so the old text was not put back`, source: 'import', actor: role, external_id: 'hub-' + crypto.randomUUID() });
+      continue;
+    }
     const owner_id = roleOwner[p.owner] || null;
     const participants = (p.participants || []).map(r => `${roleTitle[r] || r}${roleOwner[r] ? ' → ' + personNameFromDb(db, roleOwner[r]) : ' → unassigned'}`);
     const department_id = HUB_PROCESS_DEPT[p.id] || HUB_CATEGORY_DEPT[String(p.category || '').toLowerCase()] || null;
@@ -540,7 +548,7 @@ function importOpsHub(db, { filename, content }, role) {
     tasks++;
   }
   addEvent(db, { entity_type: 'integration', entity_id: 'dashboard', kind: 'import', status: 'info', label: `Snapshot import: old ops hub (${tasks} SOPs, ${hub.roles.length} legacy roles, ${hub.team.length} people)`, source: 'import', actor: role, external_id: 'hub-' + crypto.randomUUID() });
-  return { imported: tasks + docs + peopleUpdated, tasks, legacy_roles: hub.roles.length, people: peopleUpdated, unassigned_roles: hub.roles.filter(r => !roleOwner[r.id]).map(r => r.title), imported_at: ts , responsibilities_kept: skippedPeople, responsibilities_replaced: changed };
+  return { imported: tasks + docs + peopleUpdated, tasks, legacy_roles: hub.roles.length, people: peopleUpdated, unassigned_roles: hub.roles.filter(r => !roleOwner[r.id]).map(r => r.title), imported_at: ts , responsibilities_kept: skippedPeople, responsibilities_replaced: changed, procedures_kept: lockedTasks };
 }
 function personNameFromDb(db, id) { return db.prepare('SELECT name FROM people WHERE id = ?').get(id)?.name || id; }
 

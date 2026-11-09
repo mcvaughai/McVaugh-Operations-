@@ -1502,14 +1502,14 @@ const UPDATES = [
     const SRC = 'Brittany, 2026-11-09';
 
     // Gone for good. Not done at all any more.
-    upsert(db, 'tasks', { id: 'hub-framed_mirror_purchase', lifecycle: 'retired', archived: 1, board: 'done',
+    upsert(db, 'tasks', { id: 'hub-framed_mirror_purchase', lifecycle: 'retired', content_locked: 1, archived: 1, board: 'done',
       review_note: 'Retired 9 November: "framed mirrors can be completely removed, we don’t do that anymore at all" [Brittany 11/09]. Maria had already called it dumb on her last day. Kept here so the history is visible; it is out of the published hub.',
       next_action: null, updated_at: ts });
     upsert(db, 'decisions', { id: 'dec-sop-framed-mirrors', status: 'accepted', decided_by: 'Brittany',
       reason: 'Retired. McVaugh does not do this at all any more, so there is nothing to correct and nothing to keep. [Brittany 11/09]' });
 
     // The log is gone, but change orders are still tracked — by a different mechanism, which is the useful part.
-    upsert(db, 'tasks', { id: 'hub-change_order_budget', lifecycle: 'current', owner_id: 'james', backup_id: 'lonnie',
+    upsert(db, 'tasks', { id: 'hub-change_order_budget', lifecycle: 'current', content_locked: 1, owner_id: 'james', backup_id: 'lonnie',
       title: 'Change order costs on a job',
       trigger: 'A change order has been approved by the buyer and the extra cost has to land against the job.',
       steps: '1. The change order is approved by the buyer.\n2. The extra cost goes on the job as a work order or purchase order against the extra cost code for that trade — the .2 and .3 extensions, so the base code stays the original scope and the change sits beside it.\n3. That is the tracking. There is no change order log, no weekly print and nothing forwarded for a tactical meeting.',
@@ -1529,7 +1529,7 @@ const UPDATES = [
     ];
     for (const [id, name, why] of STALE) {
       const t = db.prepare('SELECT review_note FROM tasks WHERE id = ?').get(id); if (!t) continue;
-      upsert(db, 'tasks', { id, lifecycle: 'stale', verified: 0, board: 'next',
+      upsert(db, 'tasks', { id, lifecycle: 'stale', content_locked: 1, verified: 0, board: 'next',
         missing_info: `STALE: somebody should be doing this and nobody is. ${why} It is not retired — the need is real — but the written procedure describes a routine that is not happening, so following it would not reflect the company. [Brittany 11/09]`,
         next_action: 'Correct the process first, then rewrite the procedure to match. Until then do not treat this as current.',
         review_note: [t.review_note, 'Marked stale 9 November: "something someone should do but doesn’t. Those are stale until we get processes corrected." [Brittany 11/09]'].filter(Boolean).join('\n'),
@@ -1547,6 +1547,34 @@ const UPDATES = [
     addEvent(db, { entity_type: 'task', entity_id: 'hub-change_order_budget', kind: 'setup', status: 'info',
       label: 'Framed mirrors retired; change order log replaced by .2/.3 extra cost codes; four procedures marked stale pending process correction',
       source: 'manual', actor: 'brittany', external_id: 'sop-outcomes-2026-11-09' });
+  } },
+
+  // The two retired procedures still had live responsibilities hanging off other people. Retiring the SOP
+  // does not retire the work unless the work comes off the person, so strike them where they sit.
+  { key: 'retired-sop-strays-2026-11-09', apply(db) {
+    const ts = nowIso();
+    const STRAYS = [
+      ['jim', /change order log/i, 'The change order log is gone. Change orders are tracked by raising a work order or purchase order against the .2 / .3 extra cost codes. [Brittany 11/09]'],
+      ['kenneth', /change order log/i, 'The change order log is gone. Change orders are tracked by raising a work order or purchase order against the .2 / .3 extra cost codes. [Brittany 11/09]'],
+      ['pam', /framed mirror/i, 'McVaugh does not do framed mirrors at all any more. [Brittany 11/09]'],
+    ];
+    const struck = [];
+    for (const [pid, rx, why] of STRAYS) {
+      const p = db.prepare('SELECT * FROM people WHERE id = ?').get(pid); if (!p) continue;
+      const live = JSON.parse(p.responsibilities || '[]');
+      const off = JSON.parse(p.crossed_off || '[]');
+      const keep = live.filter(r => !rx.test(String(r)));
+      const drop = live.filter(r => rx.test(String(r)));
+      if (!drop.length) continue;
+      upsert(db, 'people', { id: pid, responsibilities: keep,
+        crossed_off: [...off, ...drop.filter(d => !off.includes(d))],
+        notes: [p.notes, `${drop.length} responsibilit${drop.length === 1 ? 'y' : 'ies'} struck off 9 November: ${why}`].filter(Boolean).join('\n'),
+        updated_at: ts });
+      struck.push(`${pid}: ${drop.join('; ')}`);
+    }
+    addEvent(db, { entity_type: 'person', entity_id: 'jim', kind: 'setup', status: 'info',
+      label: struck.length ? `Struck off work belonging to retired procedures — ${struck.join(' | ')}` : 'No stray responsibilities left from the retired procedures',
+      source: 'manual', actor: 'brittany', external_id: 'retired-sop-strays-2026-11-09' });
   } },
 ];
 function applyUpdates(db) {

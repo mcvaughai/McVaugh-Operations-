@@ -138,7 +138,9 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.equal(s.documents.filter(d => d.id.startsWith('doc-legacy-role')).length, 16);
     const dbp = s.tasks.find(t => t.id === 'obs-procedures-for-the-mch-database'); assert.match(dbp.steps, /Work orders must be in the database prior to work commencing/); assert.equal(dbp.owner_id, 'maria');
     await call('POST', '/api/tasks/hub-new_work_order', { proposed: 0, owner_id: 'maria' });
-    const r = (await call('POST', '/api/import/opshub', { filename: 'hub.json', content: fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8') })).body; assert.equal(r.tasks, 25);
+    const r = (await call('POST', '/api/import/opshub', { filename: 'hub.json', content: fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8') })).body; assert.equal(r.tasks, 19, 'the 19 the snapshot may refresh');
+    assert.equal(r.procedures_kept.length, 6, 'the 6 decided here — one retired, four stale, one rewritten — are not overwritten by the old file');
+    assert.ok(r.procedures_kept.some(x => x.id === 'hub-framed_mirror_purchase' && x.lifecycle === 'retired'));
     const again = (await call('GET', '/api/state')).body.tasks.find(t => t.id === 'hub-new_work_order'); assert.equal(again.proposed, 0, 'review kept'); assert.equal(again.owner_id, 'maria', 'owner change kept');
   });
   await check('succession pass: meetings stored with provenance, step reviews, flows, job status, handover sorted no-backup first, agenda', async () => {
@@ -917,6 +919,20 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.match(s.people.find(p => p.id === 'ernesto').notes, /Nothing remains assigned here/);
     assert.ok(s.decisions.some(d => d.id === 'dec-responsibilities-reassigned' && d.status === 'accepted'));
     assert.ok(s.documents.some(d => d.id === 'doc-meeting-maria-final-2026-11-06'));
+  });
+  await check('a retired procedure takes its work off every person, not just the SOP list', async () => {
+    const s = (await call('GET', '/api/state')).body;
+    const R = id => JSON.parse(s.people.find(p => p.id === id).responsibilities || '[]');
+    const X = id => JSON.parse(s.people.find(p => p.id === id).crossed_off || '[]');
+    const live = s.people.flatMap(p => JSON.parse(p.responsibilities || '[]'));
+    assert.ok(!live.some(r => /framed mirror/i.test(r)), 'framed mirrors are gone from everybody, not only from the procedure');
+    assert.ok(!live.some(r => /change order log/i.test(r)), 'nobody still reviews or forwards a change order log');
+    assert.ok(X('pam').some(r => /framed mirror/i.test(r)), 'and it is struck off, not deleted, so the history reads');
+    assert.ok(X('jim').concat(X('kenneth')).some(r => /change order log/i.test(r)));
+    const co = s.tasks.find(t => t.id === 'hub-change_order_budget');
+    assert.ok(co, 'the replacement procedure is still on the books');
+    assert.ok(/2 and \.3 extension/.test(co.steps || ''), 'and a hub snapshot import never puts the 2022 change order log steps back');
+    assert.ok(!s.tasks.some(t => t.lifecycle === 'retired' && !t.archived), 'a retired procedure stays retired across an import');
   });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {

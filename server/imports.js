@@ -869,7 +869,9 @@ function matchVendorRows(db, name) {
 // 2006 file cannot put the words back.
 const deCA = v => typeof v === 'string'
     ? v.replace(/Construction Assistant \(CA\)/gi, 'Construction').replace(/Construction Assistant/gi, 'Construction')
-        .replace(/\bconstruction_asst\b/g, 'construction').replace(/\bCA\b(?!\w)/g, 'Construction')
+        .replace(/Director of Construction \(DOC\)/gi, 'Construction').replace(/Director of Construction/gi, 'Construction')
+        .replace(/\bconstruction_asst\b/g, 'construction')
+        .replace(/\bCA\b(?!\w)/g, 'Construction').replace(/\bDOC\b(?!\w)/g, 'Construction')
   : Array.isArray(v) ? v.map(deCA)
   : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, deCA(x)]))
   : v;
@@ -882,9 +884,24 @@ function regenerateOpsHub(db, templateHtml) {
   // "Construction Assistant" is not a job here any more. The role is Construction, and Lonnie holds it.
   // Renaming it in one place rewrites the role list, every procedure's owner and participants, and the
   // team's absorbed roles together, so no corner of the page is left calling it CA.
-  const ROLE_RENAMES = { construction_asst: { id: 'construction', title: 'Construction' } };
+  // Director of Construction and Construction Assistant are one role now: Construction, which is Lonnie's.
+  // Merging them here collapses the role list, every owner and participant line, and the absorbed roles.
+  const ROLE_RENAMES = {
+    construction_asst: { id: 'construction', title: 'Construction' },
+    doc: { id: 'construction', title: 'Construction' },
+  };
   const reId = id => ROLE_RENAMES[id]?.id || id;
-  base.roles = base.roles.map(r => deCA(ROLE_RENAMES[r.id] ? { ...r, ...ROLE_RENAMES[r.id] } : r));
+  base.roles = (() => {
+    const out = [];
+    for (const r of base.roles.map(r => deCA(ROLE_RENAMES[r.id] ? { ...r, ...ROLE_RENAMES[r.id] } : r))) {
+      const already = out.find(x => x.id === r.id);
+      if (!already) { out.push(r); continue; }
+      // Two old roles collapsing into one: keep one card and merge what each of them carried.
+      already.responsibilities = [...new Set([...(already.responsibilities || []), ...(r.responsibilities || [])])];
+      already.processes = [...new Set([...(already.processes || []), ...(r.processes || [])])];
+    }
+    return out;
+  })();
   base.processes = base.processes.map(p => deCA({ ...p, owner: reId(p.owner), participants: (p.participants || []).map(reId) }));
   base.team = base.team.map(t => ({ ...t, absorbs: (t.absorbs || []).map(reId) }));
   const people = db.prepare('SELECT * FROM people').all(), tasks = db.prepare('SELECT * FROM tasks').all();   // archived included so a retired SOP can be dropped on purpose
@@ -907,7 +924,11 @@ function regenerateOpsHub(db, templateHtml) {
     // it IS the corrected procedure, and the ones pointing at it are the detail. Publish it as current,
     // owned by whoever holds it now, or the page goes on showing the old owner beside the new steps.
     const rewritten = t && t.content_locked && !stale && t.lifecycle !== 'retired';
-    processes.push({ ...bp, ...(rewritten && t.owner_id ? { owner: ownerRole(t.owner_id), participants: [ownerRole(t.owner_id), ...(t.backup_id ? [ownerRole(t.backup_id)] : [])] } : {}),
+    // Publish it under whoever holds it in the world, whenever that is somebody still here. Falling back to
+    // the 2006 role id only when nobody current holds it keeps "lonnie" and "construction" from both
+    // appearing as owners of the same kind of work.
+    const held = t && t.owner_id && people.find(x => x.id === t.owner_id && !/\bDEPARTED\b/i.test(x.notes || ''));
+    processes.push({ ...bp, ...(held ? { owner: ownerRole(t.owner_id), participants: [...new Set([ownerRole(t.owner_id), ...(t.backup_id ? [ownerRole(t.backup_id)] : []), ...(bp.participants || [])])] } : {}),
       status: stale ? 'stale' : rewritten ? 'current' : by.length ? 'superseded' : 'legacy',
       ...(rewritten ? { detailed_by: by.map(x => x.id), rewritten_on: String(t.updated_at || '').slice(0, 10), missing: t.missing_info || '' } : {}),
       supersededBy: rewritten ? [] : by.map(x => x.id),

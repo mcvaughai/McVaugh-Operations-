@@ -1898,6 +1898,56 @@ const UPDATES = [
       label: `Construction Assistant removed: the role is Construction and Lonnie holds it (${touched} procedures reworded)`,
       source: 'manual', actor: 'brittany', external_id: 'construction-not-ca-2026-11-09' });
   } },
+
+  // "Merge Director of Construction and Construction into one role, Construction, aka Lonnie." [Brittany 11/09]
+  // The role merge is only half of it: 27 procedures were still owned by Maria, who has left, and the hub
+  // showed them under a role nobody held. Construction being Lonnie means those are his.
+  { key: 'doc-into-construction-2026-11-09', apply(db) {
+    const ts = nowIso();
+    const fix = v => String(v || '')
+      .replace(/Director of Construction \(DOC\)/gi, 'Construction').replace(/Director of Construction/gi, 'Construction')
+      .replace(/\bDOC\b(?!\w)/g, 'Construction');
+
+    // Maria keeps nothing: the role is Construction and Lonnie holds it.
+    const mar = db.prepare('SELECT legacy_roles, notes FROM people WHERE id = ?').get('maria');
+    if (mar) upsert(db, 'people', { id: 'maria',
+      legacy_roles: JSON.parse(mar.legacy_roles || '[]').filter(r => !/Director of Construction|^Construction$/i.test(r)),
+      updated_at: ts });
+    const lon = db.prepare('SELECT legacy_roles FROM people WHERE id = ?').get('lonnie');
+    if (lon) upsert(db, 'people', { id: 'lonnie',
+      legacy_roles: [...new Set([...JSON.parse(lon.legacy_roles || '[]').filter(r => !/Director of Construction/i.test(r)), 'Construction'])],
+      updated_at: ts });
+
+    // Procedures still recorded against Maria. Construction work is Lonnie's; the handful that are plainly
+    // not construction are moved too, because nobody holding them is worse, and raised for a second look.
+    const NOT_CONSTRUCTION = ['hub-interior_designer_selection', 'hub-interior_designer_hoa_rocc', 'hub-president_plan_selection'];
+    const moved = [], flagged = [];
+    for (const t of db.prepare("SELECT id, title, backup_id, review_note FROM tasks WHERE owner_id = 'maria'").all()) {
+      upsert(db, 'tasks', { id: t.id, owner_id: 'lonnie', backup_id: t.backup_id === 'lonnie' ? null : t.backup_id,
+        review_note: [t.review_note, 'Moved to Lonnie 9 November: Director of Construction and Construction are one role, Construction, and it is his. [Brittany 11/09]'].filter(Boolean).join('\n'),
+        updated_at: ts });
+      (NOT_CONSTRUCTION.includes(t.id) ? flagged : moved).push(t.title);
+    }
+
+    // The words, in procedure text as well as in the role.
+    for (const t of db.prepare('SELECT id, steps, inputs, trigger, missing_info FROM tasks').all()) {
+      const row = { id: t.id };
+      for (const k of ['steps', 'inputs', 'trigger', 'missing_info']) if (t[k] && fix(t[k]) !== t[k]) row[k] = fix(t[k]);
+      if (Object.keys(row).length > 1) upsert(db, 'tasks', { ...row, updated_at: ts });
+    }
+
+    upsert(db, 'decisions', { id: 'dec-legacy-roles-rehome', status: 'accepted', decided_by: 'Brittany',
+      reason: 'Director of Construction is merged into Construction, which is Lonnie — the same answer as the Construction Assistant one. The 27 procedures recorded against Maria moved to him with it. Superintendent and Project Manager, and the two purchasing roles, are still unmerged. [Brittany 11/09]' });
+
+    upsert(db, 'decisions', { id: 'dec-non-construction-with-lonnie', date: '2026-11-09',
+      title: 'Three of the procedures that moved to Lonnie are not really construction',
+      reason: `Merging Director of Construction into Construction moved everything recorded against Maria to Lonnie. Three of them do not look like construction work: ${flagged.join('; ')}. They went to him rather than being left with nobody, which is where they were. Interior design selections may belong with Pam, and choosing the plan may be Jim's. Say where each should sit. [Brittany 11/09]`,
+      status: 'proposed', decided_by: null, source: 'Brittany, 2026-11-09' });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'lonnie', kind: 'setup', status: 'info',
+      label: `Director of Construction merged into Construction: ${moved.length + flagged.length} procedures moved from Maria to Lonnie, ${flagged.length} of them flagged as probably not construction`,
+      source: 'manual', actor: 'brittany', external_id: 'doc-into-construction-2026-11-09' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

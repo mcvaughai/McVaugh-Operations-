@@ -160,7 +160,13 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     // The citation moves to the most recent meeting that spoke about the house: 10/16 then 11/03.
     assert.match(h.status_cite, /J 11\/03/);
     const ho = (await call('GET', '/api/handover?person=maria')).body; assert.equal(ho.items.length, 23); assert.ok(ho.items[0].no_backup && ho.items[0].risk === 'high'); const firstBackup = ho.items.findIndex(i => !i.no_backup); assert.ok(ho.items.slice(firstBackup).every(i => !i.no_backup), 'no-backup items come first');
-    assert.ok(ho.not_mentioned.length > 5); assert.equal(ho.person.crossed_off.length, 24);
+    // Her procedures moved to Lonnie when Director of Construction merged into Construction, so the steps
+    // no meeting confirmed follow the work: they are his to check now, not hers.
+    // Only the one procedure an earlier test parked on her on purpose is left against her.
+    assert.ok(ho.not_mentioned.every(x => x.task_id === 'hub-new_work_order'), 'nothing else is left against Maria');
+    const hl = (await call('GET', '/api/handover?person=lonnie')).body;
+    assert.ok(hl.not_mentioned.length > 5, 'the unconfirmed steps are with whoever holds the work');
+    assert.equal(ho.person.crossed_off.length, 24);
     const agenda = (await call('GET', '/api/handover/agenda?person=maria')).body; assert.match(agenda, /walk me through how you do this today/); assert.match(agenda, /11603 Royal Parkside Place/); assert.match(agenda, /\[M \d/);
     await call('POST', '/api/handover_items/ho-leander', { status: 'reassigned', note: 'Teresa' }); assert.equal((await call('GET', '/api/state')).body.handover_items.find(i => i.id === 'ho-leander').status, 'reassigned');
   });
@@ -199,8 +205,13 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     // listed as the detail rather than as having replaced it.
     assert.equal(cob.status, 'current'); assert.equal((cob.supersededBy || []).length, 0);
     assert.ok(cob.detailed_by.includes('tr-change-orders'));
+    // A procedure is published under whoever holds it, as long as that person is still here. This one was
+    // parked on Maria by an earlier test, so it falls back to the 2006 role — which is the point of the
+    // fallback: nobody current holds it.
     const nw = hub.processes.find(p => p.id === 'new_work_order');
-    assert.equal(nw.status, 'current'); assert.notEqual(nw.owner, 'purchasing_mgr', 'and it is published under whoever holds it now, not the 2006 Purchasing Manager');
+    assert.equal(nw.status, 'current'); assert.equal(nw.owner, 'purchasing_mgr', 'parked on someone who has left, so the old role shows');
+    const perm = hub.processes.find(p => p.id === 'permitting');
+    assert.equal(perm.owner, 'lonnie', 'a procedure someone holds is published under their name');
     // The published hub carries only what people actually hold: struck-off work is removed from it, with
     // a count left behind, and the history stays in the world against whoever used to hold it.
     const mh = hub.team.find(t => t.id === 'maria');

@@ -1576,6 +1576,38 @@ const UPDATES = [
       label: struck.length ? `Struck off work belonging to retired procedures — ${struck.join(' | ')}` : 'No stray responsibilities left from the retired procedures',
       source: 'manual', actor: 'brittany', external_id: 'retired-sop-strays-2026-11-09' });
   } },
+
+  // Kenneth was listed as receiving the proforma from Maria. He is the one who makes it.
+  { key: 'kenneth-proforma-2026-11-09', apply(db) {
+    const ts = nowIso();
+    const k = db.prepare('SELECT * FROM people WHERE id = ?').get('kenneth');
+    if (k) {
+      const live = JSON.parse(k.responsibilities || '[]');
+      const off = JSON.parse(k.crossed_off || '[]');
+      const drop = live.filter(r => /receives\s+pro\s?forma/i.test(String(r)));
+      if (drop.length) upsert(db, 'people', { id: 'kenneth',
+        responsibilities: live.filter(r => !/receives\s+pro\s?forma/i.test(String(r))),
+        crossed_off: [...off, ...drop.filter(d => !off.includes(d))],
+        notes: [k.notes, 'Struck off 9 November: he does not receive the proforma from Maria — he is the one who creates it. What stays is preparing the proformas for the banks. [Brittany 11/09]'].filter(Boolean).join('\n'),
+        updated_at: ts });
+    }
+
+    // The 2004 SOP has it the other way round. Say so on the step rather than quietly rewriting a legacy SOP.
+    const pre = db.prepare('SELECT missing_info, review_note FROM tasks WHERE id = ?').get('hub-preconstruction_planning');
+    if (pre) upsert(db, 'tasks', { id: 'hub-preconstruction_planning', verified: 0,
+      missing_info: [pre.missing_info, 'Step 38 ("DOC prepares proforma and forwards to CFO") is backwards for how it works today: Kenneth creates the proformas. [Brittany 11/09] Who feeds him the numbers, and at what point, still needs writing down before the step is rewritten.'].filter(Boolean).join(' '),
+      review_note: [pre.review_note, 'Flagged 9 November: the proforma direction in step 38 is contradicted by current practice.'].filter(Boolean).join('\n'),
+      updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-sop-proforma-direction', date: '2026-11-09',
+      title: 'Rewrite the preconstruction step that has Maria preparing the proforma for Kenneth',
+      reason: 'Brittany: Kenneth creates the proformas, so "receives proforma from Maria" came off his list. Step 38 of the 2004 preconstruction SOP still says the Director of Construction prepares it and forwards it to the CFO. Rewriting it needs one more answer: what Kenneth needs from the job before he can build the proforma, and who gives it to him now that Maria has gone. [Brittany 11/09]',
+      status: 'open', decided_by: null, source: 'Brittany, 2026-11-09' });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'kenneth', kind: 'setup', status: 'info',
+      label: 'Struck off "Receives proforma from Maria" — Kenneth creates the proformas; the 2004 SOP step that says otherwise is flagged',
+      source: 'manual', actor: 'brittany', external_id: 'kenneth-proforma-2026-11-09' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

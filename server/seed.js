@@ -1948,6 +1948,27 @@ const UPDATES = [
       label: `Director of Construction merged into Construction: ${moved.length + flagged.length} procedures moved from Maria to Lonnie, ${flagged.length} of them flagged as probably not construction`,
       source: 'manual', actor: 'brittany', external_id: 'doc-into-construction-2026-11-09' });
   } },
+
+  // The three that went to Lonnie with the construction merge but are not construction work. [Brittany 11/09]
+  { key: 'selections-to-pam-plan-to-jim-2026-11-09', apply(db) {
+    const ts = nowIso();
+    const PLACE = [
+      ['hub-interior_designer_selection', 'pam', 'james', 'Interior design selections are Pam\'s. James backs it up as Selection Coordinator.'],
+      ['hub-interior_designer_hoa_rocc', 'pam', 'teresa', 'Interior design selections are Pam\'s. HOA and ROCVTA routing goes through Teresa, so she backs this one up.'],
+      ['hub-president_plan_selection', 'jim', 'pam', 'Choosing the plan is Jim\'s. Pam backs it up from sales.'],
+    ];
+    for (const [id, owner, backup, why] of PLACE) {
+      const t = db.prepare('SELECT review_note FROM tasks WHERE id = ?').get(id); if (!t) continue;
+      upsert(db, 'tasks', { id, owner_id: owner, backup_id: backup,
+        review_note: [t.review_note, `Placed 9 November: ${why} It had moved to Lonnie with the construction merge, which was never where it belonged. [Brittany 11/09]`].filter(Boolean).join('\n'),
+        updated_at: ts });
+    }
+    upsert(db, 'decisions', { id: 'dec-non-construction-with-lonnie', status: 'accepted', decided_by: 'Brittany',
+      reason: 'Interior design selections to Pam, backed up by James on the selections one and Teresa on the HOA / ROCVTA one. President plan selection to Jim, backed up by Pam. [Brittany 11/09]' });
+    addEvent(db, { entity_type: 'task', entity_id: 'hub-interior_designer_selection', kind: 'setup', status: 'info',
+      label: 'Interior design selections placed with Pam; plan selection with Jim — off Lonnie, who only held them because of the construction merge',
+      source: 'manual', actor: 'brittany', external_id: 'selections-to-pam-plan-to-jim-2026-11-09' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

@@ -985,6 +985,19 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.match(docs[0].markdown, /Proforma/, 'an open decision raised today is on the page');
     assert.ok(docs.length > 1, 'the written review documents are kept underneath it');
   });
+  await check('"Construction Assistant" is gone from the hub entirely — the role is Construction and Lonnie holds it', async () => {
+    const html = (await call('GET', '/api/export/opshub')).body;
+    assert.equal((html.match(/Construction Assistant/gi) || []).length, 0, 'not in the role list, a step, a responsibility or a review document');
+    assert.equal((html.match(/construction_asst/g) || []).length, 0, 'and not as an id, including the page\'s own role-matching table');
+    assert.equal((html.match(/\bCA\b(?!\w)/g) || []).length, 0, 'nor abbreviated');
+    assert.match(html, /"id": "construction",\s*\n\s*"title": "Construction"/);
+    const s2 = (await call('GET', '/api/state')).body;
+    const lonnie = s2.people.find(p => p.id === 'lonnie');
+    assert.deepEqual(JSON.parse(lonnie.legacy_roles), ['Construction']);
+    assert.ok(!s2.tasks.some(t => /Construction Assistant|\bCA\b(?!\w)/.test((t.steps || '') + (t.inputs || ''))),
+      'no procedure still names it, including after an old hub snapshot has been re-imported');
+    assert.ok(!s2.people.some(p => /Construction Assistant/.test(p.legacy_roles || '')), 'and no snapshot hands the role back to someone who has left');
+  });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {
     // A route accidentally placed above the session gate would answer a signed-out caller. This catches that.

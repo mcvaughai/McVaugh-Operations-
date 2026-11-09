@@ -483,7 +483,7 @@ function importOpsHub(db, { filename, content }, role) {
   const people = db.prepare('SELECT id, name FROM people').all();
   const idFor = t => { const byId = people.find(p => p.id === t.id); if (byId) return byId.id; const first = String(t.name || '').split(' ')[0].toLowerCase(); return people.find(p => p.name.toLowerCase() === first)?.id || slug(t.name || t.id); };
   const roleOwner = {}; // legacy role id → current person id
-  const roleTitle = Object.fromEntries(hub.roles.map(r => [r.id, r.title]));
+  const roleTitle = Object.fromEntries(hub.roles.map(r => [r.id, deCA(r.title)]));
   let peopleUpdated = 0, tasks = 0, docs = 0; const skippedPeople = [];   // people whose list the import refused to touch
   const lockedTasks = [];    // procedures the import refused to overwrite: retired, stale, or rewritten here
   const changed = [];        // people whose list this import shortened, so a stale file is visible
@@ -498,7 +498,10 @@ function importOpsHub(db, { filename, content }, role) {
     const departed = /\bDEPARTED\b/i.test(String(cur?.notes || ''));
     const deliberatelyEmptied = cur && JSON.parse(cur.responsibilities || '[]').length === 0 && JSON.parse(cur.crossed_off || '[]').length > 0;
     const keepAsIs = departed || deliberatelyEmptied;
-    const row = { id: pid, legacy_roles: JSON.stringify((t.absorbs || []).map(r => roleTitle[r] || r)) };
+    // A snapshot must not hand a role back to someone who has left, any more than it hands back work.
+    const row = { id: pid };
+    if (!departed)
+      row.legacy_roles = JSON.stringify((t.absorbs || []).map(r => deCA(roleTitle[r] || r)));
     if (keepAsIs) skippedPeople.push(pid);   // never hand work back to someone who has left
     else {
       // The hub is edited by people, so what it says a person holds replaces what was there, deletions
@@ -534,9 +537,9 @@ function importOpsHub(db, { filename, content }, role) {
     const owner_id = roleOwner[p.owner] || null;
     const participants = (p.participants || []).map(r => `${roleTitle[r] || r}${roleOwner[r] ? ' → ' + personNameFromDb(db, roleOwner[r]) : ' → unassigned'}`);
     const department_id = HUB_PROCESS_DEPT[p.id] || HUB_CATEGORY_DEPT[String(p.category || '').toLowerCase()] || null;
-    const steps = (p.steps || []).map((x, i) => `${i + 1}. ${x}`).join('\n');
+    const steps = (p.steps || []).map((x, i) => `${i + 1}. ${deCA(x)}`).join('\n');
     const old = /\b(200\d|201\d)\b/.test(p.date || '');
-    const row = { id, title: p.name, department_id, owner_id: ex?.owner_id || owner_id, trigger: p.description || null, steps, inputs: participants.length ? 'Participants (legacy role → current person):\n' + participants.join('\n') : null,
+    const row = { id, title: p.name, department_id, owner_id: ex?.owner_id || owner_id, trigger: deCA(p.description) || null, steps, inputs: participants.length ? 'Participants (legacy role → current person):\n' + participants.join('\n') : null,
       documented: steps ? 1 : 0, source: `${src} — SOP dated ${p.date || 'unknown'}`, source_link: `${filename || 'mch-ops-hub.jsx'}#${p.id}`,
       missing_info: [old ? `SOP dated ${p.date}: written for the old org (DOC/DOP/CFO roles). Confirm which steps still apply.` : null, !owner_id ? `Legacy owner "${roleTitle[p.owner] || p.owner}" is not absorbed by anyone on the current team.` : null].filter(Boolean).join(' ') || null,
       next_action: 'Review with ' + (owner_id ? personNameFromDb(db, owner_id) : 'the team') + ': confirm the steps still match how it is done today.' };
@@ -861,11 +864,29 @@ function matchVendorRows(db, name) {
   return byTrade;
 }
 
+// "Construction Assistant" is not a job at McVaugh any more: the role is Construction and Lonnie holds it
+// [Brittany 11/09]. Applied both when the hub is regenerated and when an old snapshot is imported, so a
+// 2006 file cannot put the words back.
+const deCA = v => typeof v === 'string'
+    ? v.replace(/Construction Assistant \(CA\)/gi, 'Construction').replace(/Construction Assistant/gi, 'Construction')
+        .replace(/\bconstruction_asst\b/g, 'construction').replace(/\bCA\b(?!\w)/g, 'Construction')
+  : Array.isArray(v) ? v.map(deCA)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, deCA(x)]))
+  : v;
+
 // ---------- regenerate the old MCH Operations Hub from the world's current data ----------
 // Keeps the hub's own UI (seed/mch-ops-hub.template.html) and replaces its data constants, so the old dashboard
 // stays in step with the world: SOPs (old + confirmed new, with supersedes), current-team responsibilities, cross-offs.
 function regenerateOpsHub(db, templateHtml) {
   const base = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8'));
+  // "Construction Assistant" is not a job here any more. The role is Construction, and Lonnie holds it.
+  // Renaming it in one place rewrites the role list, every procedure's owner and participants, and the
+  // team's absorbed roles together, so no corner of the page is left calling it CA.
+  const ROLE_RENAMES = { construction_asst: { id: 'construction', title: 'Construction' } };
+  const reId = id => ROLE_RENAMES[id]?.id || id;
+  base.roles = base.roles.map(r => deCA(ROLE_RENAMES[r.id] ? { ...r, ...ROLE_RENAMES[r.id] } : r));
+  base.processes = base.processes.map(p => deCA({ ...p, owner: reId(p.owner), participants: (p.participants || []).map(reId) }));
+  base.team = base.team.map(t => ({ ...t, absorbs: (t.absorbs || []).map(reId) }));
   const people = db.prepare('SELECT * FROM people').all(), tasks = db.prepare('SELECT * FROM tasks').all();   // archived included so a retired SOP can be dropped on purpose
   const roleIdByTitle = Object.fromEntries(base.roles.map(r => [r.title, r.id]));
   const personLegacy = p => JSON.parse(p.legacy_roles || '[]').map(t => roleIdByTitle[t]).filter(Boolean);
@@ -990,10 +1011,14 @@ function regenerateOpsHub(db, templateHtml) {
     html = html.slice(0, sp.start) + `const ${name} = ${lit(value)}` + html.slice(sp.end);
   };
   const staticDocs = (() => { const sp = spanOf(templateHtml, 'REVIEW_DOCUMENTS'); try { return sp ? JSON.parse(sp.body) : []; } catch { return []; } })();
-  replaceConst('INITIAL_PROCESSES', processes); replaceConst('CURRENT_TEAM', team);
+  replaceConst('INITIAL_ROLES', base.roles);
   replaceConst('VENDOR_RULES', vendorRules); replaceConst('COMPLETED_RECORDS', records);
   replaceConst('CURRENT_ASSIGNMENTS', assignments);
-  replaceConst('REVIEW_DOCUMENTS', [settledDoc, ...staticDocs]);
+  replaceConst('REVIEW_DOCUMENTS', deCA([settledDoc, ...staticDocs]));
+  replaceConst('INITIAL_PROCESSES', deCA(processes)); replaceConst('CURRENT_TEAM', deCA(team));
+  // The page's own role-matching table still keyed the old id and searched for "ca".
+  html = html.replace(/\{ id: "construction_asst", keywords: \[[^\]]*\] \}/,
+    '{ id: "construction", keywords: ["construction", "construction lead", "field"] }');
   html = html.replace(/<\/head>/, `<!-- regenerated by McVaugh Operations World on ${nowIso()}; data constants come from the world's database. Edit in the world, not here. -->\n</head>`);
   return html;
 }

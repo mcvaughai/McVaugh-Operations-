@@ -1857,6 +1857,47 @@ const UPDATES = [
       label: `${RECORDS.length} entered work orders and purchase orders moved into the world; the hub panel now comes from them`,
       source: 'manual', actor: 'brittany', external_id: 'work-orders-entered-2026-11-09' });
   } },
+
+  // "Construction Assistant" is gone for good. The role is Construction and Lonnie holds it, so the words
+  // come out of the role, out of Lonnie's record and out of every procedure step that still used them.
+  { key: 'construction-not-ca-2026-11-09', apply(db) {
+    const ts = nowIso();
+    const lon = db.prepare('SELECT legacy_roles, notes FROM people WHERE id = ?').get('lonnie');
+    if (lon) upsert(db, 'people', { id: 'lonnie',
+      legacy_roles: [...new Set([...JSON.parse(lon.legacy_roles || '[]').filter(r => !/Construction Assistant/i.test(r)), 'Construction'])],
+      notes: String(lon.notes || '').replace(/Holds the Construction Assistant role as well as construction and permitting[^\n]*/,
+        'Holds Construction: "remove Construction Assistant completely and replace with just Construction, aka Lonnie." The old CA work is construction work and it is his. [Brittany 11/09]'),
+      updated_at: ts });
+
+    // The words themselves, wherever they appear in a procedure.
+    const fix = v => String(v || '')
+      .replace(/Construction Assistant \(CA\)/gi, 'Construction')
+      .replace(/Construction Assistant/gi, 'Construction')
+      .replace(/\bCA\b(?!\w)/g, 'Construction')
+      .replace(/\bconstruction_asst\b/g, 'construction');
+    let touched = 0;
+    for (const t of db.prepare('SELECT id, steps, inputs, trigger, missing_info FROM tasks').all()) {
+      const row = { id: t.id };
+      for (const k of ['steps', 'inputs', 'trigger', 'missing_info']) if (t[k] && fix(t[k]) !== t[k]) row[k] = fix(t[k]);
+      if (Object.keys(row).length === 1) continue;
+      upsert(db, 'tasks', { ...row, updated_at: ts }); touched++;
+    }
+
+    // Step 1 of the new work order procedure said the CA post no longer exists. Say what is true instead.
+    const nwo = db.prepare('SELECT steps FROM tasks WHERE id = ?').get('hub-new_work_order');
+    if (nwo) upsert(db, 'tasks', { id: 'hub-new_work_order',
+      steps: String(nwo.steps).replace(/Nobody receives red-lined plans[^\n]*/,
+        'Nobody receives red-lined plans, and there is no assistant post to receive them — that work is Construction, which is Lonnie. [M 15:13–16:30] [Brittany 11/09]'),
+      updated_at: ts });
+
+    const doc = db.prepare("SELECT id, content FROM documents WHERE id = 'doc-legacy-role-construction-asst'").get();
+    if (doc) upsert(db, 'documents', { id: doc.id, content: fix(doc.content),
+      reason: 'Former Construction Assistant role, renamed Construction and held by Lonnie from 9 November', updated_at: ts });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'lonnie', kind: 'setup', status: 'info',
+      label: `Construction Assistant removed: the role is Construction and Lonnie holds it (${touched} procedures reworded)`,
+      source: 'manual', actor: 'brittany', external_id: 'construction-not-ca-2026-11-09' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

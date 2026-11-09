@@ -139,6 +139,14 @@ CREATE TABLE IF NOT EXISTS wo_specifics (
   task_id TEXT, source TEXT, noted_on TEXT, updated_at TEXT
 );
 
+-- Work orders that were actually entered, so the hub's "completed records" panel comes from the world
+-- instead of a list frozen in the page.
+CREATE TABLE IF NOT EXISTS work_orders (
+  id TEXT PRIMARY KEY, wo_number TEXT, vendor_name TEXT, job_name TEXT, home_id TEXT,
+  amount REAL, cost_code TEXT, notes TEXT, entered_by TEXT, entered_on TEXT,
+  source TEXT, updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS bid_requests (
   id TEXT PRIMARY KEY, line_item TEXT NOT NULL, cost_code TEXT, home_id TEXT, build_step_id TEXT,
   scope TEXT, docs_provided TEXT,
@@ -271,6 +279,7 @@ const TABLES = {
   vendors: ['id','trade','vendor','contacts','rate','docs_needed','notes','source','imported_at','updated_at','pricing_basis','wo_instructions','wo_review','gl_expiry','wc_expiry','insurance_updated'],
   approvals: ['id','agent_id','task_id','kind','subject','vendor_id','home_id','amount','question','draft','evidence','released','status','requested_from','channel','channel_ref','token','requested_at','decided_at','decided_by','decided_via','decision_note','source','external_id','options','chosen','bid_request_id','identity','due_by','wo_ref','entered_at','entered_by','requested_by'],
   wo_specifics: ['id','vendor_id','vendor_name','home_id','job_name','detail','scope','task_id','source','noted_on','updated_at'],
+  work_orders: ['id','wo_number','vendor_name','job_name','home_id','amount','cost_code','notes','entered_by','entered_on','source','updated_at'],
   bid_requests: ['id','line_item','cost_code','home_id','build_step_id','scope','docs_provided','vendors','expected','sole_source','sole_source_reason','due_by','status','awarded_bid_id','requested_by','requested_at','sent_at','closed_at','notes','source','updated_at'],
   bids: ['id','bid_request_id','vendor_id','vendor_name','amount','amount_value','basis','sqft','scope_notes','doc_id','received_at','status','reject_reason','wo_ref','entered_at','entered_by','source','updated_at'],
   build_steps: ['id','seq','row_no','phase','description','responsible','vendor_id','kind','is_mch','inspection','notes','credential_note','gap','sensitive','source','imported_at','updated_at'],

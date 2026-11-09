@@ -143,7 +143,8 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.equal(JSON.parse(s.people.find(p => p.id === 'maria').responsibilities).length, 0);
     assert.equal(JSON.parse(s.people.find(p => p.id === 'maria').crossed_off).length, 24, 'what she struck off on her last day'); assert.deepEqual(JSON.parse(s.people.find(p => p.id === 'kenneth').legacy_roles), ['CFO']);
     assert.equal(s.documents.filter(d => d.id.startsWith('doc-legacy-role')).length, 16);
-    const dbp = s.tasks.find(t => t.id === 'obs-procedures-for-the-mch-database'); assert.match(dbp.steps, /Work orders must be in the database prior to work commencing/); assert.equal(dbp.owner_id, 'maria');
+    const dbp = s.tasks.find(t => t.id === 'obs-procedures-for-the-mch-database'); assert.match(dbp.steps, /Work orders must be in the database prior to work commencing/); assert.equal(dbp.owner_id, 'james', 'the work-order guide moved off Maria: entry is James\'s, Lonnie backs it up');
+    assert.equal(dbp.backup_id, 'lonnie');
     await call('POST', '/api/tasks/hub-new_work_order', { proposed: 0, owner_id: 'maria' });
     const r = (await call('POST', '/api/import/opshub', { filename: 'hub.json', content: fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8') })).body; assert.equal(r.tasks, 18, 'the 18 the snapshot may refresh');
     assert.equal(r.procedures_kept.length, 7, 'the 7 decided here — one retired, four stale, two rewritten — are not overwritten by the old file');
@@ -946,6 +947,43 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(co, 'the replacement procedure is still on the books');
     assert.ok(/2 and \.3 extension/.test(co.steps || ''), 'and a hub snapshot import never puts the 2022 change order log steps back');
     assert.ok(!s.tasks.some(t => t.lifecycle === 'retired' && !t.archived), 'a retired procedure stays retired across an import');
+  });
+  await check('every hub panel comes from the world — none is left frozen in the template', async () => {
+    const fsx = require('fs');
+    const html = (await call('GET', '/api/export/opshub')).body;
+    const tpl = fsx.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.template.html'), 'utf8');
+    // Four panels used to be carried through untouched, so the page showed whatever the 4 November file held.
+    const span = (src, name) => {
+      const m = new RegExp('const\\s+' + name + '\\s*=\\s*').exec(src); if (!m) return null;
+      let i = m.index + m[0].length; const o = src[i]; let depth = 0, inStr = null, esc = false;
+      for (let j = i; j < src.length; j++) { const c = src[j];
+        if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === inStr) inStr = null; continue; }
+        if (c === '"' || c === "'" || c === '`') inStr = c;
+        else if (c === '[' || c === '{') depth++;
+        else if (c === ']' || c === '}') { if (--depth === 0) return src.slice(i, j + 1); } }
+      return null;
+    };
+    for (const name of ['VENDOR_RULES', 'COMPLETED_RECORDS', 'CURRENT_ASSIGNMENTS', 'REVIEW_DOCUMENTS'])
+      assert.notEqual(span(html, name), span(tpl, name), `${name} is still the template's copy`);
+    const rules = JSON.parse(span(html, 'VENDOR_RULES'));
+    assert.ok(rules.some(r => /change orders/i.test(r.vendor) && /\.2 and \.3/.test(r.rules)), 'a rule added today reaches the panel');
+    const recs = JSON.parse(span(html, 'COMPLETED_RECORDS'));
+    assert.ok(recs.some(r => r.id === 'WO 40184'), 'the entered work orders come out of the world now');
+    const asg = JSON.parse(span(html, 'CURRENT_ASSIGNMENTS'));
+    assert.deepEqual(asg['sop-pur-01-wo-entry-buildconnect'].owners, ['james']);
+    assert.match(asg['sop-pur-01-wo-entry-buildconnect'].label, /backup/);
+    // An earlier test parks this one on Maria on purpose; the panel must say she has left, not show her as owner.
+    assert.deepEqual(asg['new_work_order'].owners, []);
+    assert.match(asg['new_work_order'].label, /has left/);
+    assert.ok(Object.values(asg).every(a => a.owners.length || /Nobody holds this|has left/.test(a.label)),
+      'an unowned procedure says so rather than showing an empty row');
+    // What is left over and not answered — the part the page never carried.
+    const docs = JSON.parse(span(html, 'REVIEW_DOCUMENTS'));
+    assert.match(docs[0].title, /not settled yet/);
+    assert.match(docs[0].markdown, /Waiting on a decision/);
+    assert.match(docs[0].markdown, /Procedures with something missing/);
+    assert.match(docs[0].markdown, /Proforma/, 'an open decision raised today is on the page');
+    assert.ok(docs.length > 1, 'the written review documents are kept underneath it');
   });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {

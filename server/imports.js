@@ -869,7 +869,13 @@ function regenerateOpsHub(db, templateHtml) {
   const people = db.prepare('SELECT * FROM people').all(), tasks = db.prepare('SELECT * FROM tasks').all();   // archived included so a retired SOP can be dropped on purpose
   const roleIdByTitle = Object.fromEntries(base.roles.map(r => [r.title, r.id]));
   const personLegacy = p => JSON.parse(p.legacy_roles || '[]').map(t => roleIdByTitle[t]).filter(Boolean);
-  const ownerRole = id => { const p = people.find(x => x.id === id); return p ? (personLegacy(p)[0] || p.id) : 'doc'; };
+  // Someone still here is published under their own name. The old role id is only used for people who have
+  // left, where "Director of Construction" is the honest label — nobody holds it, and the assignments panel
+  // says so. Lonnie taking the Construction Assistant role must not turn his eight procedures into "CA".
+  const ownerRole = id => {
+    const p = people.find(x => x.id === id); if (!p) return 'doc';
+    return /\bDEPARTED\b/i.test(p.notes || '') ? (personLegacy(p)[0] || p.id) : p.id;
+  };
   const steps = t => String(t.steps || '').split(/\n/).map(x => x.replace(/^\s*\d+[.)]\s*/, '').trim()).filter(Boolean);
   const processes = [];
   for (const bp of base.processes) { // old SOPs keep their original structure; steps/description refreshed from the task if edited
@@ -901,10 +907,93 @@ function regenerateOpsHub(db, templateHtml) {
       review_status: p.review_status, departed: /\bDEPARTED\b/i.test(p.notes || ''), leaving: /LEAVING/.test(p.notes || '') };
   });
   for (const p of people) if (!team.find(t => t.id === p.id) && JSON.parse(p.responsibilities || '[]').length) team.push({ id: p.id, name: p.full_name || p.name, title: p.title || '', department: '', color: '#64748B', email: p.email || '', absorbs: personLegacy(p), responsibilities: JSON.parse(p.responsibilities || '[]') });
+
+  // --- the four panels that used to be frozen in the template ---------------------------------------
+  // They were carried through untouched by every regeneration, so the page showed whatever the 4 November
+  // file happened to contain. They come from the world now.
+
+  const vendorRules = db.prepare('SELECT * FROM wo_specifics ORDER BY vendor_name').all().map(r => ({
+    vendor: r.vendor_name || 'All vendors',
+    code: (String(r.detail || '').match(/\bcode\s+(\d{3}(?:\.\d)?)/i) || [])[1] || '',
+    description: r.job_name || (r.scope === 'job' ? 'Job-specific' : r.scope === 'vendor_job' ? 'This vendor on this job' : 'All work for this vendor'),
+    routing: r.home_id ? 'One job only' : 'Every job',
+    rules: r.detail, noted: r.noted_on || '', source: r.source || '',
+  }));
+
+  const records = db.prepare('SELECT * FROM work_orders ORDER BY wo_number').all().map(r => ({
+    id: r.wo_number, vendor: r.vendor_name, job: r.job_name, amount: r.amount, code: r.cost_code || '', notes: r.notes || '',
+  }));
+
+  // Who holds each procedure, straight off the task. An empty owners list is the honest answer for one
+  // that nobody holds, and the label says so rather than leaving the reader to guess.
+  const nameOf = id => { const p = people.find(x => x.id === id); return p ? (p.full_name || p.name) : id; };
+  const assignments = {};
+  for (const t of tasks.filter(x => !x.archived && x.lifecycle !== 'retired')) {
+    const owner = t.owner_id && people.find(p => p.id === t.owner_id);
+    const gone = owner && /\bDEPARTED\b/i.test(owner.notes || '');
+    assignments[t.id.replace(/^hub-/, '')] = {
+      owners: owner && !gone ? [t.owner_id] : [],
+      involved: [t.backup_id, ...(gone ? [t.owner_id] : [])].filter(Boolean),
+      label: !t.owner_id ? 'Nobody holds this'
+        : gone ? `Still recorded against ${nameOf(t.owner_id)}, who has left — needs an owner`
+        : t.lifecycle === 'stale' ? `${nameOf(t.owner_id)} — but nobody is actually doing it`
+        : t.backup_id ? `${nameOf(t.owner_id)}, backup ${nameOf(t.backup_id)}` : `${nameOf(t.owner_id)} — no backup`,
+    };
+  }
+
+  // What is left over and not answered. This is the part the hub never carried: the page showed the
+  // procedures and said nothing about the questions underneath them.
+  const openDecisions = db.prepare("SELECT * FROM decisions WHERE status IN ('proposed','open') ORDER BY status, date").all();
+  const gaps = tasks.filter(t => !t.archived && t.lifecycle !== 'retired' && t.missing_info)
+    .map(t => ({ title: t.title, owner: t.owner_id ? nameOf(t.owner_id) : 'nobody', missing: t.missing_info, stale: t.lifecycle === 'stale' }));
+  const unowned = tasks.filter(t => !t.archived && t.lifecycle !== 'retired' && !t.owner_id);
+  const row = (...c) => '| ' + c.map(x => String(x == null ? '' : x).replace(/\|/g, '\\|').replace(/\n/g, ' ')) .join(' | ') + ' |';
+  const settledDoc = {
+    title: 'What is not settled yet — ' + nowIso().slice(0, 10),
+    markdown: [
+      '## What is not settled yet',
+      '',
+      'Generated from the world, not written by hand. If something here is wrong, it is wrong in the world and should be fixed there.',
+      '',
+      `### Waiting on a decision (${openDecisions.length})`, '',
+      row('Needs', 'Question', 'Why it is open'), row('---', '---', '---'),
+      ...openDecisions.map(d => row(d.status === 'proposed' ? 'Brittany' : 'Someone else', d.title, d.reason)),
+      '',
+      `### Procedures nobody holds (${unowned.length})`, '',
+      unowned.length ? unowned.map(t => `- ${t.title}`).join('\n') : '_None._',
+      '',
+      `### Procedures with something missing (${gaps.length})`, '',
+      row('Procedure', 'Owner', 'What is missing'), row('---', '---', '---'),
+      ...gaps.map(g => row(g.title + (g.stale ? ' — STALE' : ''), g.owner, g.missing)),
+    ].join('\n'),
+  };
+
   const lit = v => JSON.stringify(v, null, 2);
   let html = templateHtml;
-  const replaceConst = (name, value) => { const re = new RegExp(`const ${name} = \\[[\\s\\S]*?\\n\\];`); if (!re.test(html)) throw new Error('template missing ' + name); html = html.replace(re, () => `const ${name} = ${lit(value)};`); };
+  // Find the constant's literal by walking its brackets, string-aware. A regex on "\n];" breaks the moment
+  // a literal ends on one line, which is how REVIEW_DOCUMENTS is written.
+  const spanOf = (src, name) => {
+    const m = new RegExp('const\\s+' + name + '\\s*=\\s*').exec(src); if (!m) return null;
+    let i = m.index + m[0].length; const o = src[i]; if (o !== '[' && o !== '{') return null;
+    let depth = 0, inStr = null, esc = false;
+    for (let j = i; j < src.length; j++) {
+      const c = src[j];
+      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === inStr) inStr = null; continue; }
+      if (c === '"' || c === "'" || c === '`') inStr = c;
+      else if (c === '[' || c === '{') depth++;
+      else if (c === ']' || c === '}') { if (--depth === 0) return { start: m.index, end: j + 1, body: src.slice(i, j + 1) }; }
+    }
+    return null;
+  };
+  const replaceConst = (name, value) => {
+    const sp = spanOf(html, name); if (!sp) throw new Error('template missing ' + name);
+    html = html.slice(0, sp.start) + `const ${name} = ${lit(value)}` + html.slice(sp.end);
+  };
+  const staticDocs = (() => { const sp = spanOf(templateHtml, 'REVIEW_DOCUMENTS'); try { return sp ? JSON.parse(sp.body) : []; } catch { return []; } })();
   replaceConst('INITIAL_PROCESSES', processes); replaceConst('CURRENT_TEAM', team);
+  replaceConst('VENDOR_RULES', vendorRules); replaceConst('COMPLETED_RECORDS', records);
+  replaceConst('CURRENT_ASSIGNMENTS', assignments);
+  replaceConst('REVIEW_DOCUMENTS', [settledDoc, ...staticDocs]);
   html = html.replace(/<\/head>/, `<!-- regenerated by McVaugh Operations World on ${nowIso()}; data constants come from the world's database. Edit in the world, not here. -->\n</head>`);
   return html;
 }

@@ -1643,7 +1643,7 @@ const UPDATES = [
       content_locked: 1, department_id: 'purchasing',
       trigger: 'A lot and plan are known and a trade has to be priced and put on the job.',
       steps: [
-        '1. The plan is known as soon as the lot is assigned — the villas build from approved master plans (3, 3A, 4, 4A). Nobody receives red-lined plans and there is no Construction Assistant. [M 15:13–16:30]',
+        '1. The plan is known as soon as the lot is assigned — the villas build from approved master plans (3, 3A, 4, 4A). Nobody receives red-lined plans, and the Construction Assistant post no longer exists as a job — that work is Lonnie\'s. [M 15:13–16:30] [Brittany 11/09]',
         '2. Who to send to is vendor knowledge, not a document. What exists is the list Maria left of people to send bids to; it has no owner yet and no current rates against it. [M 18:59]',
         '3. Square-foot trades are not bid: framing, concrete, stucco, sheetrock, paint and trim are priced at the agreed $/sq ft × that trade\'s square footage. The square footage differs by trade — framer is the total including garage and patios, sheetrock excludes balconies, trim is the A/C area. [M 12:41–13:36, 57:54–59:32]',
         '4. Electrical, plumbing and mechanical do go out to bid, but come back consistent per plan. Interior finishes cannot be priced at all until selections are done. [M 12:41–13:36]',
@@ -1689,6 +1689,173 @@ const UPDATES = [
     addEvent(db, { entity_type: 'task', entity_id: 'hub-new_work_order', kind: 'setup', status: 'info',
       label: `New work order process rewritten from the meetings; ${rehomed.length} procedures taken off the purchasing list`,
       source: 'manual', actor: 'brittany', external_id: 'new-work-order-rewrite-2026-11-09' });
+  } },
+
+  // Brittany's rules, 9 November: the Construction Assistant's work is Lonnie's unless a transcript put it
+  // with James; every procedure that named the purchasing list belongs to Lonnie or James; and chasing a
+  // late bid is Lonnie's, because he requests the bids now.
+  { key: 'ca-to-lonnie-and-late-bids-2026-11-09', apply(db) {
+    const ts = nowIso();
+    const SRC = 'Brittany, 2026-11-09';
+    const CA = 'Construction Assistant (CA)';
+
+    // The CA role sat with Maria, who has left. Construction work goes to Lonnie.
+    for (const [pid, fn] of [['maria', r => r.filter(x => x !== CA)], ['lonnie', r => [...new Set([...r, CA])]]]) {
+      const p = db.prepare('SELECT legacy_roles, notes FROM people WHERE id = ?').get(pid); if (!p) continue;
+      upsert(db, 'people', { id: pid, legacy_roles: fn(JSON.parse(p.legacy_roles || '[]')), updated_at: ts });
+    }
+    const lon = db.prepare('SELECT notes FROM people WHERE id = ?').get('lonnie');
+    if (lon && !/Construction Assistant/.test(lon.notes || ''))
+      upsert(db, 'people', { id: 'lonnie', notes: [lon.notes, 'Holds the Construction Assistant role as well as construction and permitting: "CA responsibilities should be all Lonnie\'s, aka construction, unless the transcript listed them as James." [Brittany 11/09]'].filter(Boolean).join('\n'), updated_at: ts });
+
+    // Every procedure that used to name the purchasing list is Lonnie's or James's — construction or entry.
+    const OWNERS = [
+      ['hub-work_order_ap', 'lonnie', 'james'],        // approval and payment routing: the field side is Lonnie's
+      ['hub-start_packet', 'lonnie', 'james'],
+      ['obs-procedures-for-the-mch-database', 'james', 'lonnie'],  // the work-order guide: entry is James's
+      ['sop-pur-01-wo-entry-buildconnect', 'james', 'lonnie'],
+      ['sop-pur-02-material-po-entry', 'james', 'lonnie'],
+      ['hub-new_work_order', 'lonnie', 'james'],
+      ['tr-bid-requests', 'brittany', 'lonnie'],       // parked, Brittany's until it has a process; bids are Lonnie's
+    ];
+    for (const [id, owner, backup] of OWNERS) {
+      if (!db.prepare('SELECT id FROM tasks WHERE id = ?').get(id)) continue;
+      upsert(db, 'tasks', { id, owner_id: owner, backup_id: backup, updated_at: ts });
+    }
+
+    // The two steps dropped on 9 November for want of confirmation now have an owner, so they go back in.
+    const nwo = db.prepare('SELECT steps FROM tasks WHERE id = ?').get('hub-new_work_order');
+    if (nwo && !/chase/i.test(nwo.steps || '')) {
+      const lines = String(nwo.steps).split('\n');
+      const at = lines.findIndex(l => /^7\./.test(l));   // after "Lonnie reviews the price and agrees it"
+      const extra = [
+        'If a bid has not come back, Lonnie chases it. He requests the bids, so following them up is his. [Brittany 11/09] The old procedure said a week; whether a week is still the right wait is not settled.',
+        'Lonnie tells James what went out — address, date and which subcontractor — so entry knows what is coming. [Brittany 11/09, as the CA step, now Lonnie\'s] Never confirmed in a meeting: check it is really happening before relying on it.',
+      ];
+      lines.splice(at >= 0 ? at : lines.length, 0, ...extra);
+      upsert(db, 'tasks', { id: 'hub-new_work_order',
+        steps: lines.map((l, i) => l.replace(/^\s*\d+\.\s*/, '').trim()).map((l, i) => `${i + 1}. ${l}`).join('\n'),
+        missing_info: 'Still open: who owns the vendor list and its current $/sq ft rates, the square footage per plan per trade, where each bidding document comes from, and how long a bid may go quiet before Lonnie chases it. The step where Lonnie tells James what went out was never confirmed in a meeting — check it is actually happening.',
+        updated_at: ts });
+    }
+
+    upsert(db, 'decisions', { id: 'dec-late-bid-chasing', status: 'accepted', decided_by: 'Brittany',
+      reason: 'Lonnie. He requests the bids now, so chasing one that has gone quiet is his. Back in the procedure as his step. How long to wait is not settled — the 2006 text said a week. [Brittany 11/09]' });
+
+    // What is left of the same problem: three dead roles still sit with Maria and two with the purchasing list,
+    // which is why 21 procedures still publish under "Director of Construction".
+    upsert(db, 'decisions', { id: 'dec-legacy-roles-rehome', date: '2026-11-09',
+      title: 'Five legacy roles still belong to people who have left — DOC, Superintendent and PM to Maria, DOP and Purchasing Manager to the purchasing list',
+      reason: 'The Construction Assistant role moved to Lonnie on 9 November. Still sitting with Maria: Director of Construction, Superintendent and Project Manager. Still with the purchasing list: Director of Purchasing / Operations and Purchasing Manager. This is why 21 of the 53 published procedures show their owner as "Director of Construction" — a role nobody holds. Same rule as the CA one would settle it: construction to Lonnie, entry and purchasing to James, unless a transcript says otherwise. [Brittany 11/09]',
+      status: 'proposed', decided_by: null, source: SRC });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'lonnie', kind: 'setup', status: 'info',
+      label: 'Construction Assistant role moved to Lonnie; the seven purchasing-list procedures now sit with Lonnie or James; chasing a late bid is Lonnie\'s',
+      source: 'manual', actor: 'brittany', external_id: 'ca-to-lonnie-and-late-bids-2026-11-09' });
+  } },
+
+  // The hub's completed-records panel was a list frozen in the page. Put the records in the world so the
+  // panel comes from data, and so the next work order entered can be added rather than hand-edited.
+  { key: 'work-orders-entered-2026-11-09', apply(db) {
+    const ts = nowIso();
+    const RECORDS = [
+      {
+            "id": "wo-40184",
+            "wo_number": "WO 40184",
+            "vendor_name": "Johnston Waterproofing",
+            "job_name": "11603 Royal Parkside",
+            "amount": 1935.75,
+            "cost_code": "409",
+            "notes": "4 rows: waterproofing, door pans, crickets"
+      },
+      {
+            "id": "wo-40186",
+            "wo_number": "WO 40186",
+            "vendor_name": "H & H Fence",
+            "job_name": "ROCVTA",
+            "amount": 3025,
+            "cost_code": "940",
+            "notes": "Invoice 7272; physical site 11507 Royal Ivory Crossing; requested start 10/23 vs saved 10/27; authorized correction and date-policy review open"
+      },
+      {
+            "id": "wo-40187",
+            "wo_number": "WO 40187",
+            "vendor_name": "M. Reeves",
+            "job_name": "11602 Royal Parkside",
+            "amount": 110,
+            "cost_code": "",
+            "notes": "Invoice 658140"
+      },
+      {
+            "id": "wo-40188",
+            "wo_number": "WO 40188",
+            "vendor_name": "Autumn HVAC",
+            "job_name": "11603 Royal Parkside",
+            "amount": 16438.37,
+            "cost_code": "610",
+            "notes": "60/30/10 draws; 2,626 A/C sq ft"
+      },
+      {
+            "id": "wo-40189",
+            "wo_number": "WO 40189",
+            "vendor_name": "Synergy",
+            "job_name": "11603 Royal Parkside",
+            "amount": 23991.24,
+            "cost_code": "400",
+            "notes": "30/50/20 draws; 2,542 roof sq ft; proposal date Oct 20, 2026"
+      },
+      {
+            "id": "wo-40190",
+            "wo_number": "WO 40190",
+            "vendor_name": "Electrical Works CO2",
+            "job_name": "11602 Royal Parkside",
+            "amount": 1135,
+            "cost_code": "620",
+            "notes": "Invoice 22923"
+      },
+      {
+            "id": "wo-40191",
+            "wo_number": "WO 40191",
+            "vendor_name": "Electrical Works CO3",
+            "job_name": "11602 Royal Parkside",
+            "amount": 255,
+            "cost_code": "620",
+            "notes": "Invoice 23263"
+      },
+      {
+            "id": "po-21131",
+            "wo_number": "PO 21131",
+            "vendor_name": "Lowes",
+            "job_name": "11602 Royal Parkside",
+            "amount": 82.27,
+            "cost_code": "996",
+            "notes": "Receipt 41867; sent to Canon, physical output/handoff unverified; Complete disabled"
+      },
+      {
+            "id": "po-21133",
+            "wo_number": "PO 21133",
+            "vendor_name": "Reece",
+            "job_name": "11603 Royal Parkside",
+            "amount": 8791.4,
+            "cost_code": "601",
+            "notes": "Valves $534.16 + trims $8,257.24; email sent"
+      },
+      {
+            "id": "po-21134",
+            "wo_number": "PO 21134",
+            "vendor_name": "Reece",
+            "job_name": "11603 Royal Parkside",
+            "amount": 1493.65,
+            "cost_code": "601",
+            "notes": "Quote S124892371-0001; PO emailed to vendor with Maria cc"
+      }
+];
+    for (const r of RECORDS)
+      upsert(db, 'work_orders', { ...r, entered_by: 'james', entered_on: '2026-10',
+        source: 'Recorded in the hub during the October work-order sessions', updated_at: ts });
+    addEvent(db, { entity_type: 'integration', entity_id: 'dashboard', kind: 'setup', status: 'info',
+      label: `${RECORDS.length} entered work orders and purchase orders moved into the world; the hub panel now comes from them`,
+      source: 'manual', actor: 'brittany', external_id: 'work-orders-entered-2026-11-09' });
   } },
 ];
 function applyUpdates(db) {

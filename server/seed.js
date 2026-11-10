@@ -2087,6 +2087,59 @@ const UPDATES = [
       label: `${moving.length} buyer-facing responsibilities placed with Pam; ${staying.length} left unclassified`,
       source: 'manual', actor: 'brittany', external_id: 'sales-items-to-pam-2026-11-10' });
   } },
+
+  // Finishing James's list. [Brittany 11/10] Marketing is nobody's yet, permitting is Lonnie's, and five
+  // entries go: four of them say again what another line on his list already says, and one is a duplicate
+  // of his own work-order entry. Struck off, not erased — the removal is a decision and reads as one.
+  { key: 'james-list-final-2026-11-10', apply(db) {
+    const ts = nowIso();
+    const TO_UNCLASSIFIED = ['Manages all marketing materials', 'Assists with MLS listings'];
+    const TO_LONNIE = ['Handles all permitting coordination'];
+    const DELETE = [
+      ['Enters work orders in database when within budget', 'Same work as "(Purchasing) Enters work orders and purchase orders into database", which stays.'],
+      ['Manages permit card filing and permit rack', 'Goes with permitting, and the permit rack is not kept.'],
+      ['Confirm required permits, insurance, licenses, and approvals are in place', 'Covered by the vendor compliance lines he keeps.'],
+      ['Maintain contractors liability insurance and keep up to date on all required forms', 'Said already by the GL certificate renewal line and the vendor-documents line.'],
+      ['Maintain Purchasing database items', 'Too vague to own; the specific purchasing lines he keeps are the work.'],
+    ];
+    const j = db.prepare('SELECT * FROM people WHERE id = ?').get('james');
+    const u = db.prepare('SELECT * FROM people WHERE id = ?').get('unclassified');
+    const lon = db.prepare('SELECT * FROM people WHERE id = ?').get('lonnie');
+    if (!j || !u || !lon) return;
+    const starts = (r, list) => list.some(m => String(r).toLowerCase().startsWith(String(m).toLowerCase()));
+    const live = JSON.parse(j.responsibilities || '[]');
+    const toUn = live.filter(r => starts(r, TO_UNCLASSIFIED));
+    const toLon = live.filter(r => starts(r, TO_LONNIE));
+    const gone = live.filter(r => starts(r, DELETE.map(d => d[0])));
+    const keeping = live.filter(r => !toUn.includes(r) && !toLon.includes(r) && !gone.includes(r));
+
+    upsert(db, 'people', { id: 'james', responsibilities: keeping,
+      crossed_off: [...new Set([...JSON.parse(j.crossed_off || '[]'), ...toUn, ...toLon, ...gone])],
+      notes: [j.notes, `Finalised 10 November: marketing and MLS moved to Unclassified, permitting coordination to Lonnie, and ${gone.length} entries removed as saying again what another line already says. His list is ${keeping.length}. [Brittany 11/10]`].filter(Boolean).join('\n'),
+      updated_at: ts });
+    upsert(db, 'people', { id: 'unclassified',
+      responsibilities: [...JSON.parse(u.responsibilities || '[]'), ...toUn.map(r => `${r} (was on James's list)`)],
+      updated_at: ts });
+    upsert(db, 'people', { id: 'lonnie',
+      responsibilities: [...JSON.parse(lon.responsibilities || '[]'), ...toLon.map(r => `${r} (from James)`)],
+      notes: [lon.notes, 'Permitting coordination — impact fees, rescheck and permit tracking — moved from James on 10 November. [Brittany 11/10]'].filter(Boolean).join('\n'),
+      updated_at: ts });
+
+    const why = Object.fromEntries(DELETE);
+    upsert(db, 'decisions', { id: 'dec-james-list-removals', date: '2026-11-10',
+      title: `${gone.length} responsibilities removed from James's list as duplicates`,
+      reason: `Struck off on 10 November, not deleted, so they stay visible as removals. ${gone.map(g => `"${g}" — ${why[Object.keys(why).find(k => g.toLowerCase().startsWith(k.toLowerCase()))] || 'removed'}`).join(' ')} If any of these is really separate work rather than a restatement, say so and it comes back.`,
+      status: 'accepted', decided_by: 'Brittany', source: 'Brittany, 2026-11-10' });
+
+    upsert(db, 'decisions', { id: 'dec-unclassified-owners',
+      title: `${JSON.parse(db.prepare("SELECT responsibilities FROM people WHERE id = 'unclassified'").get().responsibilities).length} responsibilities still have no owner`,
+      reason: 'Unclassified holds the five bid-request items, modifying the database budget when a bid is approved, and now marketing and MLS listings. The bid work looks like Lonnie\'s, since requesting and chasing bids became his on 9 November, but Brittany has said to leave them unclassified for now. Marketing and MLS have no obvious home at all. [Brittany 11/10]',
+      status: 'proposed', source: 'Brittany, 2026-11-10' });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'james', kind: 'setup', status: 'info',
+      label: `James's list finalised at ${keeping.length}: 2 to Unclassified, 1 to Lonnie, ${gone.length} struck off as duplicates`,
+      source: 'manual', actor: 'brittany', external_id: 'james-list-final-2026-11-10' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

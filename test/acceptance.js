@@ -1017,9 +1017,13 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     // An earlier test in this run re-imports a pre-handover hub, and an import overrides by design, so his
     // live count here reflects that file. What must hold either way: nothing moved off him comes back.
     const X = id => JSON.parse(s2.people.find(p => p.id === id).crossed_off || '[]');
-    assert.equal(X('james').length, 19, 'the move is recorded as a removal, so a stale file cannot undo it');
+    assert.equal(X('james').length, 27, 'every removal from his list is recorded, so a stale file cannot undo it');
+    // Five were struck off as saying again what another line already says, not reassigned anywhere.
+    assert.ok(X('james').some(r => /Maintain Purchasing database items/.test(r)));
+    assert.ok(!R('unclassified').concat(R('pam'), R('lonnie')).some(r => /Maintain Purchasing database items/.test(r)));
+    assert.ok(s2.decisions.some(d => d.id === 'dec-james-list-removals' && d.status === 'accepted'));
     // The thirteen buyer-facing ones were placed with Pam the next day; the bid work is still unplaced.
-    assert.equal(R('unclassified').length, 6);
+    assert.equal(R('unclassified').length, 8, 'the bid work, the budget line, and marketing/MLS');
     assert.ok(R('unclassified').every(r => /was on James's list/.test(r)), 'where each came from is kept');
     assert.ok(!R('james').some(r => /Schedules New Home Orientation|Collects bids from subcontractors/.test(r)));
     assert.ok(R('unclassified').some(r => /Calls subcontractors for bids/.test(r)), 'the bid-request work is still nobody\'s');
@@ -1030,7 +1034,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const team = JSON.parse(/const CURRENT_TEAM = (\[[\s\S]*?\n\]);/.exec(html)[1]);
     const un = team.find(t => t.id === 'unclassified');
     assert.ok(un && un.unclassified === true, 'it publishes as its own tab');
-    assert.equal(un.responsibilities.length, 6);
+    assert.equal(un.responsibilities.length, 8);
     assert.equal(team[team.length - 1].id === 'unclassified' || team.indexOf(un) > team.findIndex(t => t.id === 'james'), true, 'and never ahead of a real person');
     assert.ok(s2.decisions.some(d => d.id === 'dec-unclassified-owners' && d.status === 'proposed'), 'finding each an owner is on Brittany\'s list');
   });

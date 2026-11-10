@@ -1011,6 +1011,25 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
       'no procedure still names it, including after an old hub snapshot has been re-imported');
     assert.ok(!s2.people.some(p => /Construction Assistant/.test(p.legacy_roles || '')), 'and no snapshot hands the role back to someone who has left');
   });
+  await check('work nobody owns sits on the Unclassified tab, not on a real list', async () => {
+    const s2 = (await call('GET', '/api/state')).body;
+    const R = id => JSON.parse(s2.people.find(p => p.id === id).responsibilities || '[]');
+    // An earlier test in this run re-imports a pre-handover hub, and an import overrides by design, so his
+    // live count here reflects that file. What must hold either way: nothing moved off him comes back.
+    const X = id => JSON.parse(s2.people.find(p => p.id === id).crossed_off || '[]');
+    assert.equal(X('james').length, 19, 'the move is recorded as a removal, so a stale file cannot undo it');
+    assert.equal(R('unclassified').length, 19);
+    assert.ok(R('unclassified').every(r => /was on James's list/.test(r)), 'where each came from is kept');
+    assert.ok(!R('james').some(r => /Schedules New Home Orientation|Collects bids from subcontractors/.test(r)));
+    assert.ok(R('unclassified').some(r => /Calls subcontractors for bids/.test(r)), 'the bid-request work went here too');
+    const html = (await call('GET', '/api/export/opshub')).body;
+    const team = JSON.parse(/const CURRENT_TEAM = (\[[\s\S]*?\n\]);/.exec(html)[1]);
+    const un = team.find(t => t.id === 'unclassified');
+    assert.ok(un && un.unclassified === true, 'it publishes as its own tab');
+    assert.equal(un.responsibilities.length, 19);
+    assert.equal(team[team.length - 1].id === 'unclassified' || team.indexOf(un) > team.findIndex(t => t.id === 'james'), true, 'and never ahead of a real person');
+    assert.ok(s2.decisions.some(d => d.id === 'dec-unclassified-owners' && d.status === 'proposed'), 'finding each an owner is on Brittany\'s list');
+  });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {
     // A route accidentally placed above the session gate would answer a signed-out caller. This catches that.

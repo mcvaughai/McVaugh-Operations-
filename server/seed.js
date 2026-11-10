@@ -1983,6 +1983,60 @@ const UPDATES = [
       label: 'Unclassified added to the hub as its own tab, for work that has no owner yet',
       source: 'manual', actor: 'brittany', external_id: 'unclassified-holder-2026-11-10' });
   } },
+
+  // Nineteen of James's thirty-seven are not his. He is not doing them and nobody knows who is, so they
+  // move to Unclassified rather than staying on his list to make it look covered. [Brittany 11/10]
+  { key: 'james-to-unclassified-2026-11-10', apply(db) {
+    const ts = nowIso();
+    // Matched on their opening words so a later rewording does not silently miss one.
+    const MOVE = [
+      'Distributes copies of contract, specs, and upgrades',
+      'Submits change order requests',
+      'Follows up on customer approval of change orders',
+      'Reviews floorplan choices, design options',
+      'Schedules series of walk-throughs',
+      'Confirms closing date with buyer',
+      'Schedules New Home Orientation',
+      'Schedules Homeowner Acceptance meeting',
+      'Calls buyer within 24-48 hours',
+      'Guides buyer through initial sales process',
+      'Coordinates with Pam on buyer selections',
+      '(Sales) Makes copies of contract package',
+      '(Sales) Reviews status report and distributes contract package',
+      '(Purchasing) Collects bids from subcontractors',
+      '(Purchasing) Calls subcontractors for bids if not received',
+      '(Purchasing) Requests and manages bid lists',
+      '(Purchasing) Advises team of address, date, and subcontractor',
+      '(Purchasing) Determines most competitive bid and creates work orders',
+      'Modifies database budget when bid/quote approved',
+    ];
+    const j = db.prepare('SELECT * FROM people WHERE id = ?').get('james');
+    const u = db.prepare('SELECT * FROM people WHERE id = ?').get('unclassified');
+    if (!j || !u) return;
+    const live = JSON.parse(j.responsibilities || '[]');
+    const hit = r => MOVE.some(m => String(r).toLowerCase().startsWith(m.toLowerCase()));
+    const moving = live.filter(hit), keeping = live.filter(r => !hit(r));
+    // Including the five bid-request ones: "those should go to NA" [Brittany 11/10].
+    const tagged = moving;   // the tab stays readable; where the bid work probably belongs is in the decision
+    // Recorded as struck off his list as well as moved, which is what it is: a removal somebody decided.
+    // It also means a re-import of an older hub cannot hand them back to him.
+    upsert(db, 'people', { id: 'james', responsibilities: keeping,
+      crossed_off: [...new Set([...JSON.parse(j.crossed_off || '[]'), ...moving])],
+      notes: [j.notes, `${moving.length} responsibilities moved to Unclassified on 10 November: "James isn't doing these but I don't know who is." His list is the ${keeping.length} that are genuinely his. [Brittany 11/10]`].filter(Boolean).join('\n'),
+      updated_at: ts });
+    upsert(db, 'people', { id: 'unclassified',
+      responsibilities: [...JSON.parse(u.responsibilities || '[]'), ...tagged.map(r => `${r} (was on James's list)`)],
+      updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-unclassified-owners', date: '2026-11-10',
+      title: `${moving.length} responsibilities have no owner — who does each of them?`,
+      reason: `Taken off James on 10 November because he is not doing them. Thirteen are buyer-facing sales work — walk-throughs, orientation, acceptance meeting, closing date, change order approvals, the contract package — which reads like Pam's or a sales coordinator's. Five are the bid-request work that became Lonnie's on 9 November and are flagged as such on the tab. One is modifying the database budget when a bid is approved, which sits next to James's own work-order entry. They are parked in Unclassified so the gap is visible instead of hiding on a real list. [Brittany 11/10]`,
+      status: 'proposed', decided_by: null, source: 'Brittany, 2026-11-10' });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'james', kind: 'setup', status: 'info',
+      label: `${moving.length} responsibilities moved from James to Unclassified; his list is down to ${keeping.length}`,
+      source: 'manual', actor: 'brittany', external_id: 'james-to-unclassified-2026-11-10' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

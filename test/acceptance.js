@@ -1018,15 +1018,19 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     // live count here reflects that file. What must hold either way: nothing moved off him comes back.
     const X = id => JSON.parse(s2.people.find(p => p.id === id).crossed_off || '[]');
     assert.equal(X('james').length, 19, 'the move is recorded as a removal, so a stale file cannot undo it');
-    assert.equal(R('unclassified').length, 19);
+    // The thirteen buyer-facing ones were placed with Pam the next day; the bid work is still unplaced.
+    assert.equal(R('unclassified').length, 6);
     assert.ok(R('unclassified').every(r => /was on James's list/.test(r)), 'where each came from is kept');
     assert.ok(!R('james').some(r => /Schedules New Home Orientation|Collects bids from subcontractors/.test(r)));
-    assert.ok(R('unclassified').some(r => /Calls subcontractors for bids/.test(r)), 'the bid-request work went here too');
+    assert.ok(R('unclassified').some(r => /Calls subcontractors for bids/.test(r)), 'the bid-request work is still nobody\'s');
+    // Pam's live list here is whatever the re-imported snapshot held, since an import overrides by design.
+    // What survives either way is the record of the placement.
+    assert.match(s2.people.find(p => p.id === 'pam').notes, /13 buyer-facing responsibilities placed with her/);
     const html = (await call('GET', '/api/export/opshub')).body;
     const team = JSON.parse(/const CURRENT_TEAM = (\[[\s\S]*?\n\]);/.exec(html)[1]);
     const un = team.find(t => t.id === 'unclassified');
     assert.ok(un && un.unclassified === true, 'it publishes as its own tab');
-    assert.equal(un.responsibilities.length, 19);
+    assert.equal(un.responsibilities.length, 6);
     assert.equal(team[team.length - 1].id === 'unclassified' || team.indexOf(un) > team.findIndex(t => t.id === 'james'), true, 'and never ahead of a real person');
     assert.ok(s2.decisions.some(d => d.id === 'dec-unclassified-owners' && d.status === 'proposed'), 'finding each an owner is on Brittany\'s list');
   });

@@ -2037,6 +2037,56 @@ const UPDATES = [
       label: `${moving.length} responsibilities moved from James to Unclassified; his list is down to ${keeping.length}`,
       source: 'manual', actor: 'brittany', external_id: 'james-to-unclassified-2026-11-10' });
   } },
+
+  // The thirteen buyer-facing items are Pam's. [Brittany 11/10] They were only unclassified for a day.
+  { key: 'sales-items-to-pam-2026-11-10', apply(db) {
+    const ts = nowIso();
+    const SALES = [
+      'Distributes copies of contract, specs, and upgrades',
+      'Submits change order requests',
+      'Follows up on customer approval of change orders',
+      'Reviews floorplan choices, design options',
+      'Schedules series of walk-throughs',
+      'Confirms closing date with buyer',
+      'Schedules New Home Orientation',
+      'Schedules Homeowner Acceptance meeting',
+      'Calls buyer within 24-48 hours',
+      'Guides buyer through initial sales process',
+      'Coordinates with Pam on buyer selections',
+      '(Sales) Makes copies of contract package',
+      '(Sales) Reviews status report and distributes contract package',
+    ];
+    // Two of them were written from someone else's side of the desk and read wrong once they are hers.
+    const REWORD = [
+      [/^Calls buyer within 24-48 hours to set up consultation with Pam/i, 'Calls buyer within 24-48 hours to set up the design consultation'],
+      [/^Coordinates with Pam on buyer selections and design consultations/i, 'Coordinates buyer selections and design consultations with James'],
+    ];
+    const u = db.prepare('SELECT * FROM people WHERE id = ?').get('unclassified');
+    const pam = db.prepare('SELECT * FROM people WHERE id = ?').get('pam');
+    if (!u || !pam) return;
+    const held = JSON.parse(u.responsibilities || '[]');
+    const isSales = r => SALES.some(m => String(r).toLowerCase().startsWith(m.toLowerCase()));
+    const moving = held.filter(isSales), staying = held.filter(r => !isSales(r));
+    const clean = r => {
+      let x = String(r).replace(/\s*\(was on James's list\)\s*$/, '');
+      for (const [re, to] of REWORD) if (re.test(x)) x = x.replace(re, to);
+      return `${x} (from James)`;
+    };
+    upsert(db, 'people', { id: 'pam',
+      responsibilities: [...JSON.parse(pam.responsibilities || '[]'), ...moving.map(clean)],
+      notes: [pam.notes, `${moving.length} buyer-facing responsibilities placed with her on 10 November — walk-throughs, orientation, the acceptance meeting, closing dates, change orders and the contract package. They came off James, who is not doing them. [Brittany 11/10]`].filter(Boolean).join('\n'),
+      updated_at: ts });
+    upsert(db, 'people', { id: 'unclassified', responsibilities: staying, updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-unclassified-owners',
+      title: `${staying.length} responsibilities still have no owner`,
+      reason: `The thirteen buyer-facing sales items went to Pam on 10 November. What is left unclassified: five bid-request items — collecting bids, chasing them after a week, managing bid lists, advising on address, date and subcontractor, and determining the most competitive bid — and modifying the database budget when a bid or quote is approved. The bid work looks like Lonnie's, since requesting and chasing bids became his on 9 November, but it has not been said. [Brittany 11/10]`,
+      status: 'proposed', source: 'Brittany, 2026-11-10' });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'pam', kind: 'setup', status: 'info',
+      label: `${moving.length} buyer-facing responsibilities placed with Pam; ${staying.length} left unclassified`,
+      source: 'manual', actor: 'brittany', external_id: 'sales-items-to-pam-2026-11-10' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

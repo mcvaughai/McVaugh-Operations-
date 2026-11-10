@@ -1969,6 +1969,20 @@ const UPDATES = [
       label: 'Interior design selections placed with Pam; plan selection with Jim — off Lonnie, who only held them because of the construction merge',
       source: 'manual', actor: 'brittany', external_id: 'selections-to-pam-plan-to-jim-2026-11-09' });
   } },
+
+  // A place to put work that is on somebody's list only because it had to go somewhere. [Brittany 11/10]
+  // One tab on the hub, so what nobody owns can be seen at a glance instead of hiding inside a real list.
+  { key: 'unclassified-holder-2026-11-10', apply(db) {
+    const ts = nowIso();
+    upsert(db, 'people', { id: 'unclassified', name: 'Unclassified', full_name: 'Unclassified',
+      title: 'No role assigned yet', role_summary: 'Work that is not anybody\'s yet. Parked here on purpose so it stays visible rather than sitting on whoever happened to be nearest it.',
+      departments: [], confirmed: 0, review_status: 'not_reviewed', responsibilities: [], crossed_off: [],
+      notes: 'UNCLASSIFIED — not a person. Created 9 November so a responsibility nobody owns can be taken off a real list without being lost: "James isn\'t doing these but I don\'t know who is." Everything here needs an owner. [Brittany 11/10]',
+      source: 'Brittany, 2026-11-10', updated_at: ts });
+    addEvent(db, { entity_type: 'person', entity_id: 'unclassified', kind: 'setup', status: 'info',
+      label: 'Unclassified added to the hub as its own tab, for work that has no owner yet',
+      source: 'manual', actor: 'brittany', external_id: 'unclassified-holder-2026-11-10' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

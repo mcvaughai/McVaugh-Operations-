@@ -948,7 +948,14 @@ function regenerateOpsHub(db, templateHtml) {
       responsibilities: JSON.parse(p.responsibilities || '[]'), removed: JSON.parse(p.crossed_off || '[]').length,
       review_status: p.review_status, departed: /\bDEPARTED\b/i.test(p.notes || ''), leaving: /LEAVING/.test(p.notes || '') };
   });
-  for (const p of people) if (!team.find(t => t.id === p.id) && JSON.parse(p.responsibilities || '[]').length) team.push({ id: p.id, name: p.full_name || p.name, title: p.title || '', department: '', color: '#64748B', email: p.email || '', absorbs: personLegacy(p), responsibilities: JSON.parse(p.responsibilities || '[]') });
+  // The unclassified holder is a tab, not a person: work nobody has been given yet, parked somewhere
+  // visible instead of sitting on whoever used to be nearest it. It is published even when empty, so the
+  // tab is there to drop things into, and it sorts last.
+  for (const p of people) if (p.id === 'unclassified' && !team.find(t => t.id === p.id)) team.push({
+    id: p.id, name: p.full_name || p.name, title: p.title || '', department: 'Unassigned', color: '#94A3B8',
+    email: '', absorbs: [], unclassified: true, responsibilities: JSON.parse(p.responsibilities || '[]'),
+    removed: JSON.parse(p.crossed_off || '[]').length, review_status: p.review_status });
+  for (const p of people) if (p.id !== 'unclassified' && !team.find(t => t.id === p.id) && JSON.parse(p.responsibilities || '[]').length) team.push({ id: p.id, name: p.full_name || p.name, title: p.title || '', department: '', color: '#64748B', email: p.email || '', absorbs: personLegacy(p), responsibilities: JSON.parse(p.responsibilities || '[]') });
 
   // --- the four panels that used to be frozen in the template ---------------------------------------
   // They were carried through untouched by every regeneration, so the page showed whatever the 4 November

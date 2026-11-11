@@ -2202,6 +2202,22 @@ const UPDATES = [
       label: 'Back charge: notification recorded in the database; James runs the whole procedure once construction reports it',
       source: 'manual', actor: 'brittany', external_id: 'back-charge-james-owns-it-2026-11-11' });
   } },
+
+  // A back charge is not a financial procedure. The financial part starts where this one ends: accounting
+  // is told one was entered and puts it into QuickBooks. [Brittany 11/11]
+  { key: 'back-charge-not-financial-2026-11-11', apply(db) {
+    const ts = nowIso();
+    const t = db.prepare('SELECT * FROM tasks WHERE id = ?').get('hub-back_charge'); if (!t) return;
+    upsert(db, 'tasks', { id: 'hub-back_charge', hub_category: 'Operations', department_id: 'purchasing',
+      inputs: String(t.inputs || '').replace(
+        'Accounting (Kenneth) — reads the back-charge report before cutting cheques',
+        'Accounting (Kenneth) — where the financial side starts, after this procedure ends: accounting is notified a back charge was entered, puts it into QuickBooks, and reads the back-charge report before cutting cheques'),
+      review_note: [t.review_note, 'Recategorised 11 November from Financial to Operations: "the financial side of this starts at the end of this current back charge process, because accounting gets notified a back charge was entered and then they put it into QuickBooks." The procedure itself is construction reporting it and purchasing recording it. [Brittany 11/11]'].filter(Boolean).join('\n'),
+      updated_at: ts });
+    addEvent(db, { entity_type: 'task', entity_id: 'hub-back_charge', kind: 'setup', status: 'info',
+      label: 'Back charge moved out of Financial into Operations; the QuickBooks entry is recorded as what accounting does after it',
+      source: 'manual', actor: 'brittany', external_id: 'back-charge-not-financial-2026-11-11' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

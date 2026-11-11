@@ -1054,6 +1054,11 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.match(bc.steps, /Everything after this is James/);
     assert.match(bc.inputs, /Purchasing assistant \(James\)/);
     assert.ok(!/Superintendent → Maria/.test(bc.inputs), 'the 2006 participant list is gone');
+    assert.equal(bc.hub_category, 'Operations', 'a back charge is not a financial procedure');
+    assert.match(bc.inputs, /QuickBooks/, 'what accounting does after it is recorded, outside the procedure');
+    const hub2 = (await call('GET', '/api/export/opshub')).body;
+    const procs = JSON.parse(/const INITIAL_PROCESSES = (\[[\s\S]*?\n\]);/.exec(hub2)[1]);
+    assert.equal(procs.find(p => p.id === 'back_charge').category, 'Operations', 'and the hub files it there');
     const live = JSON.parse(j.responsibilities || '[]');
     assert.ok(!live.some(r => /^Fills out database backcharges|^Must notify subcontractors|^Clicks back ?charge approval/.test(r)),
       'the three lines are gone from the list itself, and a pre-fold snapshot cannot list them beside their own parent');

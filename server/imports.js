@@ -932,7 +932,7 @@ function regenerateOpsHub(db, templateHtml) {
     // the 2006 role id only when nobody current holds it keeps "lonnie" and "construction" from both
     // appearing as owners of the same kind of work.
     const held = t && t.owner_id && people.find(x => x.id === t.owner_id && !/\bDEPARTED\b/i.test(x.notes || ''));
-    processes.push({ ...bp, ...(held ? { owner: ownerRole(t.owner_id), participants: [...new Set([ownerRole(t.owner_id), ...(t.backup_id ? [ownerRole(t.backup_id)] : []), ...(bp.participants || [])])] } : {}),
+    processes.push({ ...bp, ...(t && t.hub_category ? { category: t.hub_category } : {}), ...(held ? { owner: ownerRole(t.owner_id), participants: [...new Set([ownerRole(t.owner_id), ...(t.backup_id ? [ownerRole(t.backup_id)] : []), ...(bp.participants || [])])] } : {}),
       status: stale ? 'stale' : rewritten ? 'current' : by.length ? 'superseded' : 'legacy',
       ...(rewritten ? { detailed_by: by.map(x => x.id), rewritten_on: String(t.updated_at || '').slice(0, 10), missing: t.missing_info || '' } : {}),
       supersededBy: rewritten ? [] : by.map(x => x.id),

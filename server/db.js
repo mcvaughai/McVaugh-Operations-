@@ -256,7 +256,8 @@ const MIGRATIONS = [
   ['tasks', 'lifecycle', 'TEXT'],            // current (default) | stale: somebody should, nobody does | retired
   ['people', 'responsibility_steps', 'TEXT'],
   ['people', 'folded_lines', 'TEXT'],          // old list lines that are now steps inside another responsibility   // {responsibility text: [step, ...]} — one duty written out, hidden until clicked
-  ['tasks', 'content_locked', 'INTEGER'],    // 1 = rewritten or retired here on purpose; a hub snapshot import must not undo it
+  ['tasks', 'content_locked', 'INTEGER'],
+  ['tasks', 'hub_category', 'TEXT'],         // overrides the 2006 category a legacy SOP was filed under    // 1 = rewritten or retired here on purpose; a hub snapshot import must not undo it
   ['vendors', 'gl_expiry', 'TEXT'],            // general liability expiry, mirrored from the register so something can warn
   ['vendors', 'wc_expiry', 'TEXT'],            // workers comp expiry
   ['vendors', 'insurance_updated', 'TEXT'],     // who asked for the work order (a person asks; the agent never starts one)         // reusable | needs_review | reviewed         // JSON array: old procedure ids this (new) procedure replaces or absorbs
@@ -273,7 +274,7 @@ const TABLES = {
   departments: ['id','name','short','description','setup_stage','gx','gy','hue','sort'],
   people: ['id','name','role_summary','confirmed','departments','review_status','notes','source','reviewed_at','reviewed_by','full_name','title','reports_to','email','responsibilities','legacy_roles','crossed_off','responsibility_steps','folded_lines','created_at','updated_at'],
   agents: ['id','name','department_id','purpose','setup_stage','approach','approach_note','enabled','paused','human_authority','initial_output','n8n_workflow_id','next_run','proposed','created_at','updated_at'],
-  tasks: ['id','title','department_id','owner_id','backup_id','agent_id','trigger','inputs','steps','deadline','evidence','approval_rules','automation_approach','verification_result','source_link','documented','automated','verified','board','proposed','project_stage','missing_info','blocker','waiting_on','next_action','sensitive','source','archived','merged_into','review_note','reviewed_at','reviewed_by','step_review','flow','doc_ids','supersedes','lifecycle','content_locked','created_at','updated_at'],
+  tasks: ['id','title','department_id','owner_id','backup_id','agent_id','trigger','inputs','steps','deadline','evidence','approval_rules','automation_approach','verification_result','source_link','documented','automated','verified','board','proposed','project_stage','missing_info','blocker','waiting_on','next_action','sensitive','source','archived','merged_into','review_note','reviewed_at','reviewed_by','step_review','flow','doc_ids','supersedes','lifecycle','content_locked','hub_category','created_at','updated_at'],
   homes: ['id','address','job_id','active','kind','stage','pilot','notes','source','imported_at','updated_at','permits','trades','issues','next_milestone','status_cite'],
   decisions: ['id','date','title','reason','decided_by','status','source','created_at'],
   integrations: ['id','name','kind','status','last_checked','last_message','last_import_at','config','notes'],

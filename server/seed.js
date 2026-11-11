@@ -2241,6 +2241,41 @@ const UPDATES = [
       label: 'James retitled Purchasing Assistant; the sales and marketing half of the title waits on the work',
       source: 'manual', actor: 'brittany', external_id: 'james-title-purchasing-assistant-2026-11-11' });
   } },
+
+  // Preparing the budget is construction's. Entering the approved one is purchasing's. [Brittany 11/11]
+  { key: 'budget-prep-lonnie-entry-james-2026-11-11', apply(db) {
+    const ts = nowIso();
+    const PREP = /^Assist with takeoffs, estimates/i;
+    const ENTRY = 'Enters the approved construction budget into the database, once construction hands it over';
+    const j = db.prepare('SELECT * FROM people WHERE id = ?').get('james');
+    const lon = db.prepare('SELECT * FROM people WHERE id = ?').get('lonnie');
+    if (!j || !lon) return;
+    const live = JSON.parse(j.responsibilities || '[]');
+    const moving = live.filter(r => PREP.test(String(r)));
+    const rest = live.filter(r => !PREP.test(String(r)));
+    const at = live.findIndex(r => PREP.test(String(r)));
+    rest.splice(at < 0 ? rest.length : Math.min(at, rest.length), 0, ENTRY);
+    upsert(db, 'people', { id: 'james', responsibilities: rest,
+      crossed_off: [...new Set([...JSON.parse(j.crossed_off || '[]'), ...moving])],
+      notes: [j.notes, 'Takeoffs, estimates, specifications, scopes of work and budget preparation moved to Lonnie on 11 November — that is construction\'s work. What James has instead is the entry: construction hands him the approved budget and he puts it in the database. [Brittany 11/11]'].filter(Boolean).join('\n'),
+      updated_at: ts });
+    upsert(db, 'people', { id: 'lonnie',
+      responsibilities: [...JSON.parse(lon.responsibilities || '[]'),
+        ...moving.map(r => String(r).replace(/\s*\(from Maria\)\s*$/, '') + ' (from James)'),
+        'Hands the approved construction budget to purchasing for entry'],
+      notes: [lon.notes, 'Takeoffs, estimates, home-specific specifications, scopes of work and construction budget preparation moved from James on 11 November: "that one is all Lonnie." He hands the approved budget to James, who enters it. [Brittany 11/11]'].filter(Boolean).join('\n'),
+      updated_at: ts });
+
+    // The matching line sitting in Unclassified is the same handoff at a later point.
+    upsert(db, 'decisions', { id: 'dec-budget-entry-vs-revision', date: '2026-11-11',
+      title: 'Does "modifies database budget when bid/quote approved" belong with James too?',
+      reason: 'James now enters the approved construction budget when construction hands it over [Brittany 11/11]. "Modifies database budget when bid/quote approved" has been sitting in Unclassified since 10 November and is the same act at a later point in the job — the budget changing in the database once a price is agreed. If entering it is his, changing it probably is too, but it has not been said. Note the approval itself is not his either way: Lonnie agrees the price, James records it.',
+      status: 'proposed', decided_by: null, source: 'Brittany, 2026-11-11' });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'lonnie', kind: 'setup', status: 'info',
+      label: 'Budget preparation moved to Lonnie; James enters the approved budget when construction hands it over',
+      source: 'manual', actor: 'brittany', external_id: 'budget-prep-lonnie-entry-james-2026-11-11' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

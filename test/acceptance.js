@@ -1017,7 +1017,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     // An earlier test in this run re-imports a pre-handover hub, and an import overrides by design, so his
     // live count here reflects that file. What must hold either way: nothing moved off him comes back.
     const X = id => JSON.parse(s2.people.find(p => p.id === id).crossed_off || '[]');
-    assert.equal(X('james').length, 27, 'every removal from his list is recorded, so a stale file cannot undo it');
+    assert.equal(X('james').length, 28, 'every removal from his list is recorded, so a stale file cannot undo it');
     // Five were struck off as saying again what another line already says, not reassigned anywhere.
     assert.ok(X('james').some(r => /Maintain Purchasing database items/.test(r)));
     assert.ok(!R('unclassified').concat(R('pam'), R('lonnie')).some(r => /Maintain Purchasing database items/.test(r)));
@@ -1056,6 +1056,11 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(!/Superintendent → Maria/.test(bc.inputs), 'the 2006 participant list is gone');
     assert.equal(bc.hub_category, 'Operations', 'a back charge is not a financial procedure');
     assert.equal(s2.people.find(p => p.id === 'james').title, 'Purchasing Assistant', 'his title matches the job he actually has');
+    // Preparing the budget is construction's; entering the approved one is purchasing's.
+    assert.ok(JSON.parse(j.crossed_off || '[]').some(r => /^Assist with takeoffs/.test(r)), 'budget prep came off him');
+    // His live list here is whatever the re-imported snapshot held; the record of the swap survives either way.
+    assert.match(j.notes, /construction hands him the approved budget and he puts it in the database/);
+    assert.ok(s2.decisions.some(d => d.id === 'dec-budget-entry-vs-revision' && d.status === 'proposed'));
     assert.ok(s2.decisions.some(d => d.id === 'dec-james-title' && d.status === 'accepted'));
     assert.ok(s2.decisions.some(d => d.id === 'dec-marketing-owner' && d.status === 'proposed'), 'and who owns marketing is still open');
     assert.match(bc.inputs, /QuickBooks/, 'what accounting does after it is recorded, outside the procedure');

@@ -2218,6 +2218,29 @@ const UPDATES = [
       label: 'Back charge moved out of Financial into Operations; the QuickBooks entry is recorded as what accounting does after it',
       source: 'manual', actor: 'brittany', external_id: 'back-charge-not-financial-2026-11-11' });
   } },
+
+  // James is the purchasing assistant. The sales and marketing half of the title waits until he actually
+  // holds sales and marketing work — those two lines are sitting in Unclassified. [Brittany 11/11]
+  { key: 'james-title-purchasing-assistant-2026-11-11', apply(db) {
+    const ts = nowIso();
+    const j = db.prepare('SELECT title, notes FROM people WHERE id = ?').get('james'); if (!j) return;
+    upsert(db, 'people', { id: 'james', title: 'Purchasing Assistant', role_summary: 'Purchasing: work order and purchase order entry, back charges, estimating support, and vendor compliance.',
+      notes: [j.notes, `Title changed from "${j.title}" to Purchasing Assistant on 11 November. It becomes "Purchasing Assistant / Sales & Marketing Assistant" if and when he actually holds sales and marketing work — marketing materials and MLS listings are in Unclassified, not with him, so the title would be describing a job he is not doing. [Brittany 11/11]`].filter(Boolean).join('\n'),
+      updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-james-title', status: 'accepted', decided_by: 'Brittany',
+      reason: 'Purchasing Assistant. The sales and marketing half waits until he has sales and marketing responsibilities — "maybe wait on the sales and marketing part until he has sales and marketing responsibilities." [Brittany 11/11]' });
+
+    // So the title is not forgotten if those two lines land back on him.
+    upsert(db, 'decisions', { id: 'dec-marketing-owner', date: '2026-11-11',
+      title: 'Who owns marketing materials and MLS listings?',
+      reason: 'Both are in Unclassified since 10 November, taken off James because he is not doing them. They are the only two responsibilities in the company with no home that are not purchasing. If they go back to James his title becomes "Purchasing Assistant / Sales & Marketing Assistant"; if they go to Pam they join the buyer-facing work she took on 10 November. [Brittany 11/11]',
+      status: 'proposed', decided_by: null, source: 'Brittany, 2026-11-11' });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'james', kind: 'setup', status: 'info',
+      label: 'James retitled Purchasing Assistant; the sales and marketing half of the title waits on the work',
+      source: 'manual', actor: 'brittany', external_id: 'james-title-purchasing-assistant-2026-11-11' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

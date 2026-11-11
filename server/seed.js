@@ -2140,6 +2140,39 @@ const UPDATES = [
       label: `James's list finalised at ${keeping.length}: 2 to Unclassified, 1 to Lonnie, ${gone.length} struck off as duplicates`,
       source: 'manual', actor: 'brittany', external_id: 'james-list-final-2026-11-10' });
   } },
+
+  // Backcharges were three lines on James's list for what is one duty. They become one responsibility with
+  // its steps underneath, hidden until it is clicked. [Brittany 11/11]
+  { key: 'backcharges-one-responsibility-2026-11-11', apply(db) {
+    const ts = nowIso();
+    const PARENT = 'Handles backcharges when reported by construction';
+    // Ordered by what has to happen first. Brittany said the subcontractor is told "prior to entering into
+    // the database", so notifying comes before the entry even though she listed the entry first.
+    const STEPS = [
+      'Notifies the subcontractor of the backcharge before it goes into the database.',
+      'Fills out the backcharge in the database completely.',
+      'Clicks backcharge approval in the database.',
+    ];
+    const OLD = [/^Fills out database backcharges/i, /^Must notify subcontractors of backcharges/i, /^Clicks back ?charge approval/i];
+    const j = db.prepare('SELECT * FROM people WHERE id = ?').get('james'); if (!j) return;
+    const live = JSON.parse(j.responsibilities || '[]');
+    const first = live.findIndex(r => OLD.some(re => re.test(String(r))));
+    const rest = live.filter(r => !OLD.some(re => re.test(String(r))));
+    const folded = live.filter(r => OLD.some(re => re.test(String(r))));
+    if (!folded.length) return;
+    rest.splice(first < 0 ? rest.length : Math.min(first, rest.length), 0, PARENT);
+    upsert(db, 'people', { id: 'james', responsibilities: rest,
+      responsibility_steps: { ...JSON.parse(j.responsibility_steps || '{}'), [PARENT]: STEPS },
+      // The exact lines that became steps, so a snapshot taken before the fold cannot list them again
+      // beside the responsibility that now contains them.
+      folded_lines: [...new Set([...JSON.parse(j.folded_lines || '[]'), ...folded])],
+      notes: [j.notes, `Backcharges folded into one responsibility on 11 November: "${PARENT}". The three lines that were on the list — filling it out, telling the subcontractor, clicking approval — are its steps, shown when the responsibility is clicked. [Brittany 11/11]`].filter(Boolean).join('\n'),
+      updated_at: ts });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'james', kind: 'setup', status: 'info',
+      label: `Backcharges: ${folded.length} responsibilities folded into one with ${STEPS.length} steps behind it`,
+      source: 'manual', actor: 'brittany', external_id: 'backcharges-one-responsibility-2026-11-11' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

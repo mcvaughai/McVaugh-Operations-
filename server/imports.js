@@ -494,7 +494,7 @@ function importOpsHub(db, { filename, content }, role) {
     const crossed = all.filter(r => /^\s*\[N\/A\]/i.test(r)).map(r => r.replace(/^\s*\[N\/A\]\s*/i, ''));
     // A hub export is a snapshot. Re-importing one taken before a handover must not put a departed
     // person's work back on them, or undo a reassignment someone made deliberately afterwards.
-    const cur = ex ? db.prepare('SELECT responsibilities, crossed_off, notes FROM people WHERE id = ?').get(pid) : null;
+    const cur = ex ? db.prepare('SELECT responsibilities, crossed_off, notes, folded_lines FROM people WHERE id = ?').get(pid) : null;
     const departed = /\bDEPARTED\b/i.test(String(cur?.notes || ''));
     const deliberatelyEmptied = cur && JSON.parse(cur.responsibilities || '[]').length === 0 && JSON.parse(cur.crossed_off || '[]').length > 0;
     const keepAsIs = departed || deliberatelyEmptied;
@@ -508,7 +508,11 @@ function importOpsHub(db, { filename, content }, role) {
       // included. Anything already struck off stays struck off: a removal is a decision, not an omission.
       const struck = new Set([...JSON.parse(cur?.crossed_off || '[]'), ...crossed].map(x => String(x).toLowerCase().slice(0, 60)));
       const key = x => String(x).toLowerCase().replace(/\s*\(from [^)]*\)\s*$/, '').slice(0, 60);
-      const incoming = all.filter(r => !/^\s*\[N\/A\]/i.test(r)).filter(r => !struck.has(key(r)));
+      // A line that has become a step of a folded responsibility is not missing from the list, it is inside
+      // one. A snapshot taken before the fold must not put it back alongside its own parent.
+      const folded = new Set(JSON.parse(cur?.folded_lines || '[]').map(key));
+      const isFolded = r => folded.has(key(r));
+      const incoming = all.filter(r => !/^\s*\[N\/A\]/i.test(r)).filter(r => !struck.has(key(r))).filter(r => !isFolded(r));
       // An import that silently drops work somebody assigned last week is how a handover gets undone.
       // The override still happens — it is what the file is for — but the damage is reported back.
       const had = JSON.parse(cur?.responsibilities || '[]');
@@ -946,6 +950,7 @@ function regenerateOpsHub(db, templateHtml) {
       // Only what the person actually holds. Work that was struck off is removed from the published hub —
       // it stays in the world against whoever used to hold it, which is where the history belongs.
       responsibilities: JSON.parse(p.responsibilities || '[]'), removed: JSON.parse(p.crossed_off || '[]').length,
+      resp_steps: JSON.parse(p.responsibility_steps || '{}'),
       review_status: p.review_status, departed: /\bDEPARTED\b/i.test(p.notes || ''), leaving: /LEAVING/.test(p.notes || '') };
   });
   // The unclassified holder is a tab, not a person: work nobody has been given yet, parked somewhere

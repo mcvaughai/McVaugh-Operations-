@@ -1038,6 +1038,23 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.equal(team[team.length - 1].id === 'unclassified' || team.indexOf(un) > team.findIndex(t => t.id === 'james'), true, 'and never ahead of a real person');
     assert.ok(s2.decisions.some(d => d.id === 'dec-unclassified-owners' && d.status === 'proposed'), 'finding each an owner is on Brittany\'s list');
   });
+  await check('a responsibility that is really several steps carries them, hidden until it is clicked', async () => {
+    const s2 = (await call('GET', '/api/state')).body;
+    const j = s2.people.find(p => p.id === 'james');
+    const steps = JSON.parse(j.responsibility_steps || '{}');
+    const parent = 'Handles backcharges when reported by construction';
+    assert.deepEqual(Object.keys(steps), [parent]);
+    assert.equal(steps[parent].length, 3);
+    assert.match(steps[parent][0], /^Notifies the subcontractor/, 'the subcontractor is told before it is entered');
+    const live = JSON.parse(j.responsibilities || '[]');
+    assert.ok(!live.some(r => /^Fills out database backcharges|^Must notify subcontractors|^Clicks back ?charge approval/.test(r)),
+      'the three lines are gone from the list itself, and a pre-fold snapshot cannot list them beside their own parent');
+    const html = (await call('GET', '/api/export/opshub')).body;
+    const team = JSON.parse(/const CURRENT_TEAM = (\[[\s\S]*?\n\]);/.exec(html)[1]);
+    const jh = team.find(t => t.id === 'james');
+    assert.equal((jh.resp_steps || {})[parent].length, 3, 'and they reach the hub');
+    assert.ok(/stepsFor\(resp\)\.length > 0/.test(html), 'which renders them behind the responsibility');
+  });
   await check('folder import is admin/accounting only', async () => { const admin = cookie; cookie = ''; await call('POST', '/api/login', { passphrase: creds.construction }); const r = await call('POST', '/api/import/folder', { dir: '/' }); assert.equal(r.status, 403); cookie = admin; });
   await check('every write route sits behind the session and write check', async () => {
     // A route accidentally placed above the session gate would answer a signed-out caller. This catches that.

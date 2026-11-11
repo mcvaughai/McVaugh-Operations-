@@ -3962,6 +3962,10 @@ function CurrentTeamGrid({ team, roles, processes, onSelect }) {
 
 // ─── Current Member Detail ───────────────────────────
 function CurrentMemberDetail({ member, team, roles, processes, onBack, onSelectProcess, showROCC, showNA }) {
+  // A responsibility that is really several steps carries them in member.resp_steps, keyed by its text.
+  // The steps stay out of the list until the responsibility is clicked, so the list reads as one job.
+  const [openResp, setOpenResp] = useState({});
+  const stepsFor = r => ((member.resp_steps || {})[r] || []);
   const [activeFilter, setActiveFilter] = useState(null);
   const memberProcesses = processes.filter(p =>
     memberInvolved(member,p)
@@ -4145,7 +4149,30 @@ function CurrentMemberDetail({ member, team, roles, processes, onBack, onSelectP
                       {String(member.responsibilities.indexOf(resp) + 1).padStart(2, "0")}
                     </span>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 13, color: "#CBD5E1", lineHeight: 1.5 }}>{resp}</span>
+                      {stepsFor(resp).length > 0 ? (
+                        <React.Fragment>
+                          <button onClick={() => setOpenResp(o => ({ ...o, [resp]: !o[resp] }))} style={{
+                            display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+                            background: "none", border: "none", padding: 0, cursor: "pointer",
+                            fontSize: 13, color: "#CBD5E1", lineHeight: 1.5, fontFamily: "inherit",
+                          }}>
+                            <span style={{ fontSize: 10, color: member.color, flexShrink: 0, transform: openResp[resp] ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▶</span>
+                            <span>{resp}</span>
+                            <span style={{ fontSize: 9, padding: "1px 7px", borderRadius: 4, background: `${member.color}1f`, color: member.color, border: `1px solid ${member.color}33`, fontWeight: 600, letterSpacing: "0.03em", flexShrink: 0 }}>
+                              {stepsFor(resp).length} STEPS
+                            </span>
+                          </button>
+                          {openResp[resp] && (
+                            <ol style={{ margin: "10px 0 2px", paddingLeft: 26, display: "flex", flexDirection: "column", gap: 6 }}>
+                              {stepsFor(resp).map((st, k) => (
+                                <li key={k} style={{ fontSize: 12.5, color: "#94A3B8", lineHeight: 1.55 }}>{st}</li>
+                              ))}
+                            </ol>
+                          )}
+                        </React.Fragment>
+                      ) : (
+                        <span style={{ fontSize: 13, color: "#CBD5E1", lineHeight: 1.5 }}>{resp}</span>
+                      )}
                       {linkedProcesses.length > 0 && (
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
                           {linkedProcesses.map(lp => {

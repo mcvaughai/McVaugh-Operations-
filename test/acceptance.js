@@ -148,8 +148,8 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const dbp = s.tasks.find(t => t.id === 'obs-procedures-for-the-mch-database'); assert.match(dbp.steps, /Work orders must be in the database prior to work commencing/); assert.equal(dbp.owner_id, 'james', 'the work-order guide moved off Maria: entry is James\'s, Lonnie backs it up');
     assert.equal(dbp.backup_id, 'lonnie');
     await call('POST', '/api/tasks/hub-new_work_order', { proposed: 0, owner_id: 'maria' });
-    const r = (await call('POST', '/api/import/opshub', { filename: 'hub.json', content: fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8') })).body; assert.equal(r.tasks, 18, 'the 18 the snapshot may refresh');
-    assert.equal(r.procedures_kept.length, 7, 'the 7 decided here — one retired, four stale, two rewritten — are not overwritten by the old file');
+    const r = (await call('POST', '/api/import/opshub', { filename: 'hub.json', content: fs.readFileSync(path.join(__dirname, '..', 'seed', 'mch-ops-hub.json'), 'utf8') })).body; assert.equal(r.tasks, 17, 'the 17 the snapshot may refresh');
+    assert.equal(r.procedures_kept.length, 8, 'the 8 decided here — one retired, four stale, three rewritten — are not overwritten by the old file');
     assert.ok(r.procedures_kept.some(x => x.id === 'hub-framed_mirror_purchase' && x.lifecycle === 'retired'));
     const again = (await call('GET', '/api/state')).body.tasks.find(t => t.id === 'hub-new_work_order'); assert.equal(again.proposed, 0, 'review kept'); assert.equal(again.owner_id, 'maria', 'owner change kept');
   });
@@ -1046,6 +1046,14 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.deepEqual(Object.keys(steps), [parent]);
     assert.equal(steps[parent].length, 3);
     assert.match(steps[parent][0], /^Notifies the subcontractor/, 'the subcontractor is told before it is entered');
+    // And the procedure behind it: the notification is recorded in the database, and James runs all of it
+    // once construction reports it.
+    const bc = s2.tasks.find(t => t.id === 'hub-back_charge');
+    assert.equal(bc.owner_id, 'james');
+    assert.match(bc.steps, /who was notified and the date they were notified, in the database/);
+    assert.match(bc.steps, /Everything after this is James/);
+    assert.match(bc.inputs, /Purchasing assistant \(James\)/);
+    assert.ok(!/Superintendent → Maria/.test(bc.inputs), 'the 2006 participant list is gone');
     const live = JSON.parse(j.responsibilities || '[]');
     assert.ok(!live.some(r => /^Fills out database backcharges|^Must notify subcontractors|^Clicks back ?charge approval/.test(r)),
       'the three lines are gone from the list itself, and a pre-fold snapshot cannot list them beside their own parent');

@@ -2173,6 +2173,35 @@ const UPDATES = [
       label: `Backcharges: ${folded.length} responsibilities folded into one with ${STEPS.length} steps behind it`,
       source: 'manual', actor: 'brittany', external_id: 'backcharges-one-responsibility-2026-11-11' });
   } },
+
+  // The back charge procedure: the notification goes in the database, and James does the whole of it once
+  // construction reports it. [Brittany 11/11]
+  { key: 'back-charge-james-owns-it-2026-11-11', apply(db) {
+    const ts = nowIso();
+    const t = db.prepare('SELECT * FROM tasks WHERE id = ?').get('hub-back_charge'); if (!t) return;
+    upsert(db, 'tasks', { id: 'hub-back_charge', owner_id: 'james', backup_id: 'lonnie',
+      content_locked: 1, documented: 1,
+      steps: String(t.steps)
+        .replace('1. Whoever runs the job decides there is a back charge, because they know what actually happened and why.',
+                 '1. Construction decides there is a back charge and reports it, because they know what actually happened and why. Everything after this is James.')
+        .replace('4. Fill in who was notified and the date they were notified. The field exists and it is the most important part of the record.',
+                 '4. Fill in who was notified and the date they were notified, in the database. The field exists and it is the most important part of the record.'),
+      inputs: 'Who does what:\nConstruction (Lonnie) — decides there is a back charge and reports it\nPurchasing assistant (James) — every step after that: telling the vendor, creating it in the database, recording who was notified and when, and clicking approved\nAccounting (Kenneth) — reads the back-charge report before cutting cheques',
+      review_note: [t.review_note, 'Updated 11 November: the notification is recorded in the database, and James runs the whole procedure once construction reports it — "James will be doing this entire process." [Brittany 11/11]'].filter(Boolean).join('\n'),
+      updated_at: ts });
+
+    // His list says purchasing; the hub still calls him Sales / Marketing Coordinator.
+    const j = db.prepare('SELECT title FROM people WHERE id = ?').get('james');
+    if (j && /sales|marketing/i.test(j.title || ''))
+      upsert(db, 'decisions', { id: 'dec-james-title', date: '2026-11-11',
+        title: `James's title still reads "${j.title}" — should it be Purchasing Assistant?`,
+        reason: 'Brittany called him the purchasing assistant on 11 November, and every one of the eight responsibilities left on his list is purchasing: work order and PO entry, back charges, takeoffs and estimates, vendor pricing, W-9s, GL insurance and the purchasing files. The marketing and MLS lines moved to Unclassified on 10 November. The title is the last thing still describing the old job. [Brittany 11/11]',
+        status: 'proposed', decided_by: null, source: 'Brittany, 2026-11-11' });
+
+    addEvent(db, { entity_type: 'task', entity_id: 'hub-back_charge', kind: 'setup', status: 'info',
+      label: 'Back charge: notification recorded in the database; James runs the whole procedure once construction reports it',
+      source: 'manual', actor: 'brittany', external_id: 'back-charge-james-owns-it-2026-11-11' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

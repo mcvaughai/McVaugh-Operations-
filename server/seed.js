@@ -2276,6 +2276,44 @@ const UPDATES = [
       label: 'Budget preparation moved to Lonnie; James enters the approved budget when construction hands it over',
       source: 'manual', actor: 'brittany', external_id: 'budget-prep-lonnie-entry-james-2026-11-11' });
   } },
+
+  // The transcripts do answer it. Maria, going down her own list on 6 November: item 15, modifies database
+  // budget — "any budget entering would be James and there's a workflow for that." [Brittany 11/13: "it is
+  // in the transcripts"]
+  { key: 'budget-modification-james-2026-11-13', apply(db) {
+    const ts = nowIso();
+    const MATCH = /^Modifies database budget when bid\/quote approved/i;
+    const u = db.prepare('SELECT * FROM people WHERE id = ?').get('unclassified');
+    const j = db.prepare('SELECT * FROM people WHERE id = ?').get('james');
+    if (!u || !j) return;
+    const held = JSON.parse(u.responsibilities || '[]');
+    const moving = held.filter(r => MATCH.test(String(r)));
+    if (!moving.length) return;
+    upsert(db, 'people', { id: 'unclassified', responsibilities: held.filter(r => !MATCH.test(String(r))), updated_at: ts });
+    upsert(db, 'people', { id: 'james',
+      responsibilities: [...JSON.parse(j.responsibilities || '[]'),
+        'Modifies the budget in the database when a bid or quote is approved, and raises budget increase requests, working from numbers construction or Teresa give him'],
+      notes: [j.notes, 'Budget modification confirmed as his on 13 November from the transcripts, not decided fresh: Maria, going down her own list on 6 November — "any budget entering would be James and there is a workflow for that" [M-final 11/06 5:40]; and on 5 November — "when the budgets are done, James will have to enter the budgets… whenever he gets a revision or something from construction or from Teresa having to increase a budget, he will have very specific information and numbers to do so" [Purchasing 11/05].'].filter(Boolean).join('\n'),
+      updated_at: ts });
+
+    upsert(db, 'decisions', { id: 'dec-budget-entry-vs-revision', status: 'accepted', decided_by: 'Brittany',
+      reason: 'James, on the transcripts rather than a fresh decision. Maria on 6 November, reviewing item 15 of her own list: "any budget entering would be James and there is a workflow for that." On 5 November she had already said he enters the budget once it is approved, and handles revisions and increases from numbers construction or Teresa supply. [M-final 11/06] [Purchasing 11/05]' });
+
+    upsert(db, 'decisions', { id: 'dec-unclassified-owners',
+      title: `${JSON.parse(db.prepare("SELECT responsibilities FROM people WHERE id = 'unclassified'").get().responsibilities).length} responsibilities still have no owner`,
+      reason: 'What is left unclassified is the five bid-request items, plus marketing materials and MLS listings. The bid work looks like Lonnie\'s, since requesting and chasing bids became his on 9 November, but Brittany has said to leave them for now. Marketing and MLS have no obvious home at all. [Brittany 11/13]',
+      status: 'proposed', source: 'Brittany, 2026-11-13' });
+
+    // The stale budget revision SOP has an answer in the same transcripts. Not applied — it is hers to approve.
+    upsert(db, 'decisions', { id: 'dec-budget-increase-route', date: '2026-11-13',
+      title: 'The stale budget revision procedure has an answer in the 6 November transcript',
+      reason: 'Budget Revision Update was marked stale on 9 November because the written routine — the overage log, the weekly print, forwarding to Kenneth — is not happening. But the all-office meeting of 6 November describes what does happen: a budget increase is requested in the database with a reason; a standard one takes a single approval from the Director of Operations; Teresa and Kenneth are notified by email because nothing in the database tells them. If that is right, the procedure can be rewritten from current to stale rather than left as a known gap. [Brittany 11/13]',
+      status: 'proposed', decided_by: null, source: 'All-office meeting, 2026-11-06' });
+
+    addEvent(db, { entity_type: 'person', entity_id: 'james', kind: 'setup', status: 'info',
+      label: 'Budget modification placed with James on the transcripts; Unclassified down to 7',
+      source: 'manual', actor: 'brittany', external_id: 'budget-modification-james-2026-11-13' });
+  } },
 ];
 function applyUpdates(db) {
   const applied = new Set(JSON.parse(db.prepare("SELECT value FROM meta WHERE key = 'applied_updates'").get()?.value || '[]'));

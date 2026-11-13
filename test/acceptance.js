@@ -1023,7 +1023,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(!R('unclassified').concat(R('pam'), R('lonnie')).some(r => /Maintain Purchasing database items/.test(r)));
     assert.ok(s2.decisions.some(d => d.id === 'dec-james-list-removals' && d.status === 'accepted'));
     // The thirteen buyer-facing ones were placed with Pam the next day; the bid work is still unplaced.
-    assert.equal(R('unclassified').length, 8, 'the bid work, the budget line, and marketing/MLS');
+    assert.equal(R('unclassified').length, 7, 'the five bid items plus marketing and MLS');
     assert.ok(R('unclassified').every(r => /was on James's list/.test(r)), 'where each came from is kept');
     assert.ok(!R('james').some(r => /Schedules New Home Orientation|Collects bids from subcontractors/.test(r)));
     assert.ok(R('unclassified').some(r => /Calls subcontractors for bids/.test(r)), 'the bid-request work is still nobody\'s');
@@ -1034,7 +1034,7 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     const team = JSON.parse(/const CURRENT_TEAM = (\[[\s\S]*?\n\]);/.exec(html)[1]);
     const un = team.find(t => t.id === 'unclassified');
     assert.ok(un && un.unclassified === true, 'it publishes as its own tab');
-    assert.equal(un.responsibilities.length, 8);
+    assert.equal(un.responsibilities.length, 7);
     assert.equal(team[team.length - 1].id === 'unclassified' || team.indexOf(un) > team.findIndex(t => t.id === 'james'), true, 'and never ahead of a real person');
     assert.ok(s2.decisions.some(d => d.id === 'dec-unclassified-owners' && d.status === 'proposed'), 'finding each an owner is on Brittany\'s list');
   });
@@ -1060,7 +1060,9 @@ async function check(name, fn) { try { await fn(); results.push(['PASS', name]);
     assert.ok(JSON.parse(j.crossed_off || '[]').some(r => /^Assist with takeoffs/.test(r)), 'budget prep came off him');
     // His live list here is whatever the re-imported snapshot held; the record of the swap survives either way.
     assert.match(j.notes, /construction hands him the approved budget and he puts it in the database/);
-    assert.ok(s2.decisions.some(d => d.id === 'dec-budget-entry-vs-revision' && d.status === 'proposed'));
+    // Settled from the transcripts rather than asked again: Maria said budget entry is James's.
+    assert.ok(s2.decisions.some(d => d.id === 'dec-budget-entry-vs-revision' && d.status === 'accepted'));
+    assert.match(j.notes, /any budget entering would be James/);
     assert.ok(s2.decisions.some(d => d.id === 'dec-james-title' && d.status === 'accepted'));
     assert.ok(s2.decisions.some(d => d.id === 'dec-marketing-owner' && d.status === 'proposed'), 'and who owns marketing is still open');
     assert.match(bc.inputs, /QuickBooks/, 'what accounting does after it is recorded, outside the procedure');
